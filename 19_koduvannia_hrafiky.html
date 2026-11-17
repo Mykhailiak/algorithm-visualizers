@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Лабораторія «Растр і вектор: як кодується зображення»</title>
+<!--
+  Навчальний візуалізатор для уроків технологій профільного рівня
+  Спеціалізація «Обробка інформації та програмне забезпечення»
+  11 клас. Розділ 10. Графіка, мультимедіа та технічне креслення
+  Тема 10.1 «Основи комп'ютерної графіки (методи кодування графічної інформації)»
+
+  Один самодостатній файл: HTML + CSS + JS, без бібліотек і CDN.
+  Працює офлайн (можна запускати з флешки в комп'ютерному класі).
+  Код не мінімізований і прокомментований, щоб учитель міг його змінити.
+-->
+<style>
+:root{
+  --bg:#eef2f7; --panel:#fff; --ink:#16222e; --ink-soft:#52657a; --line:#c7d3e0;
+  --accent:#1e5fa8; --accent-soft:#dce8f7; --ok:#0f8a5f; --ok-soft:#d8f1e6;
+  --warn:#c9741a; --err:#bf3330; --err-soft:#fbe0df; --hl:#fff3b0;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{background:var(--bg);color:var(--ink);font-family:"Segoe UI",Tahoma,Verdana,sans-serif;
+  font-size:17px;line-height:1.45;}
+header.app{background:linear-gradient(180deg,#1e5fa8,#174a85);color:#fff;padding:14px 20px;}
+header.app h1{margin:0;font-size:1.45rem;line-height:1.2;}
+header.app .meta{margin-top:4px;font-size:1rem;opacity:.92;}
+main{max-width:1560px;margin:0 auto;padding:16px 16px 10px;}
+footer.app{text-align:center;padding:14px;color:var(--ink-soft);border-top:1px solid var(--line);
+  margin-top:18px;font-size:.95rem;}
+
+nav.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+nav.tabs button{font:inherit;font-weight:600;padding:11px 18px;border:2px solid var(--accent);
+  background:var(--panel);color:var(--accent);border-radius:10px 10px 0 0;cursor:pointer;}
+nav.tabs button[aria-selected="true"]{background:var(--accent);color:#fff;}
+section.tab{display:none;} section.tab.active{display:block;}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;}
+.panel h2{margin:0 0 10px;font-size:1.12rem;color:var(--accent);}
+.panel h3{margin:14px 0 6px;font-size:1rem;color:var(--ink-soft);}
+.cols{display:flex;gap:14px;flex-wrap:wrap;}
+.cols > *{flex:1 1 420px;min-width:300px;}
+.note{color:var(--ink-soft);font-size:.95rem;}
+
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 10px;}
+.controls button{font:inherit;font-weight:600;padding:10px 16px;border-radius:9px;
+  border:2px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;}
+.controls button.ghost{background:var(--panel);color:var(--accent);}
+.controls button:disabled{opacity:.45;cursor:default;}
+.controls input[type=range]{width:150px;}
+.controls .speed{display:flex;align-items:center;gap:8px;}
+.controls .counter{font-weight:700;color:var(--ink-soft);margin-left:auto;}
+.progress{height:8px;background:var(--accent-soft);border-radius:5px;overflow:hidden;margin-bottom:10px;}
+.progress > div{height:100%;width:0;background:var(--accent);transition:width .2s;}
+.explain{background:var(--hl);border-left:6px solid var(--warn);border-radius:8px;padding:11px 14px;
+  min-height:60px;font-size:1.05rem;}
+.error{background:var(--err-soft);border-left:6px solid var(--err);padding:10px 14px;border-radius:8px;
+  color:#5b1512;font-weight:600;margin-top:8px;}
+.ok-box{background:var(--ok-soft);border-left:6px solid var(--ok);padding:10px 14px;border-radius:8px;
+  color:#0a5c40;font-weight:600;margin-top:8px;}
+
+.presets{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+.presets button{font:inherit;padding:8px 13px;border-radius:20px;cursor:pointer;
+  border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600;}
+.presets button:hover{background:#cadcf2;}
+.btn-main{font:inherit;font-weight:600;padding:10px 16px;border-radius:9px;border:2px solid var(--accent);
+  background:var(--accent);color:#fff;cursor:pointer;}
+.btn-sec{font:inherit;font-weight:600;padding:10px 16px;border-radius:9px;border:2px solid var(--accent);
+  background:#fff;color:var(--accent);cursor:pointer;}
+label.field{display:block;font-weight:600;margin:8px 0;}
+label.field span{display:block;margin-bottom:4px;}
+select,input[type=text],textarea{font:inherit;padding:9px 10px;border:2px solid var(--line);
+  border-radius:8px;background:#fff;color:var(--ink);width:100%;}
+textarea{font-family:Consolas,"Courier New",monospace;min-height:120px;resize:vertical;}
+select:focus,input:focus,textarea:focus{outline:none;border-color:var(--accent);}
+.inline{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
+
+/* ---------- Сітка пікселів ---------- */
+.grid-wrap{max-width:430px;}
+.pgrid{display:grid;grid-template-columns:repeat(16,1fr);gap:1px;background:var(--line);
+  border:2px solid var(--ink-soft);width:100%;aspect-ratio:1/1;user-select:none;}
+.pgrid div{background:#fff;cursor:crosshair;position:relative;}
+.pgrid div.unread{background:repeating-linear-gradient(45deg,#f0f2f5,#f0f2f5 3px,#e0e4ea 3px,#e0e4ea 6px);}
+.pgrid div.cur{box-shadow:inset 0 0 0 3px var(--warn);z-index:2;}
+.pgrid div.front{box-shadow:inset 0 0 0 3px var(--accent);z-index:2;}
+.pgrid div.start{box-shadow:inset 0 0 0 3px var(--err);z-index:3;}
+.axis{display:grid;grid-template-columns:repeat(16,1fr);gap:1px;font-size:.72rem;color:var(--ink-soft);
+  text-align:center;max-width:430px;}
+
+/* ---------- Палітра ---------- */
+.palette{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0;}
+.palette button{width:30px;height:30px;border:2px solid var(--line);border-radius:6px;cursor:pointer;padding:0;}
+.palette button.sel{border-color:var(--ink);box-shadow:0 0 0 2px var(--hl);}
+.palette.p256 button{width:17px;height:17px;border-width:1px;border-radius:3px;}
+
+/* ---------- Код пікселя ---------- */
+.code-box{font-family:Consolas,"Courier New",monospace;font-size:1.05rem;background:#f7fafd;
+  border:2px dashed var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;}
+.code-box b{color:var(--accent);}
+.bits{letter-spacing:2px;font-weight:700;color:#0a5c40;}
+table.calc{border-collapse:collapse;width:100%;font-size:.98rem;margin-top:8px;}
+table.calc th,table.calc td{border:1px solid var(--line);padding:6px 9px;text-align:left;}
+table.calc th{background:#e3eaf2;}
+table.calc tr.cur td{background:var(--hl);font-weight:600;}
+.formula{font-family:Consolas,monospace;font-size:1.1rem;background:#fff8d6;border-radius:8px;
+  padding:8px 10px;display:inline-block;margin:6px 0;}
+
+/* ---------- Полотна порівняння ---------- */
+.canvases{display:flex;gap:14px;flex-wrap:wrap;}
+.canvases figure{margin:0;flex:1 1 240px;}
+.canvases canvas{width:100%;max-width:280px;border:2px solid var(--ink-soft);background:#fff;
+  image-rendering:pixelated;display:block;}
+.canvases figcaption{font-size:.95rem;color:var(--ink-soft);margin-top:6px;}
+
+/* ---------- RGB ---------- */
+.rgb-row{display:flex;align-items:center;gap:10px;margin:8px 0;}
+.rgb-row label{width:110px;font-weight:700;}
+.rgb-row input[type=range]{flex:1 1 180px;}
+.rgb-row output{width:52px;text-align:right;font-family:Consolas,monospace;font-weight:700;}
+.swatch{height:120px;border:2px solid var(--ink-soft);border-radius:10px;}
+.mix{position:relative;height:210px;}
+.mix svg{width:100%;height:100%;}
+
+@media (max-width:900px){
+  body{font-size:16px;}
+  header.app h1{font-size:1.2rem;}
+  .cols > *{flex:1 1 100%;}
+}
+</style>
+</head>
+<body>
+
+<header class="app">
+  <h1>Лабораторія «Растр і вектор: як кодується зображення»</h1>
+  <div class="meta">11 клас · Розділ 10. Графіка, мультимедіа та технічне креслення · Тема 10.1 «Методи кодування графічної інформації»</div>
+</header>
+
+<main>
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true"  data-tab="r1">1. Растр</button>
+    <button role="tab" aria-selected="false" data-tab="r2">2. Вектор</button>
+    <button role="tab" aria-selected="false" data-tab="r3">3. Модель RGB</button>
+  </nav>
+
+  <!-- ============================ РАСТР ============================ -->
+  <section class="tab active" id="r1">
+    <div class="cols">
+      <div>
+        <div class="panel">
+          <h2>Растрове зображення 16 × 16</h2>
+          <div class="presets" id="r1-presets"></div>
+          <div class="inline">
+            <label class="field" style="flex:1 1 200px"><span>Глибина кольору</span>
+              <select id="r1-depth">
+                <option value="1">1 біт — 2 кольори</option>
+                <option value="4" selected>4 біти — 16 кольорів</option>
+                <option value="8">8 бітів — 256 кольорів</option>
+                <option value="24">24 біти — 16 777 216 кольорів</option>
+              </select></label>
+            <label class="field" style="flex:1 1 180px"><span>Інструмент</span>
+              <select id="r1-tool">
+                <option value="pen">олівець</option>
+                <option value="eraser">гумка</option>
+                <option value="pick">піпетка</option>
+                <option value="fill">заливка (клацнути піксель)</option>
+              </select></label>
+          </div>
+          <h3>Палітра (код кольору = номер у палітрі)</h3>
+          <div class="palette" id="r1-palette"></div>
+          <div id="r1-rgb24" style="display:none">
+            <div class="rgb-row"><label>Червоний</label><input type="range" id="r1-r" min="0" max="255" value="200"><output id="r1-ro">200</output></div>
+            <div class="rgb-row"><label>Зелений</label><input type="range" id="r1-g" min="0" max="255" value="60"><output id="r1-go">60</output></div>
+            <div class="rgb-row"><label>Синій</label><input type="range" id="r1-b" min="0" max="255" value="60"><output id="r1-bo">60</output></div>
+          </div>
+          <div class="grid-wrap">
+            <div class="pgrid" id="r1-grid"></div>
+            <div class="axis" id="r1-axis"></div>
+          </div>
+          <p class="note">Малюйте мишею (можна з натиснутою кнопкою). Наведіть курсор на піксель,
+            щоб побачити його код. Номер пікселя обчислюється як <b>номер рядка × 16 + номер стовпця</b>.</p>
+        </div>
+      </div>
+      <div>
+        <div class="panel">
+          <h2>Код пікселя та обсяг файлу</h2>
+          <div class="code-box" id="r1-code">Наведіть курсор на піксель.</div>
+          <div class="formula" id="r1-size"></div>
+          <table class="calc" id="r1-table">
+            <thead><tr><th>Глибина</th><th>Кольорів = 2<sup>i</sup></th><th>Обсяг 16×16</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p class="note">Для режимів з палітрою у файлі додатково зберігається сама палітра
+            (по 3 байти на колір), тому зовсім маленькі зображення з великою палітрою не завжди вигідні.</p>
+        </div>
+        <div class="panel">
+          <h2>Покрокові алгоритми</h2>
+          <div class="inline" style="margin-bottom:8px">
+            <button class="btn-main" id="r1-decode">Читання файлу рядками</button>
+            <button class="btn-sec" id="r1-fill">Заливка (flood fill)</button>
+            <label class="field" style="flex:1 1 130px;margin:0"><span>Колір заливки</span>
+              <select id="r1-fillcolor"></select></label>
+          </div>
+          <div id="r1-err"></div>
+          <div class="controls" id="r1-controls"></div>
+          <div class="progress"><div id="r1-bar"></div></div>
+          <div class="explain" id="r1-explain">Виберіть алгоритм і натискайте «Крок».</div>
+          <div class="code-box" id="r1-stream" style="display:none"></div>
+          <p class="note">Заливка починається з пікселя, позначеного червоною рамкою. Щоб вибрати інший
+            початковий піксель, не змінюючи малюнка, перемкніть інструмент на «заливка» і клацніть потрібну
+            клітинку. Алгоритм поширюється тільки на сусідів того самого кольору — по чотирьох напрямках.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ ВЕКТОР ============================ -->
+  <section class="tab" id="r2">
+    <div class="cols">
+      <div>
+        <div class="panel">
+          <h2>Опис зображення командами</h2>
+          <div class="presets" id="r2-presets"></div>
+          <textarea id="r2-cmds" spellcheck="false"></textarea>
+          <div class="inline" style="margin-top:8px">
+            <button class="btn-main" id="r2-build">Растеризувати покроково</button>
+            <button class="btn-sec" id="r2-all">Показати результат одразу</button>
+          </div>
+          <div id="r2-err"></div>
+          <p class="note">Формат команд (координати від 0 до 15):<br>
+            <b>ТОЧКА x y</b> · <b>ЛІНІЯ x1 y1 x2 y2</b> · <b>КОЛО xc yc r</b> ·
+            <b>ПРЯМОКУТНИК x1 y1 x2 y2</b></p>
+          <div class="grid-wrap">
+            <div class="pgrid" id="r2-grid"></div>
+            <div class="axis" id="r2-axis"></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="panel">
+          <h2>Алгоритм растеризації (Брезенхем)</h2>
+          <div class="controls" id="r2-controls"></div>
+          <div class="progress"><div id="r2-bar"></div></div>
+          <div class="explain" id="r2-explain">Натисніть «Растеризувати покроково».</div>
+          <table class="calc" id="r2-log">
+            <thead><tr><th style="width:60px">Крок</th><th>Обчислення</th><th style="width:110px">Піксель</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <h2>Масштабування: растр проти вектора</h2>
+          <label class="field" style="max-width:220px"><span>Збільшення</span>
+            <select id="r2-zoom">
+              <option value="1">× 1 (16 × 16)</option>
+              <option value="2">× 2 (32 × 32)</option>
+              <option value="4" selected>× 4 (64 × 64)</option>
+              <option value="8">× 8 (128 × 128)</option>
+            </select></label>
+          <div class="canvases">
+            <figure>
+              <canvas id="r2-cv-raster" width="256" height="256"></canvas>
+              <figcaption><b>Растр.</b> Збільшується сам піксель, тому межі «розпадаються на сходинки».</figcaption>
+            </figure>
+            <figure>
+              <canvas id="r2-cv-vector" width="256" height="256"></canvas>
+              <figcaption><b>Вектор.</b> Команди перераховуються для нової роздільної здатності,
+                тому контури залишаються чіткими.</figcaption>
+            </figure>
+          </div>
+          <div class="formula" id="r2-size"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ RGB ============================ -->
+  <section class="tab" id="r3">
+    <div class="cols">
+      <div>
+        <div class="panel">
+          <h2>Змішування кольорових складових</h2>
+          <div class="presets" id="r3-presets"></div>
+          <div class="rgb-row"><label>Червоний R</label><input type="range" id="r3-r" min="0" max="255" value="255"><output id="r3-ro">255</output></div>
+          <div class="rgb-row"><label>Зелений G</label><input type="range" id="r3-g" min="0" max="255" value="200"><output id="r3-go">200</output></div>
+          <div class="rgb-row"><label>Синій B</label><input type="range" id="r3-b" min="0" max="255" value="0"><output id="r3-bo">0</output></div>
+          <div class="swatch" id="r3-swatch"></div>
+          <div class="code-box" id="r3-code"></div>
+          <div class="mix">
+            <svg viewBox="0 0 320 210" id="r3-mix" aria-hidden="true"></svg>
+          </div>
+          <p class="note">Модель RGB — <b>адитивна</b>: кольори утворюються додаванням світла.
+            Саме так працює екран монітора. Для друку використовують віднімальну модель CMYK.</p>
+        </div>
+      </div>
+      <div>
+        <div class="panel">
+          <h2>Як 24 біти складаються в код кольору</h2>
+          <div class="controls" id="r3-controls"></div>
+          <div class="progress"><div id="r3-bar"></div></div>
+          <div class="explain" id="r3-explain">Натискайте «Крок», щоб побачити складання коду з трьох байтів.</div>
+          <div class="code-box" id="r3-bits"></div>
+          <h3>Скільки кольорів дає кожна глибина</h3>
+          <table class="calc" id="r3-table">
+            <thead><tr><th>Глибина</th><th>Кольорів</th><th>Приклад застосування</th></tr></thead>
+            <tbody>
+              <tr><td>1 біт</td><td>2</td><td>чорно-білі схеми, факс</td></tr>
+              <tr><td>4 біти</td><td>16</td><td>найпростіші піктограми, старі режими відео</td></tr>
+              <tr><td>8 бітів</td><td>256</td><td>GIF, зображення з палітрою</td></tr>
+              <tr><td>16 бітів</td><td>65 536</td><td>режим High Color</td></tr>
+              <tr><td>24 біти</td><td>16 777 216</td><td>фотографії, True Color, JPEG, PNG</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="app">Розроблено автором</footer>
+
+<script>
+"use strict";
+
+/* ==================================================================
+   1. ДОПОМІЖНІ ФУНКЦІЇ
+   ================================================================== */
+function $(id){ return document.getElementById(id); }
+function esc(s){
+  return String(s).replace(/[&<>"]/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];
+  });
+}
+/** Число у двійковому вигляді з доповненням нулями до n розрядів. */
+function bin(v, n){
+  var s = (v >>> 0).toString(2);
+  while(s.length < n) s = "0" + s;
+  return s;
+}
+/** Групування бітів по 4 для зручного читання. */
+function bits4(s){ return s.replace(/(.{4})(?=.)/g, "$1 "); }
+function hex2(v){ var s = v.toString(16).toUpperCase(); return s.length < 2 ? "0"+s : s; }
+function hexToRgb(h){
+  return { r:parseInt(h.substr(1,2),16), g:parseInt(h.substr(3,2),16), b:parseInt(h.substr(5,2),16) };
+}
+function rgbToHex(r,g,b){ return "#" + hex2(r) + hex2(g) + hex2(b); }
+/** Розділення числа на розряди пробілами: 16777216 → 16 777 216 */
+function grp(n){ return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
+
+/* ==================================================================
+   2. КРОКОВИЙ ВИКОНАВЕЦЬ (спільний для всього комплекту)
+   ================================================================== */
+function StepRunner(opts){
+  this.o = opts; this.steps = []; this.i = -1; this.timer = null; this.delay = 900;
+  this.build();
+}
+StepRunner.prototype.build = function(){
+  var self = this, box = this.o.mount;
+  box.innerHTML =
+    '<button class="btn-step">Крок</button>' +
+    '<button class="btn-play ghost">Старт</button>' +
+    '<button class="btn-reset ghost">Скинути</button>' +
+    '<span class="speed"><label>Швидкість</label>' +
+    '<input type="range" min="60" max="2000" step="20" value="800"></span>' +
+    '<span class="counter">крок 0 з 0</span>';
+  this.bStep = box.querySelector(".btn-step");
+  this.bPlay = box.querySelector(".btn-play");
+  this.bReset = box.querySelector(".btn-reset");
+  this.range = box.querySelector("input[type=range]");
+  this.counter = box.querySelector(".counter");
+  this.bStep.onclick = function(){ self.pause(); self.next(); };
+  this.bPlay.onclick = function(){ self.timer ? self.pause() : self.play(); };
+  this.bReset.onclick = function(){ self.reset(); };
+  this.range.oninput = function(){
+    self.delay = 2060 - Number(self.range.value);
+    if(self.timer){ self.pause(); self.play(); }
+  };
+  this.delay = 2060 - Number(this.range.value);
+};
+StepRunner.prototype.setSteps = function(steps){
+  this.pause(); this.steps = steps || []; this.i = -1; this.apply();
+};
+StepRunner.prototype.apply = function(){
+  if(this.o.reset) this.o.reset();
+  for(var k=0; k<=this.i; k++) this.steps[k].apply();
+  if(this.o.render) this.o.render(this.i, this.steps[this.i] || null, this.steps);
+  this.counter.textContent = "крок " + (this.i+1) + " з " + this.steps.length;
+  this.bPlay.textContent = this.timer ? "Пауза" : "Старт";
+  var empty = this.steps.length === 0;
+  this.bStep.disabled = empty || this.i >= this.steps.length-1;
+  this.bPlay.disabled = empty;
+  if(this.o.bar) this.o.bar.style.width = (this.steps.length ? (this.i+1)/this.steps.length*100 : 0) + "%";
+};
+StepRunner.prototype.next = function(){
+  if(this.i >= this.steps.length-1){ this.pause(); return false; }
+  this.i++; this.apply(); return true;
+};
+StepRunner.prototype.play = function(){
+  var self = this;
+  if(!this.steps.length) return;
+  if(this.i >= this.steps.length-1) this.i = -1;
+  this.timer = setInterval(function(){ if(!self.next()) self.pause(); }, this.delay);
+  this.apply();
+};
+StepRunner.prototype.pause = function(){
+  if(this.timer){ clearInterval(this.timer); this.timer = null; }
+  this.bPlay.textContent = "Старт";
+};
+StepRunner.prototype.reset = function(){ this.pause(); this.i = -1; this.apply(); };
+StepRunner.prototype.toEnd = function(){ this.pause(); this.i = this.steps.length-1; this.apply(); };
+
+/* Перемикання вкладок */
+(function(){
+  var btns = document.querySelectorAll("nav.tabs button");
+  Array.prototype.forEach.call(btns, function(b){
+    b.onclick = function(){
+      Array.prototype.forEach.call(btns, function(x){ x.setAttribute("aria-selected","false"); });
+      b.setAttribute("aria-selected","true");
+      Array.prototype.forEach.call(document.querySelectorAll("section.tab"), function(s){
+        s.classList.toggle("active", s.id === b.dataset.tab);
+      });
+      if(b.dataset.tab === "r2") R2.redrawCanvases();
+    };
+  });
+})();
+
+/* ==================================================================
+   3. ПАЛІТРИ
+   ================================================================== */
+var SIZE = 16;                 // сторона зображення в пікселях
+var PAL1 = ["#FFFFFF","#000000"];
+var PAL4 = ["#000000","#800000","#008000","#808000","#000080","#800080","#008080","#C0C0C0",
+            "#808080","#FF0000","#00FF00","#FFFF00","#0000FF","#FF00FF","#00FFFF","#FFFFFF"];
+/** 256-колірна палітра: 216 «безпечних» кольорів + 40 відтінків сірого. */
+var PAL8 = (function(){
+  var p = [], lv = [0,51,102,153,204,255];
+  for(var r=0;r<6;r++) for(var g=0;g<6;g++) for(var b=0;b<6;b++) p.push(rgbToHex(lv[r],lv[g],lv[b]));
+  for(var i=0;i<40;i++){ var v = Math.round(i*255/39); p.push(rgbToHex(v,v,v)); }
+  return p;
+})();
+function paletteFor(depth){
+  if(depth === 1) return PAL1;
+  if(depth === 4) return PAL4;
+  if(depth === 8) return PAL8;
+  return null;                 // 24 біти — палітри немає
+}
+/** Номер найближчого кольору палітри (квантування). */
+function nearestIndex(hex, pal){
+  var c = hexToRgb(hex), best = 0, bd = Infinity;
+  for(var i=0;i<pal.length;i++){
+    var p = hexToRgb(pal[i]);
+    var d = (c.r-p.r)*(c.r-p.r) + (c.g-p.g)*(c.g-p.g) + (c.b-p.b)*(c.b-p.b);
+    if(d < bd){ bd = d; best = i; }
+  }
+  return best;
+}
+
+/* ==================================================================
+   4. ВКЛАДКА 1 — РАСТР
+   ================================================================== */
+var R1 = (function(){
+  var img = [];                  // 256 кольорів у форматі #RRGGBB
+  var depth = 4;
+  var penColor = "#FF0000";
+  var startPixel = 136;          // піксель для заливки (центр за замовчуванням)
+  var mode = "none";             // none | decode | fill
+  var revealedRows = 0;          // для анімації читання файлу
+  var fillState = {};            // index -> true (залито)
+  var frontier = [];
+  var runner, drawing = false;
+
+  /* ---------- Готові малюнки ---------- */
+  function blank(){ var a = []; for(var i=0;i<SIZE*SIZE;i++) a.push("#FFFFFF"); return a; }
+  function fromMap(rows, map){
+    var a = blank();
+    rows.forEach(function(line, y){
+      for(var x=0; x<Math.min(line.length, SIZE); x++){
+        var ch = line[x];
+        if(map[ch]) a[y*SIZE+x] = map[ch];
+      }
+    });
+    return a;
+  }
+  var PRESETS = [
+    { name:"Смайлик", make:function(){
+        return fromMap([
+          "....########....",
+          "..##yyyyyyyy##..",
+          ".#yyyyyyyyyyyy#.",
+          "#yyyyyyyyyyyyyy#",
+          "#yy##yyyy##yyyy#",
+          "#yy##yyyy##yyyy#",
+          "#yyyyyyyyyyyyyy#",
+          "#yyyyyyyyyyyyyy#",
+          "#yyy#yyyyyy#yyy#",
+          "#yyy#yyyyyy#yyy#",
+          "#yyyy######yyyy#",
+          "#yyyyyyyyyyyyyy#",
+          ".#yyyyyyyyyyyy#.",
+          "..##yyyyyyyy##..",
+          "....########....",
+          "................"
+        ], {"#":"#000000","y":"#FFFF00"});
+      }},
+    { name:"Прапор", make:function(){
+        var a = blank();
+        for(var y=0;y<SIZE;y++) for(var x=0;x<SIZE;x++)
+          a[y*SIZE+x] = y < 8 ? "#0000FF" : "#FFFF00";
+        return a;
+      }},
+    { name:"Літера А", make:function(){
+        return fromMap([
+          "................",
+          "......####......",
+          ".....######.....",
+          "....##....##....",
+          "....##....##....",
+          "...##......##...",
+          "...##......##...",
+          "..############..",
+          "..############..",
+          "..##........##..",
+          ".##..........##.",
+          ".##..........##.",
+          "##............##",
+          "##............##",
+          "................",
+          "................"
+        ], {"#":"#000080"});
+      }},
+    { name:"Градієнт", make:function(){
+        var a = blank();
+        for(var y=0;y<SIZE;y++) for(var x=0;x<SIZE;x++){
+          a[y*SIZE+x] = rgbToHex(Math.round(x*255/15), Math.round(y*255/15), 128);
+        }
+        return a;
+      }}
+  ];
+
+  /* ---------- Відображення ---------- */
+  /** Колір, який реально видно на екрані (з урахуванням квантування). */
+  function shown(i){
+    var pal = paletteFor(depth);
+    if(!pal) return img[i];
+    return pal[nearestIndex(img[i], pal)];
+  }
+  function buildGrid(){
+    var g = $("r1-grid"), html = "";
+    for(var i=0;i<SIZE*SIZE;i++) html += '<div data-i="' + i + '"></div>';
+    g.innerHTML = html;
+    var cells = g.children;
+    // малювання мишею
+    g.onmousedown = function(e){
+      var t = e.target;
+      if(!t.dataset || t.dataset.i === undefined) return;
+      drawing = true; paint(Number(t.dataset.i)); e.preventDefault();
+    };
+    g.onmouseover = function(e){
+      var t = e.target;
+      if(!t.dataset || t.dataset.i === undefined) return;
+      showCode(Number(t.dataset.i));
+      var tl = $("r1-tool").value;
+      if(drawing && tl !== "fill" && tl !== "pick") paint(Number(t.dataset.i));
+    };
+    document.addEventListener("mouseup", function(){ drawing = false; });
+    // осі координат
+    var ax = "";
+    for(var x=0;x<SIZE;x++) ax += "<div>" + x + "</div>";
+    $("r1-axis").innerHTML = ax;
+    paintAll();
+  }
+  function paint(i){
+    var tool = $("r1-tool").value;
+    if(tool === "pick"){ penColor = img[i]; renderPalette(); showCode(i); startPixel = i; paintAll(); return; }
+    if(tool === "fill"){
+      // інструмент «заливка»: клацання лише вибирає початковий піксель
+      // і одразу будує покроковий алгоритм, малюнок не змінюється
+      startPixel = i; showCode(i); buildFill(); return;
+    }
+    // малювання скасовує незавершену анімацію, щоб малюнок було видно повністю
+    if(mode !== "none"){
+      mode = "none"; revealedRows = SIZE; fillState = {}; frontier = [];
+      $("r1-stream").style.display = "none";
+      runner.setSteps([]);
+    }
+    img[i] = (tool === "eraser") ? "#FFFFFF" : penColor;
+    startPixel = i;
+    paintAll(); showCode(i); updateSize();
+  }
+  function paintAll(){
+    var cells = $("r1-grid").children;
+    for(var i=0;i<cells.length;i++){
+      var c = cells[i];
+      c.className = "";
+      if(mode === "decode" && Math.floor(i/SIZE) >= revealedRows){
+        c.classList.add("unread");
+        c.style.background = "";
+        continue;
+      }
+      if(mode === "fill" && fillState[i]){
+        c.style.background = fillState[i];
+      } else {
+        c.style.background = shown(i);
+      }
+      if(mode === "fill" && i === startPixel) c.classList.add("start");
+      else if(mode !== "fill" && i === startPixel) c.classList.add("start");
+    }
+  }
+
+  /* ---------- Палітра ---------- */
+  function renderPalette(){
+    var pal = paletteFor(depth);
+    var box = $("r1-palette");
+    box.className = "palette" + (depth === 8 ? " p256" : "");
+    if(!pal){
+      // 24 біти: палітри немає, колір задають повзунками
+      box.innerHTML = "";
+      $("r1-rgb24").style.display = "";
+      var c = hexToRgb(penColor);
+      $("r1-r").value = c.r; $("r1-g").value = c.g; $("r1-b").value = c.b;
+      $("r1-ro").textContent = c.r; $("r1-go").textContent = c.g; $("r1-bo").textContent = c.b;
+      // для заливки пропонуємо базові кольори
+      $("r1-fillcolor").innerHTML = PAL4.map(function(col, idx){
+        return '<option value="' + col + '">' + col + "</option>";
+      }).join("");
+      $("r1-fillcolor").value = "#FF0000";
+      return;
+    }
+    $("r1-rgb24").style.display = "none";
+    var html = "";
+    pal.forEach(function(col, idx){
+      var sel = (nearestIndex(penColor, pal) === idx) ? " sel" : "";
+      html += '<button class="' + sel.trim() + '" style="background:' + col + '" data-c="' + col +
+              '" title="код ' + idx + " = " + bin(idx, depth) + '"></button>';
+    });
+    box.innerHTML = html;
+    Array.prototype.forEach.call(box.children, function(b){
+      b.onclick = function(){ penColor = b.dataset.c; renderPalette(); };
+    });
+    // список кольорів заливки
+    var sel = $("r1-fillcolor"), cur = sel.value;
+    sel.innerHTML = pal.map(function(col, idx){
+      return '<option value="' + col + '">' + idx + " — " + col + "</option>";
+    }).join("");
+    if(cur && pal.indexOf(cur) >= 0) sel.value = cur;
+    else sel.value = pal[Math.min(1, pal.length-1)];
+  }
+
+  /* ---------- Код пікселя й обсяг ---------- */
+  function showCode(i){
+    var x = i % SIZE, y = Math.floor(i / SIZE);
+    var pal = paletteFor(depth);
+    var col = shown(i);
+    var html = "Піксель <b>(рядок " + y + ", стовпець " + x + ")</b>, номер у файлі: <b>" + i + "</b><br>" +
+      'Колір: <b>' + col + '</b> <span style="display:inline-block;width:18px;height:18px;border:1px solid #333;' +
+      'vertical-align:middle;background:' + col + '"></span><br>';
+    if(pal){
+      var idx = nearestIndex(img[i], pal);
+      html += "Код у палітрі: <b>" + idx + "</b> (десяткове) = <span class=\"bits\">" +
+              bits4(bin(idx, depth)) + "</span> (двійкове, " + depth + " біт)";
+      if(img[i].toUpperCase() !== col.toUpperCase()){
+        html += "<br><i>Початковий колір " + img[i] + " у палітрі з " + pal.length +
+                " кольорів відсутній, тому його замінено найближчим — це втрата якості при зменшенні глибини.</i>";
+      }
+    } else {
+      var c = hexToRgb(col);
+      html += "Код: <b>" + col + "</b> = R " + c.r + ", G " + c.g + ", B " + c.b + "<br>" +
+        '<span class="bits">' + bin(c.r,8) + " " + bin(c.g,8) + " " + bin(c.b,8) + "</span> (24 біти)";
+    }
+    $("r1-code").innerHTML = html;
+  }
+  function updateSize(){
+    var bitsTotal = SIZE * SIZE * depth;
+    var bytes = bitsTotal / 8;
+    var pal = paletteFor(depth);
+    var palBytes = pal ? pal.length * 3 : 0;
+    $("r1-size").innerHTML = "Обсяг = ширина × висота × глибина = " + SIZE + " × " + SIZE + " × " + depth +
+      " = <b>" + grp(bitsTotal) + " біт</b> = <b>" + grp(bytes) + " байт</b>" +
+      (pal ? " + палітра " + pal.length + " × 3 = " + grp(palBytes) + " байт" : "") +
+      (bytes >= 1024 ? " (" + (bytes/1024).toFixed(2).replace(".", ",") + " КіБ)" : "");
+    var rows = "";
+    [1,4,8,24].forEach(function(d){
+      var b = SIZE*SIZE*d/8;
+      rows += '<tr class="' + (d === depth ? "cur" : "") + '"><td>' + d + " біт</td><td>" +
+              grp(Math.pow(2,d)) + "</td><td>" + grp(b) + " байт</td></tr>";
+    });
+    $("r1-table").querySelector("tbody").innerHTML = rows;
+  }
+
+  /* ---------- Алгоритм 1: читання файлу рядками ---------- */
+  function buildDecode(){
+    $("r1-err").innerHTML = "";
+    mode = "decode";
+    $("r1-stream").style.display = "";
+    var pal = paletteFor(depth);
+    var steps = [];
+    for(var y=0; y<SIZE; y++){
+      (function(y){
+        var codes = [];
+        for(var x=0; x<SIZE; x++){
+          var i = y*SIZE + x;
+          codes.push(pal ? bin(nearestIndex(img[i], pal), depth) : bin(hexToRgb(img[i]).r, 8) + "·…");
+        }
+        steps.push({
+          text: "Рядок <b>" + y + "</b>. Програма перегляду читає з файлу " + SIZE + " кодів по <b>" +
+                depth + " біт</b> (разом " + (SIZE*depth) + " біт = " + (SIZE*depth/8) +
+                " байт) і зафарбовує відповідні пікселі. Файл не містить ні ліній, ні фігур — " +
+                "тільки послідовність кодів кольору.",
+          stream: pal
+            ? "Біти рядка " + y + ": <span class=\"bits\">" + codes.join(" ") + "</span>"
+            : "Рядок " + y + ": по 3 байти (R, G, B) на кожен піксель, разом " + (SIZE*3) + " байт.",
+          apply: function(){ revealedRows = y+1; }
+        });
+      })(y);
+    }
+    steps.push({
+      text: "Зображення прочитано повністю. Растровий файл — це <b>таблиця кодів кольору</b> " +
+            "(растр, бітова карта). Його обсяг не залежить від складності малюнка, лише від " +
+            "розміру та глибини кольору.",
+      stream: "Усього " + grp(SIZE*SIZE) + " пікселів × " + depth + " біт = " +
+              grp(SIZE*SIZE*depth/8) + " байт.",
+      apply: function(){ revealedRows = SIZE; }
+    });
+    runner.setSteps(steps);
+  }
+
+  /* ---------- Алгоритм 2: заливка (flood fill) ---------- */
+  function buildFill(){
+    $("r1-err").innerHTML = "";
+    var newColor = $("r1-fillcolor").value || "#FF0000";
+    var target = shown(startPixel);
+    if(target.toUpperCase() === newColor.toUpperCase()){
+      $("r1-err").innerHTML = '<div class="error">Некоректні дані: колір заливки збігається з кольором ' +
+        "вибраної області. Виберіть інший колір або інший початковий піксель.</div>";
+      runner.setSteps([]); return;
+    }
+    mode = "fill";
+    $("r1-stream").style.display = "";
+    var steps = [{
+      text:"Початок заливки. Вибрано піксель <b>" + startPixel + "</b> (рядок " +
+           Math.floor(startPixel/SIZE) + ", стовпець " + (startPixel%SIZE) + "). " +
+           "Колір області: <b>" + target + "</b>, колір заливки: <b>" + newColor + "</b>. " +
+           "Алгоритм працює з чергою: беремо піксель, фарбуємо його і додаємо в чергу сусідів " +
+           "того самого кольору.",
+      stream:"Черга: [" + startPixel + "]",
+      fill:{}, front:[startPixel],
+      apply:function(){ fillState = {}; frontier = [startPixel]; }
+    }];
+    // імітація алгоритму з чергою (пошук у ширину)
+    var filled = {}, queue = [startPixel], seen = {};
+    seen[startPixel] = true;
+    var guard = 0;
+    while(queue.length && guard++ < 5000){
+      var cur = queue.shift();
+      filled[cur] = newColor;
+      var x = cur % SIZE, y = Math.floor(cur / SIZE);
+      var nb = [];
+      if(x > 0)      nb.push(cur-1);
+      if(x < SIZE-1) nb.push(cur+1);
+      if(y > 0)      nb.push(cur-SIZE);
+      if(y < SIZE-1) nb.push(cur+SIZE);
+      var added = [];
+      nb.forEach(function(n){
+        if(seen[n]) return;
+        if(shown(n).toUpperCase() !== target.toUpperCase()) return;
+        seen[n] = true; queue.push(n); added.push(n);
+      });
+      (function(cur, snapFill, snapQueue, added, x, y){
+        steps.push({
+          text:"Беремо з черги піксель <b>" + cur + "</b> (рядок " + y + ", стовпець " + x + ") і " +
+               "фарбуємо його. " + (added.length
+                 ? "Сусіди " + added.join(", ") + " мають колір області, тому додаємо їх у чергу."
+                 : "Усі сусіди або вже оброблені, або іншого кольору — нічого не додаємо.") +
+               " У черзі залишилося: " + snapQueue.length + ".",
+          stream:"Залито пікселів: " + Object.keys(snapFill).length + ". Черга: [" +
+                 (snapQueue.length > 14 ? snapQueue.slice(0,14).join(", ") + ", …" : snapQueue.join(", ")) + "]",
+          apply:(function(sf, sq){ return function(){
+            fillState = sf; frontier = sq;
+          }; })(JSON.parse(JSON.stringify(snapFill)), snapQueue.slice())
+        });
+      })(cur, filled, queue, added, x, y);
+    }
+    steps.push({
+      text:"Заливку завершено: зафарбовано <b>" + Object.keys(filled).length + "</b> пікселів. " +
+           "Алгоритм не «знає» про фігури — він лише перевіряє колір сусідніх пікселів. " +
+           "Саме тому в растровому редакторі заливка «протікає» через розрив у контурі.",
+      stream:"Черга порожня — робота алгоритму закінчена.",
+      apply:(function(sf){ return function(){ fillState = sf; frontier = []; }; })(JSON.parse(JSON.stringify(filled)))
+    });
+    runner.setSteps(steps);
+  }
+
+  /* ---------- Відображення кроку ---------- */
+  function render(i, step, steps){
+    paintAll();
+    // підсвітка межі черги
+    if(mode === "fill" && frontier.length){
+      var cells = $("r1-grid").children;
+      frontier.forEach(function(n){ if(cells[n]) cells[n].classList.add("front"); });
+    }
+    $("r1-explain").innerHTML = step ? step.text :
+      (steps.length ? "Алгоритм підготовлено. Натискайте «Крок»." : "Виберіть алгоритм і натискайте «Крок».");
+    $("r1-stream").innerHTML = step && step.stream ? step.stream : "";
+  }
+
+  function init(){
+    img = PRESETS[0].make();
+    runner = new StepRunner({
+      mount:$("r1-controls"), bar:$("r1-bar"),
+      reset:function(){ revealedRows = (mode === "decode") ? 0 : SIZE; fillState = {}; frontier = []; },
+      render:render
+    });
+    buildGrid();
+    renderPalette();
+    updateSize();
+
+    var box = $("r1-presets");
+    PRESETS.forEach(function(pr){
+      var b = document.createElement("button");
+      b.textContent = pr.name;
+      b.onclick = function(){
+        img = pr.make(); mode = "none"; revealedRows = SIZE;
+        runner.setSteps([]); paintAll(); updateSize();
+        $("r1-stream").style.display = "none";
+      };
+      box.appendChild(b);
+    });
+
+    $("r1-depth").onchange = function(){
+      depth = Number($("r1-depth").value);
+      // зміна глибини скасовує поточну анімацію і повертає звичайний показ малюнка
+      mode = "none"; revealedRows = SIZE; fillState = {}; frontier = [];
+      $("r1-stream").style.display = "none";
+      runner.setSteps([]);
+      renderPalette(); paintAll(); updateSize(); showCode(startPixel);
+    };
+    $("r1-tool").onchange = function(){};
+    ["r1-r","r1-g","r1-b"].forEach(function(id){
+      $(id).oninput = function(){
+        var r = Number($("r1-r").value), g = Number($("r1-g").value), b = Number($("r1-b").value);
+        $("r1-ro").textContent = r; $("r1-go").textContent = g; $("r1-bo").textContent = b;
+        penColor = rgbToHex(r,g,b);
+      };
+    });
+    $("r1-decode").onclick = buildDecode;
+    $("r1-fill").onclick = buildFill;
+
+    mode = "none"; revealedRows = SIZE;
+    paintAll();
+    showCode(startPixel);
+  }
+  return { init:init };
+})();
+
+/* ==================================================================
+   5. ВКЛАДКА 2 — ВЕКТОР І РАСТЕРИЗАЦІЯ
+   ================================================================== */
+var R2 = (function(){
+  var runner;
+  var cmds = [];            // розібрані команди
+  var pixels = {};          // індекс -> true (зафарбовані під час кроків)
+  var allPixels = {};       // повний результат растеризації (для масштабування)
+
+  var PRESETS = [
+    { name:"Трикутник", code:"ЛІНІЯ 2 13 13 13\nЛІНІЯ 2 13 8 2\nЛІНІЯ 8 2 13 13" },
+    { name:"Коло", code:"КОЛО 8 8 6" },
+    { name:"Будинок", code:"ПРЯМОКУТНИК 3 8 12 14\nЛІНІЯ 3 8 8 3\nЛІНІЯ 8 3 12 8" },
+    { name:"Відрізок під кутом", code:"ЛІНІЯ 1 2 14 9" }
+  ];
+
+  /* ---------- Розбір команд ---------- */
+  function parse(text){
+    var out = [], lines = text.split(/\n+/);
+    for(var k=0;k<lines.length;k++){
+      var raw = lines[k].trim();
+      if(!raw) continue;
+      var parts = raw.split(/[\s,;]+/);
+      var name = parts[0].toUpperCase();
+      var nums = parts.slice(1).map(Number);
+      if(nums.some(function(n){ return isNaN(n); }))
+        throw "Рядок " + (k+1) + ": параметри команди мають бути цілими числами.";
+      function chk(n, need){
+        if(nums.length !== need) throw "Рядок " + (k+1) + ": команда " + name + " потребує " + need + " параметрів.";
+        for(var j=0;j<need;j++){
+          if(nums[j] < 0 || nums[j] > SIZE-1)
+            throw "Рядок " + (k+1) + ": координати мають бути від 0 до " + (SIZE-1) + ".";
+        }
+      }
+      if(name === "ТОЧКА" || name === "POINT"){ chk(nums,2); out.push({t:"point", p:nums, raw:raw}); }
+      else if(name === "ЛІНІЯ" || name === "LINE"){ chk(nums,4); out.push({t:"line", p:nums, raw:raw}); }
+      else if(name === "ПРЯМОКУТНИК" || name === "RECT"){ chk(nums,4); out.push({t:"rect", p:nums, raw:raw}); }
+      else if(name === "КОЛО" || name === "CIRCLE"){
+        if(nums.length !== 3) throw "Рядок " + (k+1) + ": команда КОЛО потребує трьох параметрів: xc yc r.";
+        if(nums[2] < 1 || nums[2] > 7) throw "Рядок " + (k+1) + ": радіус має бути від 1 до 7, щоб коло вмістилося.";
+        out.push({t:"circle", p:nums, raw:raw});
+      }
+      else throw "Рядок " + (k+1) + ": невідома команда «" + parts[0] + "». Доступні: ТОЧКА, ЛІНІЯ, КОЛО, ПРЯМОКУТНИК.";
+    }
+    if(!out.length) throw "Не введено жодної команди.";
+    return out;
+  }
+
+  /* ---------- Алгоритм Брезенхема для відрізка ---------- */
+  /** Повертає масив кроків: {x,y,calc} */
+  function lineSteps(x1,y1,x2,y2,scale){
+    scale = scale || 1;
+    x1*=scale; y1*=scale; x2*=scale; y2*=scale;
+    var dx = Math.abs(x2-x1), dy = Math.abs(y2-y1);
+    var sx = x1 < x2 ? 1 : -1, sy = y1 < y2 ? 1 : -1;
+    var err = dx - dy, out = [], guard = 0;
+    var x = x1, y = y1;
+    while(guard++ < 20000){
+      out.push({x:x, y:y, calc:"помилка e = " + err + " (dx = " + dx + ", dy = " + dy + ")"});
+      if(x === x2 && y === y2) break;
+      var e2 = 2*err, moved = [];
+      if(e2 > -dy){ err -= dy; x += sx; moved.push("крок по x"); }
+      if(e2 <  dx){ err += dx; y += sy; moved.push("крок по y"); }
+      out[out.length-1].calc += ", 2e = " + e2 + " → " + moved.join(" і ");
+    }
+    return out;
+  }
+  /** Алгоритм середньої точки для кола (8 симетричних пікселів за ітерацію). */
+  function circleSteps(xc,yc,r,scale){
+    scale = scale || 1;
+    xc*=scale; yc*=scale; r*=scale;
+    var x = 0, y = r, d = 3 - 2*r, out = [], guard = 0;
+    while(x <= y && guard++ < 5000){
+      var pts = [
+        [xc+x,yc+y],[xc-x,yc+y],[xc+x,yc-y],[xc-x,yc-y],
+        [xc+y,yc+x],[xc-y,yc+x],[xc+y,yc-x],[xc-y,yc-x]
+      ];
+      out.push({ pts:pts, calc:"x = " + x + ", y = " + y + ", d = " + d +
+        (d < 0 ? " < 0 → d = d + 4x + 6" : " ≥ 0 → d = d + 4(x−y) + 10, y = y − 1") });
+      if(d < 0) d = d + 4*x + 6;
+      else { d = d + 4*(x-y) + 10; y--; }
+      x++;
+    }
+    return out;
+  }
+
+  /** Повна растеризація набору команд у сітці size×size (для порівняння масштабів). */
+  function rasterize(list, scale){
+    var set = {}, S = SIZE*scale;
+    function put(x,y){
+      x = Math.round(x); y = Math.round(y);
+      if(x<0||y<0||x>=S||y>=S) return;
+      set[y*S+x] = true;
+    }
+    list.forEach(function(c){
+      if(c.t === "point") put(c.p[0]*scale, c.p[1]*scale);
+      if(c.t === "line") lineSteps(c.p[0],c.p[1],c.p[2],c.p[3],scale).forEach(function(s){ put(s.x,s.y); });
+      if(c.t === "rect"){
+        var a = c.p;
+        lineSteps(a[0],a[1],a[2],a[1],scale).forEach(function(s){ put(s.x,s.y); });
+        lineSteps(a[2],a[1],a[2],a[3],scale).forEach(function(s){ put(s.x,s.y); });
+        lineSteps(a[2],a[3],a[0],a[3],scale).forEach(function(s){ put(s.x,s.y); });
+        lineSteps(a[0],a[3],a[0],a[1],scale).forEach(function(s){ put(s.x,s.y); });
+      }
+      if(c.t === "circle") circleSteps(c.p[0],c.p[1],c.p[2],scale).forEach(function(s){
+        s.pts.forEach(function(p){ put(p[0],p[1]); });
+      });
+    });
+    return set;
+  }
+
+  /* ---------- Побудова кроків ---------- */
+  function build(){
+    $("r2-err").innerHTML = "";
+    try{ cmds = parse($("r2-cmds").value); }
+    catch(msg){
+      $("r2-err").innerHTML = '<div class="error">Некоректний ввід: ' + esc(msg) + "</div>";
+      runner.setSteps([]); cmds = []; allPixels = {}; redrawCanvases(); return;
+    }
+    allPixels = rasterize(cmds, 1);
+    var steps = [{
+      text:"Векторний опис містить <b>" + cmds.length + "</b> команд(и). У файлі зберігаються не пікселі, " +
+           "а параметри фігур. Щоб показати зображення на екрані, програма має виконати " +
+           "<b>растеризацію</b> — обчислити, які пікселі зафарбувати.",
+      apply:function(){ pixels = {}; }, log:null
+    }];
+    cmds.forEach(function(c, ci){
+      if(c.t === "point"){
+        pushPix(steps, [[c.p[0],c.p[1]]],
+          "Команда <b>" + esc(c.raw) + "</b>: зафарбовується один піксель (" + c.p[0] + ", " + c.p[1] + ").",
+          "ТОЧКА", "(" + c.p[0] + ", " + c.p[1] + ")");
+        return;
+      }
+      if(c.t === "line" || c.t === "rect"){
+        var segs = (c.t === "line")
+          ? [[c.p[0],c.p[1],c.p[2],c.p[3]]]
+          : [[c.p[0],c.p[1],c.p[2],c.p[1]],[c.p[2],c.p[1],c.p[2],c.p[3]],
+             [c.p[2],c.p[3],c.p[0],c.p[3]],[c.p[0],c.p[3],c.p[0],c.p[1]]];
+        segs.forEach(function(sg, si){
+          var pts = lineSteps(sg[0],sg[1],sg[2],sg[3]);
+          pts.forEach(function(st, k){
+            var head = (c.t === "rect" ? "Сторона " + (si+1) + " прямокутника" : "Команда <b>" + esc(c.raw) + "</b>");
+            pushPix(steps, [[st.x,st.y]],
+              head + ". Алгоритм Брезенхема працює лише з цілими числами: " +
+              "він тримає «помилку» і за її знаком вирішує, зсунутися по одній осі чи по двох. " +
+              "Поточний стан: " + esc(st.calc) + ". Зафарбовуємо піксель (" + st.x + ", " + st.y + ").",
+              "Брезенхем: " + esc(st.calc), "(" + st.x + ", " + st.y + ")");
+          });
+        });
+        return;
+      }
+      if(c.t === "circle"){
+        var its = circleSteps(c.p[0],c.p[1],c.p[2]);
+        its.forEach(function(it){
+          pushPix(steps, it.pts,
+            "Команда <b>" + esc(c.raw) + "</b>. Алгоритм середньої точки обчислює лише 1/8 кола, " +
+            "а решту пікселів отримує за симетрією (8 точок одразу). " + esc(it.calc) + ".",
+            "Коло: " + esc(it.calc), it.pts.length + " пікселів");
+        });
+      }
+    });
+    steps.push({
+      text:"Растеризацію завершено: зафарбовано <b>" + Object.keys(allPixels).length + "</b> пікселів. " +
+           "Зверніть увагу: у файлі залишилися тільки команди, тому зображення можна збільшити " +
+           "й перерахувати заново — без «сходинок».",
+      apply:(function(fin){ return function(){ pixels = fin; }; })(cloneSet(allPixels)),
+      log:{calc:"Разом", pix:Object.keys(allPixels).length + " пікселів"}
+    });
+    runner.setSteps(steps);
+    updateSizes();
+    redrawCanvases();
+  }
+  function cloneSet(s){ var o = {}; Object.keys(s).forEach(function(k){ o[k] = true; }); return o; }
+  /** Додає крок, який фарбує задані пікселі (накопичувально). */
+  function pushPix(steps, pts, text, calc, pixLabel){
+    var snapshot = null;
+    steps.push({
+      text:text, log:{calc:calc, pix:pixLabel},
+      apply:function(){
+        pts.forEach(function(p){
+          var x = p[0], y = p[1];
+          if(x<0||y<0||x>=SIZE||y>=SIZE) return;
+          pixels[y*SIZE+x] = true;
+        });
+      },
+      last:pts
+    });
+  }
+
+  /* ---------- Відображення ---------- */
+  function buildGrid(){
+    var g = $("r2-grid"), html = "";
+    for(var i=0;i<SIZE*SIZE;i++) html += '<div data-i="' + i + '"></div>';
+    g.innerHTML = html;
+    var ax = "";
+    for(var x=0;x<SIZE;x++) ax += "<div>" + x + "</div>";
+    $("r2-axis").innerHTML = ax;
+  }
+  function render(i, step, steps){
+    var cells = $("r2-grid").children;
+    for(var k=0;k<cells.length;k++){
+      cells[k].className = "";
+      cells[k].style.background = pixels[k] ? "#16222e" : "#fff";
+    }
+    if(step && step.last){
+      step.last.forEach(function(p){
+        var x = p[0], y = p[1];
+        if(x<0||y<0||x>=SIZE||y>=SIZE) return;
+        var c = cells[y*SIZE+x];
+        if(c) c.classList.add("cur");
+      });
+    }
+    $("r2-explain").innerHTML = step ? step.text :
+      (steps.length ? "Команди розібрано. Натискайте «Крок», щоб побачити роботу алгоритму растеризації."
+                    : "Натисніть «Растеризувати покроково».");
+    var rows = "";
+    steps.forEach(function(s, k){
+      if(k > i || !s.log) return;
+      rows += '<tr class="' + (k === i ? "cur" : "") + '"><td>' + (k+1) + "</td><td>" + s.log.calc +
+              "</td><td>" + esc(s.log.pix) + "</td></tr>";
+    });
+    // показуємо лише останні 12 рядків журналу, щоб таблиця не розтягувалася
+    var tb = $("r2-log").querySelector("tbody");
+    tb.innerHTML = rows;
+    var trs = tb.querySelectorAll("tr");
+    if(trs.length > 12){
+      for(var q=0; q<trs.length-12; q++) trs[q].style.display = "none";
+    }
+  }
+
+  /* ---------- Порівняння масштабування ---------- */
+  function redrawCanvases(){
+    var zoom = Number($("r2-zoom").value);
+    drawSet($("r2-cv-raster"), allPixels, SIZE, 1);     // растр 16×16, розтягнутий
+    drawSet($("r2-cv-vector"), rasterize(cmds, zoom), SIZE*zoom, zoom);
+    updateSizes();
+  }
+  /** Малює множину пікселів на полотні 256×256. */
+  function drawSet(canvas, set, gridSize, zoom){
+    var ctx = canvas.getContext("2d");
+    var W = canvas.width, cell = W / gridSize;
+    ctx.clearRect(0,0,W,W);
+    ctx.fillStyle = "#fff"; ctx.fillRect(0,0,W,W);
+    ctx.fillStyle = "#16222e";
+    Object.keys(set).forEach(function(k){
+      var idx = Number(k), x = idx % gridSize, y = Math.floor(idx / gridSize);
+      ctx.fillRect(x*cell, y*cell, Math.ceil(cell), Math.ceil(cell));
+    });
+    // сітка пікселів лише для великих клітинок
+    if(cell >= 8){
+      ctx.strokeStyle = "rgba(0,0,0,.12)"; ctx.lineWidth = 1;
+      for(var i=0;i<=gridSize;i++){
+        ctx.beginPath(); ctx.moveTo(i*cell,0); ctx.lineTo(i*cell,W); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,i*cell); ctx.lineTo(W,i*cell); ctx.stroke();
+      }
+    }
+  }
+  function updateSizes(){
+    var zoom = Number($("r2-zoom").value);
+    var rasterBytes = SIZE*zoom*SIZE*zoom*1/8;          // 1 біт на піксель
+    var vectorBytes = cmds.reduce(function(a,c){ return a + 1 + c.p.length; }, 0);
+    $("r2-size").innerHTML =
+      "Обсяг растрового файлу для " + (SIZE*zoom) + " × " + (SIZE*zoom) + " при 1 біті: <b>" +
+      grp(rasterBytes) + " байт</b>. Обсяг векторного опису: " + cmds.length +
+      " команд(и) × (код + параметри) ≈ <b>" + grp(vectorBytes) + " байт</b> — " +
+      "і він <b>не залежить</b> від розміру зображення на екрані.";
+  }
+
+  function init(){
+    runner = new StepRunner({
+      mount:$("r2-controls"), bar:$("r2-bar"),
+      reset:function(){ pixels = {}; },
+      render:render
+    });
+    buildGrid();
+    var box = $("r2-presets");
+    PRESETS.forEach(function(pr){
+      var b = document.createElement("button");
+      b.textContent = pr.name;
+      b.onclick = function(){ $("r2-cmds").value = pr.code; build(); };
+      box.appendChild(b);
+    });
+    $("r2-build").onclick = build;
+    $("r2-all").onclick = function(){ build(); runner.toEnd(); };
+    $("r2-zoom").onchange = redrawCanvases;
+    $("r2-cmds").value = PRESETS[0].code;
+    build();
+  }
+  return { init:init, redrawCanvases:function(){ if(cmds.length || true) redrawCanvases(); } };
+})();
+
+/* ==================================================================
+   6. ВКЛАДКА 3 — МОДЕЛЬ RGB
+   ================================================================== */
+var R3 = (function(){
+  var runner;
+  var shownChannels = 0;     // скільки каналів уже «увімкнено» в покроковій демонстрації
+
+  var PRESETS = [
+    {name:"Білий", c:[255,255,255]},
+    {name:"Жовтий", c:[255,255,0]},
+    {name:"Бірюзовий", c:[0,255,255]},
+    {name:"Пурпуровий", c:[255,0,255]},
+    {name:"Сірий 50 %", c:[128,128,128]}
+  ];
+
+  function vals(){
+    return { r:Number($("r3-r").value), g:Number($("r3-g").value), b:Number($("r3-b").value) };
+  }
+  function update(){
+    var v = vals();
+    $("r3-ro").textContent = v.r; $("r3-go").textContent = v.g; $("r3-bo").textContent = v.b;
+    var hex = rgbToHex(v.r, v.g, v.b);
+    $("r3-swatch").style.background = hex;
+    $("r3-code").innerHTML =
+      "Десятковий запис: <b>rgb(" + v.r + ", " + v.g + ", " + v.b + ")</b><br>" +
+      "Шістнадцятковий код: <b>" + hex + "</b><br>" +
+      'Двійковий код (24 біти): <span class="bits">' + bin(v.r,8) + " " + bin(v.g,8) + " " + bin(v.b,8) + "</span>";
+    drawMix(v);
+    buildSteps();
+  }
+  /** Три промені світла, що перетинаються (адитивне змішування). */
+  function drawMix(v){
+    var hexR = rgbToHex(v.r,0,0), hexG = rgbToHex(0,v.g,0), hexB = rgbToHex(0,0,v.b);
+    var show = shownChannels;
+    var svg = "";
+    // Група ізольована: режим «screen» складає світло кружків між собою
+    // і з чорним тлом — саме так працює адитивне змішування.
+    svg += '<g style="isolation:isolate">';
+    svg += '<rect x="0" y="0" width="320" height="210" fill="#0b0f14"></rect>';
+    // show = -1 означає вільний показ (усі три складові)
+    if(show < 0 || show >= 1) svg += '<circle cx="128" cy="78"  r="62" fill="' + hexR + '" style="mix-blend-mode:screen"></circle>';
+    if(show < 0 || show >= 2) svg += '<circle cx="192" cy="78"  r="62" fill="' + hexG + '" style="mix-blend-mode:screen"></circle>';
+    if(show < 0 || show >= 3) svg += '<circle cx="160" cy="134" r="62" fill="' + hexB + '" style="mix-blend-mode:screen"></circle>';
+    svg += "</g>";
+    svg += '<text x="10" y="200" fill="#8a94a0" font-size="12" font-family="Segoe UI">' +
+           "Адитивне змішування: там, де промені накладаються, світло додається" + "</text>";
+    $("r3-mix").innerHTML = svg;
+  }
+  /** Покрокове складання 24-бітного коду з трьох байтів. */
+  function buildSteps(){
+    var v = vals();
+    var steps = [
+      { text:"Колір на екрані утворюють три складові: червона, зелена і синя. На кожну складову " +
+             "відводиться <b>1 байт = 8 бітів</b>, тобто 256 градацій яскравості (від 0 до 255).",
+        bitsHtml:'<span class="bits">________ ________ ________</span> (ще нічого не записано)',
+        apply:function(){ shownChannels = 0; } },
+      { text:"<b>Червоний канал R = " + v.r + "</b>. У двійковій системі це " + bin(v.r,8) +
+             ". Ці 8 бітів записуються першими.",
+        bitsHtml:'<span class="bits">' + bin(v.r,8) + " ________ ________</span>  (R = " + v.r + ")",
+        apply:function(){ shownChannels = 1; } },
+      { text:"<b>Зелений канал G = " + v.g + "</b> → " + bin(v.g,8) +
+             ". Додаємо другий байт. Око людини найчутливіше саме до зеленого.",
+        bitsHtml:'<span class="bits">' + bin(v.r,8) + " " + bin(v.g,8) + " ________</span>  (R, G)",
+        apply:function(){ shownChannels = 2; } },
+      { text:"<b>Синій канал B = " + v.b + "</b> → " + bin(v.b,8) +
+             ". Код кольору готовий: 8 + 8 + 8 = <b>24 біти = 3 байти</b> на один піксель.",
+        bitsHtml:'<span class="bits">' + bin(v.r,8) + " " + bin(v.g,8) + " " + bin(v.b,8) +
+                 "</span>  = " + rgbToHex(v.r,v.g,v.b),
+        apply:function(){ shownChannels = 3; } },
+      { text:"Усього комбінацій: 2<sup>24</sup> = 256 × 256 × 256 = <b>16 777 216</b> кольорів. " +
+             "Такий режим називають True Color. Якщо глибину зменшити до 8 бітів, " +
+             "кольори доведеться підбирати з палітри — і зображення втратить плавні переходи.",
+        bitsHtml:"Код пікселя: <b>" + rgbToHex(v.r,v.g,v.b) + "</b> = " +
+                 grp(v.r*65536 + v.g*256 + v.b) + " (десяткове значення 24-бітного коду)",
+        apply:function(){ shownChannels = 3; } }
+    ];
+    runner.setSteps(steps);
+  }
+
+  function init(){
+    runner = new StepRunner({
+      mount:$("r3-controls"), bar:$("r3-bar"),
+      reset:function(){ shownChannels = -1; },
+      render:function(i, step, steps){
+        $("r3-explain").innerHTML = step ? step.text :
+          "Натискайте «Крок», щоб побачити, як з трьох байтів складається код кольору.";
+        $("r3-bits").innerHTML = step ? step.bitsHtml : "";
+        drawMix(vals());
+      }
+    });
+    ["r3-r","r3-g","r3-b"].forEach(function(id){ $(id).oninput = update; });
+    var box = $("r3-presets");
+    PRESETS.forEach(function(pr){
+      var b = document.createElement("button");
+      b.textContent = pr.name;
+      b.onclick = function(){
+        $("r3-r").value = pr.c[0]; $("r3-g").value = pr.c[1]; $("r3-b").value = pr.c[2];
+        update();
+      };
+      box.appendChild(b);
+    });
+    update();
+  }
+  return { init:init };
+})();
+
+/* ==================================================================
+   7. СТАРТ
+   ================================================================== */
+R1.init();
+R2.init();
+R3.init();
+
+/* Запасний варіант для старих браузерів, які не підтримують CSS aspect-ratio:
+   робимо сітку пікселів квадратною вручну. */
+(function keepSquare(){
+  if(window.CSS && CSS.supports && CSS.supports("aspect-ratio","1 / 1")) return;
+  function fix(){
+    ["r1-grid","r2-grid"].forEach(function(id){
+      var g = $(id);
+      if(g && g.clientWidth) g.style.height = g.clientWidth + "px";
+    });
+  }
+  window.addEventListener("resize", fix);
+  setTimeout(fix, 0);
+})();
+</script>
+</body>
+</html>

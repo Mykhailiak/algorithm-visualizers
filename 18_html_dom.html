@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Візуалізатор «HTML → DOM-дерево → сторінка»</title>
+<!--
+  Навчальний візуалізатор для уроків технологій профільного рівня
+  Спеціалізація «Обробка інформації та програмне забезпечення»
+  11 клас. Розділ 9. Основи веб-дизайну. Тема 9.2 «Основи мови HTML»
+
+  Один самодостатній файл: HTML + CSS + JS, без бібліотек і CDN.
+  Працює офлайн (можна запускати з флешки в комп'ютерному класі).
+  Код не мінімізований і прокомментований, щоб учитель міг його змінити.
+-->
+<style>
+/* ===================== Спільне оформлення ===================== */
+:root{
+  --bg:#eef2f7;
+  --panel:#ffffff;
+  --ink:#16222e;
+  --ink-soft:#52657a;
+  --line:#c7d3e0;
+  --accent:#1e5fa8;
+  --accent-soft:#dce8f7;
+  --ok:#0f8a5f;
+  --ok-soft:#d8f1e6;
+  --warn:#c9741a;
+  --err:#bf3330;
+  --err-soft:#fbe0df;
+  --hl:#fff3b0;
+  --tag:#1e5fa8;
+  --attr:#7a3fa0;
+  --val:#0f8a5f;
+  --txt:#444;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:"Segoe UI",Tahoma,Verdana,sans-serif;
+  font-size:17px;line-height:1.45;
+}
+header.app{background:linear-gradient(180deg,#1e5fa8,#174a85);color:#fff;padding:14px 20px;}
+header.app h1{margin:0;font-size:1.45rem;line-height:1.2;}
+header.app .meta{margin-top:4px;font-size:1rem;opacity:.92;}
+main{max-width:1600px;margin:0 auto;padding:16px 16px 10px;}
+footer.app{text-align:center;padding:14px;color:var(--ink-soft);
+  border-top:1px solid var(--line);margin-top:18px;font-size:.95rem;}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;}
+.panel h2{margin:0 0 10px;font-size:1.12rem;color:var(--accent);}
+.note{color:var(--ink-soft);font-size:.95rem;}
+
+/* ---- керування кроками ---- */
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 10px;}
+.controls button{font:inherit;font-weight:600;padding:10px 16px;border-radius:9px;
+  border:2px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;}
+.controls button.ghost{background:var(--panel);color:var(--accent);}
+.controls button:disabled{opacity:.45;cursor:default;}
+.controls .speed{display:flex;align-items:center;gap:8px;}
+.controls input[type=range]{width:150px;}
+.controls .counter{font-weight:700;color:var(--ink-soft);margin-left:auto;}
+.progress{height:8px;background:var(--accent-soft);border-radius:5px;overflow:hidden;margin-bottom:10px;}
+.progress > div{height:100%;width:0;background:var(--accent);transition:width .2s;}
+
+.explain{background:var(--hl);border-left:6px solid var(--warn);border-radius:8px;
+  padding:11px 14px;min-height:60px;font-size:1.05rem;}
+.explain.bad{background:var(--err-soft);border-left-color:var(--err);}
+.error{background:var(--err-soft);border-left:6px solid var(--err);padding:10px 14px;
+  border-radius:8px;color:#5b1512;font-weight:600;margin-top:8px;}
+
+/* ---- пресети й кнопки ---- */
+.presets{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+.presets button{font:inherit;padding:8px 13px;border-radius:20px;cursor:pointer;
+  border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600;}
+.presets button:hover{background:#cadcf2;}
+.btn-main{font:inherit;font-weight:600;padding:10px 16px;border-radius:9px;
+  border:2px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;}
+.btn-sec{font:inherit;font-weight:600;padding:10px 16px;border-radius:9px;
+  border:2px solid var(--accent);background:#fff;color:var(--accent);cursor:pointer;}
+
+/* ---- редактор ---- */
+textarea#code{
+  width:100%;min-height:170px;font-family:Consolas,"Courier New",monospace;font-size:1.02rem;
+  border:2px solid var(--line);border-radius:10px;padding:10px;line-height:1.5;resize:vertical;
+  background:#fbfdff;color:var(--ink);
+}
+textarea#code:focus{outline:none;border-color:var(--accent);}
+
+/* ---- три синхронні панелі ---- */
+.cols3{display:grid;grid-template-columns:1.05fr 1fr 1fr;gap:14px;align-items:start;}
+@media (max-width:1150px){ .cols3{grid-template-columns:1fr;} }
+
+/* ---- підсвічений код ---- */
+pre.tokens{
+  font-family:Consolas,"Courier New",monospace;font-size:1.02rem;line-height:1.6;
+  background:#fbfdff;border:2px solid var(--line);border-radius:10px;
+  padding:10px;margin:0;max-height:430px;overflow:auto;white-space:pre-wrap;word-break:break-word;
+}
+pre.tokens .tk{border-radius:4px;}
+pre.tokens .pending{opacity:.35;}
+pre.tokens .cur{background:var(--hl);box-shadow:0 0 0 3px var(--hl);}
+pre.tokens .hl{background:#d7e9ff;box-shadow:0 0 0 3px #d7e9ff;}
+pre.tokens .bad{background:var(--err-soft);text-decoration:underline wavy var(--err);}
+.k-tag{color:var(--tag);font-weight:700;}
+.k-attr{color:var(--attr);}
+.k-val{color:var(--val);}
+.k-txt{color:var(--txt);}
+.k-com{color:#8a94a0;font-style:italic;}
+
+/* ---- стек відкритих тегів ---- */
+.stack{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;min-height:34px;align-items:center;}
+.stack .chip{background:var(--accent-soft);border:2px solid var(--accent);color:var(--accent);
+  border-radius:16px;padding:3px 11px;font-family:Consolas,monospace;font-weight:700;font-size:.95rem;}
+.stack .chip.top{background:var(--accent);color:#fff;}
+.stack .lbl{color:var(--ink-soft);font-size:.95rem;}
+
+/* ---- DOM-дерево ---- */
+.tree{max-height:430px;overflow:auto;font-family:Consolas,"Courier New",monospace;font-size:1rem;}
+.tree ul{list-style:none;margin:0;padding-left:20px;position:relative;}
+.tree > ul{padding-left:4px;}
+.tree li{position:relative;padding:2px 0 2px 14px;}
+.tree li::before{content:"";position:absolute;left:0;top:16px;width:12px;height:2px;background:var(--line);}
+.tree li::after{content:"";position:absolute;left:0;top:0;height:100%;width:2px;background:var(--line);}
+.tree li:last-child::after{height:16px;}
+.tree > ul > li::before,.tree > ul > li::after{display:none;}
+.tree .node{display:inline-block;padding:3px 9px;border-radius:7px;border:2px solid transparent;cursor:default;}
+.tree .node.el{background:var(--accent-soft);color:var(--accent);font-weight:700;}
+.tree .node.txt{background:#f1f3f6;color:#333;font-style:italic;font-weight:400;}
+.tree .node.com{background:#eceef1;color:#8a94a0;font-style:italic;}
+.tree .node.cur{border-color:var(--warn);background:var(--hl);color:#000;}
+.tree .node.hl{border-color:var(--accent);}
+.tree .node .a-n{color:var(--attr);font-weight:400;}
+.tree .node .a-v{color:var(--val);font-weight:400;}
+.tree .node.open-el{box-shadow:inset 0 0 0 2px #fff, 0 0 0 2px var(--ok);}
+
+/* ---- сторінка-результат ---- */
+.browser{border:2px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;}
+.browser .bar{background:#e3eaf2;border-bottom:1px solid var(--line);padding:6px 10px;
+  font-size:.92rem;color:var(--ink-soft);display:flex;gap:8px;align-items:center;}
+.browser .bar .dot{width:10px;height:10px;border-radius:50%;background:#c2ccd8;}
+.browser .bar .ttl{font-weight:700;color:var(--ink);}
+.page-view{
+  padding:12px 14px;min-height:300px;max-height:400px;overflow:auto;
+  font:16px/1.45 "Times New Roman",Georgia,serif;color:#111;background:#fff;
+}
+.page-view h1,.page-view h2,.page-view h3,.page-view h4{margin:.5em 0 .35em;}
+.page-view p{margin:.5em 0;}
+.page-view table{border-collapse:collapse;}
+.page-view th,.page-view td{border:1px solid #999;padding:4px 8px;}
+.page-view a{color:#0b57c7;}
+.page-view img{max-width:100%;}
+.page-view .img-stub{
+  display:inline-block;border:2px dashed #aab4c0;background:#f4f6f9;color:#6b7785;
+  padding:8px 12px;font:italic 14px/1.2 "Segoe UI",sans-serif;border-radius:6px;
+}
+.page-view .flash{outline:3px solid var(--warn);outline-offset:2px;background:#fff8d6;}
+
+.counts{display:flex;gap:14px;flex-wrap:wrap;font-size:.95rem;color:var(--ink-soft);margin-top:8px;}
+.counts b{color:var(--ink);}
+
+@media (max-width:900px){
+  body{font-size:16px;}
+  header.app h1{font-size:1.2rem;}
+}
+</style>
+</head>
+<body>
+
+<header class="app">
+  <h1>Візуалізатор «HTML → DOM-дерево → сторінка»</h1>
+  <div class="meta">11 клас · Розділ 9. Основи веб-дизайну · Тема 9.2 «Основи мови HTML»</div>
+</header>
+
+<main>
+  <div class="panel">
+    <h2>Код HTML</h2>
+    <div class="presets" id="presets"></div>
+    <textarea id="code" spellcheck="false"></textarea>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn-main" id="parse">Розібрати покроково</button>
+      <button class="btn-sec" id="all">Показати результат одразу</button>
+      <button class="btn-sec" id="check">Перевірити вкладеність тегів</button>
+    </div>
+    <div id="err"></div>
+    <p class="note">Браузер читає код послідовно, тег за тегом. Відкривальний тег додає новий вузол
+      у дерево документа (DOM) і «заходить» усередину нього, закривальний — повертає на рівень вище.
+      Наведіть курсор на вузол дерева, щоб побачити відповідний фрагмент коду й елемент на сторінці.</p>
+  </div>
+
+  <div class="panel">
+    <div class="controls" id="controls"></div>
+    <div class="progress"><div id="bar"></div></div>
+    <div class="explain" id="explain">Виберіть приклад або введіть власний код і натисніть «Розібрати покроково».</div>
+    <div class="stack" id="stack"></div>
+  </div>
+
+  <div class="cols3">
+    <div class="panel">
+      <h2>1. Код (розбір тег за тегом)</h2>
+      <pre class="tokens" id="tokens"></pre>
+    </div>
+    <div class="panel">
+      <h2>2. DOM-дерево документа</h2>
+      <div class="tree" id="tree"></div>
+      <div class="counts" id="counts"></div>
+    </div>
+    <div class="panel">
+      <h2>3. Сторінка (результат)</h2>
+      <div class="browser">
+        <div class="bar"><span class="dot"></span><span class="ttl" id="pg-title">нова вкладка</span></div>
+        <div class="page-view" id="page"></div>
+      </div>
+      <p class="note">На сторінці відображається лише вміст елемента <b>body</b>.
+        Те, що записано в <b>head</b>, браузер використовує як службову інформацію.</p>
+    </div>
+  </div>
+</main>
+
+<footer class="app">Розроблено автором</footer>
+
+<script>
+"use strict";
+
+/* ==================================================================
+   1. ДОПОМІЖНІ ФУНКЦІЇ
+   ================================================================== */
+function $(id){ return document.getElementById(id); }
+function esc(s){
+  return String(s).replace(/[&<>"]/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];
+  });
+}
+/** Скорочення довгого тексту для підписів у дереві. */
+function shorten(s, n){
+  s = s.replace(/\s+/g, " ").trim();
+  return s.length > n ? s.slice(0, n-1) + "…" : s;
+}
+
+/* Одиночні (порожні) теги: не мають закривального тега. */
+var VOID = ["br","hr","img","input","meta","link","area","base","col","source"];
+/* Теги, які дозволено відтворювати на сторінці-результаті. */
+var ALLOWED = ["html","head","body","title","meta","link",
+  "h1","h2","h3","h4","h5","h6","p","br","hr","div","span","pre","blockquote",
+  "b","strong","i","em","u","s","mark","small","sup","sub","code",
+  "ul","ol","li","dl","dt","dd",
+  "table","caption","thead","tbody","tfoot","tr","th","td",
+  "a","img","center","figure","figcaption","header","footer","nav","section","article","main","aside"];
+/* Атрибути, які дозволено застосовувати у перегляді. */
+var ATTR_OK = ["href","src","alt","title","width","height","border","align","valign",
+  "colspan","rowspan","type","start","style","color","size","lang","dir"];
+
+/* ==================================================================
+   2. КРОКОВИЙ ВИКОНАВЕЦЬ (той самий, що й в інших засобах комплекту)
+   ================================================================== */
+function StepRunner(opts){
+  this.o = opts; this.steps = []; this.i = -1; this.timer = null; this.delay = 900;
+  this.build();
+}
+StepRunner.prototype.build = function(){
+  var self = this, box = this.o.mount;
+  box.innerHTML =
+    '<button class="btn-step">Крок</button>' +
+    '<button class="btn-play ghost">Старт</button>' +
+    '<button class="btn-reset ghost">Скинути</button>' +
+    '<span class="speed"><label>Швидкість</label>' +
+    '<input type="range" min="150" max="2000" step="50" value="900"></span>' +
+    '<span class="counter">крок 0 з 0</span>';
+  this.bStep = box.querySelector(".btn-step");
+  this.bPlay = box.querySelector(".btn-play");
+  this.bReset = box.querySelector(".btn-reset");
+  this.range = box.querySelector("input[type=range]");
+  this.counter = box.querySelector(".counter");
+  this.bStep.onclick = function(){ self.pause(); self.next(); };
+  this.bPlay.onclick = function(){ self.timer ? self.pause() : self.play(); };
+  this.bReset.onclick = function(){ self.reset(); };
+  this.range.oninput = function(){
+    self.delay = 2150 - Number(self.range.value);
+    if(self.timer){ self.pause(); self.play(); }
+  };
+  this.delay = 2150 - Number(this.range.value);
+};
+StepRunner.prototype.setSteps = function(steps){
+  this.pause(); this.steps = steps || []; this.i = -1; this.apply();
+};
+StepRunner.prototype.apply = function(){
+  if(this.o.reset) this.o.reset();
+  for(var k=0; k<=this.i; k++) this.steps[k].apply();
+  if(this.o.render) this.o.render(this.i, this.steps[this.i] || null, this.steps);
+  this.counter.textContent = "крок " + (this.i+1) + " з " + this.steps.length;
+  this.bPlay.textContent = this.timer ? "Пауза" : "Старт";
+  var empty = this.steps.length === 0;
+  this.bStep.disabled = empty || this.i >= this.steps.length-1;
+  this.bPlay.disabled = empty;
+  if(this.o.bar){
+    this.o.bar.style.width = (this.steps.length ? (this.i+1)/this.steps.length*100 : 0) + "%";
+  }
+};
+StepRunner.prototype.next = function(){
+  if(this.i >= this.steps.length-1){ this.pause(); return false; }
+  this.i++; this.apply(); return true;
+};
+StepRunner.prototype.play = function(){
+  var self = this;
+  if(!this.steps.length) return;
+  if(this.i >= this.steps.length-1) this.i = -1;
+  this.timer = setInterval(function(){ if(!self.next()) self.pause(); }, this.delay);
+  this.apply();
+};
+StepRunner.prototype.pause = function(){
+  if(this.timer){ clearInterval(this.timer); this.timer = null; }
+  this.bPlay.textContent = "Старт";
+};
+StepRunner.prototype.reset = function(){ this.pause(); this.i = -1; this.apply(); };
+StepRunner.prototype.toEnd = function(){
+  this.pause();
+  this.i = this.steps.length - 1;
+  this.apply();
+};
+
+/* ==================================================================
+   3. ЛЕКСИЧНИЙ АНАЛІЗ HTML (розбиття коду на лексеми)
+   ================================================================== */
+/**
+ * Повертає масив лексем. Кожна лексема:
+ *  {kind:"open"|"close"|"text"|"comment"|"doctype", raw, name, attrs, selfClose, start, end}
+ */
+function tokenizeHTML(src){
+  var toks = [], i = 0;
+  while(i < src.length){
+    if(src[i] === "<"){
+      // коментар
+      if(src.substr(i,4) === "<!--"){
+        var ce = src.indexOf("-->", i+4);
+        var end = ce < 0 ? src.length : ce+3;
+        toks.push({kind:"comment", raw:src.slice(i,end), text:src.slice(i+4, ce<0?src.length:ce), start:i, end:end});
+        i = end; continue;
+      }
+      // оголошення типу документа
+      if(/^<!doctype/i.test(src.substr(i,9))){
+        var de = src.indexOf(">", i);
+        var dend = de < 0 ? src.length : de+1;
+        toks.push({kind:"doctype", raw:src.slice(i,dend), start:i, end:dend});
+        i = dend; continue;
+      }
+      // закривальний тег
+      var mClose = /^<\/\s*([A-Za-z][A-Za-z0-9]*)\s*>/.exec(src.slice(i));
+      if(mClose){
+        toks.push({kind:"close", raw:mClose[0], name:mClose[1].toLowerCase(), start:i, end:i+mClose[0].length});
+        i += mClose[0].length; continue;
+      }
+      // відкривальний тег
+      var mOpen = /^<\s*([A-Za-z][A-Za-z0-9]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/.exec(src.slice(i));
+      if(mOpen){
+        var body = mOpen[2] || "";
+        var selfClose = /\/\s*$/.test(body);
+        toks.push({
+          kind:"open", raw:mOpen[0], name:mOpen[1].toLowerCase(),
+          attrs: parseAttrs(body.replace(/\/\s*$/, "")),
+          selfClose: selfClose, start:i, end:i+mOpen[0].length
+        });
+        i += mOpen[0].length; continue;
+      }
+      // «<», який не утворює тега — вважаємо текстом
+      var nx = src.indexOf("<", i+1);
+      var tEnd = nx < 0 ? src.length : nx;
+      toks.push({kind:"text", raw:src.slice(i,tEnd), text:src.slice(i,tEnd), start:i, end:tEnd, broken:true});
+      i = tEnd; continue;
+    }
+    // звичайний текст до наступного «<»
+    var next = src.indexOf("<", i);
+    var e = next < 0 ? src.length : next;
+    toks.push({kind:"text", raw:src.slice(i,e), text:src.slice(i,e), start:i, end:e});
+    i = e;
+  }
+  return toks;
+}
+
+/** Розбір атрибутів усередині відкривального тега. */
+function parseAttrs(s){
+  var out = [], re = /([A-Za-z_:][-A-Za-z0-9_:.]*)(\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g, m;
+  while((m = re.exec(s))){
+    if(!m[1]) continue;
+    var v = m[4] !== undefined ? m[4] : (m[5] !== undefined ? m[5] : (m[6] !== undefined ? m[6] : null));
+    out.push({n:m[1].toLowerCase(), v:v, raw:m[0]});
+  }
+  return out;
+}
+
+/* ==================================================================
+   4. ПОБУДОВА ДЕРЕВА І КРОКІВ РОЗБОРУ
+   ================================================================== */
+var model = {
+  src:"", toks:[], root:null, nodes:[], steps:[], problems:[]
+};
+
+function newNode(type, extra){
+  var n = {
+    id: model.nodes.length, type:type, children:[], parent:null,
+    name:null, attrs:[], text:"", openTok:-1, closeTok:-1, el:null,
+    visible:false, closed:false, bad:false
+  };
+  if(extra) for(var k in extra) n[k] = extra[k];
+  model.nodes.push(n);
+  return n;
+}
+
+/** Повний розбір: формуємо дерево, список кроків і перелік помилок. */
+function buildModel(src){
+  model.src = src;
+  model.toks = tokenizeHTML(src);
+  model.nodes = [];
+  model.problems = [];
+  var steps = [];
+
+  var root = newNode("root", {name:"#документ"});
+  model.root = root;
+  var stack = [root];           // стек відкритих вузлів
+  var nodeOf = {};              // tokenIndex -> node
+
+  function depth(){ return stack.length - 1; }
+  function parentName(){
+    var p = stack[stack.length-1];
+    return p.type === "root" ? "#документ" : p.name;
+  }
+
+  model.toks.forEach(function(tk, ti){
+    /* --- Порожній текст між тегами пропускаємо: у дереві він лише заважає --- */
+    if(tk.kind === "text" && tk.text.trim() === "") { tk.skipped = true; return; }
+
+    if(tk.kind === "doctype"){
+      steps.push(mkStep(ti, null,
+        "Браузер зустрів оголошення типу документа <b>&lt;!DOCTYPE html&gt;</b>. " +
+        "Це не тег і не вузол дерева: так браузер дізнається, що перед ним документ стандарту HTML5, " +
+        "і переходить у звичайний режим відображення.", []));
+      return;
+    }
+
+    if(tk.kind === "comment"){
+      var cn = newNode("comment", {text:tk.text, openTok:ti, parent:stack[stack.length-1]});
+      stack[stack.length-1].children.push(cn);
+      steps.push(mkStep(ti, cn,
+        "Коментар <b>&lt;!-- " + esc(shorten(tk.text, 40)) + " --&gt;</b> стає вузлом-коментарем у дереві, " +
+        "але на сторінці не відображається. Коментарі пишуть для себе та для інших розробників.",
+        stackNames(stack), {show:cn}));
+      return;
+    }
+
+    if(tk.kind === "text"){
+      var tn = newNode("text", {text:tk.text, openTok:ti, parent:stack[stack.length-1]});
+      stack[stack.length-1].children.push(tn);
+      var inHead = isInHead(stack[stack.length-1]);
+      var titleHost = nearestName(stack[stack.length-1], "title");
+      var msg = "Текст «<b>" + esc(shorten(tk.text, 48)) + "</b>» стає <b>текстовим вузлом</b> — " +
+        "це листок дерева, він не має дітей. Батьківський вузол: <b>" + esc(parentName()) + "</b>.";
+      if(titleHost) msg += " Оскільки текст міститься в елементі title, він з'являється як назва вкладки браузера.";
+      else if(inHead) msg += " Текст у розділі head на сторінці не відображається.";
+      steps.push(mkStep(ti, tn, msg, stackNames(stack), {show:tn}));
+      return;
+    }
+
+    if(tk.kind === "open"){
+      var known = ALLOWED.indexOf(tk.name) >= 0;
+      var isVoid = VOID.indexOf(tk.name) >= 0 || tk.selfClose;
+      var el = newNode("element", {
+        name:tk.name, attrs:tk.attrs, openTok:ti, parent:stack[stack.length-1], isVoid:isVoid
+      });
+      stack[stack.length-1].children.push(el);
+      nodeOf[ti] = el;
+
+      var txt = "Відкривальний тег <b>&lt;" + esc(tk.name) + "&gt;</b>. Браузер створює новий " +
+        "<b>вузол елемента</b> і додає його як дочірній до вузла <b>" + esc(parentName()) + "</b> " +
+        "(рівень вкладеності " + (depth()+1) + ").";
+      if(tk.attrs.length){
+        txt += " Атрибути цього тега записуються у властивості вузла: " +
+          tk.attrs.map(function(a){
+            return "<b>" + esc(a.n) + (a.v !== null ? '="' + esc(shorten(a.v, 24)) + '"' : "") + "</b>";
+          }).join(", ") + ".";
+      }
+      if(isVoid){
+        txt += " Тег <b>" + esc(tk.name) + "</b> — одиночний (порожній): він не має вмісту й " +
+               "закривального тега, тому браузер одразу залишається на тому самому рівні.";
+      } else {
+        txt += " Тег очікує закриття, тому він стає поточним батьком: усе наступне потрапляє всередину нього.";
+      }
+      if(!known){
+        txt += " Увага: тег <b>" + esc(tk.name) + "</b> не входить до вивченого набору елементів HTML, " +
+               "тому в перегляді він показаний як звичайний блок.";
+      }
+      var pushNode = !isVoid;
+      steps.push(mkStep(ti, el, txt, stackNames(stack).concat(pushNode ? [tk.name] : []), {show:el}));
+      if(pushNode){
+        stack.push(el);
+        el._pushedAt = steps.length - 1;
+      } else {
+        el.closed = true;
+      }
+      return;
+    }
+
+    if(tk.kind === "close"){
+      var top = stack[stack.length-1];
+      if(VOID.indexOf(tk.name) >= 0){
+        tk.bad = true;
+        model.problems.push("Тег " + tk.name + " одиночний, закривати його не потрібно.");
+        steps.push(mkStep(ti, null,
+          "Закривальний тег <b>&lt;/" + esc(tk.name) + "&gt;</b> зайвий: <b>" + esc(tk.name) +
+          "</b> — одиночний тег, він не має вмісту. Браузер цей тег ігнорує.",
+          stackNames(stack), {bad:true}));
+        return;
+      }
+      if(top.type === "element" && top.name === tk.name){
+        top.closeTok = ti;
+        steps.push(mkStep(ti, top,
+          "Закривальний тег <b>&lt;/" + esc(tk.name) + "&gt;</b> відповідає останньому відкритому тегу " +
+          "<b>&lt;" + esc(tk.name) + "&gt;</b>. Вузол завершено: браузер <b>повертається на рівень вище</b> — " +
+          "до вузла <b>" + esc(top.parent.type === "root" ? "#документ" : top.parent.name) + "</b>.",
+          stackNames(stack).slice(0, -1), {close:top}));
+        stack.pop();
+        return;
+      }
+      // пошук тега в стеку глибше (це означає незакриті теги)
+      var idx = -1;
+      for(var s = stack.length-1; s >= 1; s--){
+        if(stack[s].type === "element" && stack[s].name === tk.name){ idx = s; break; }
+      }
+      if(idx > 0){
+        var notClosed = stack.slice(idx+1).map(function(x){ return x.name; });
+        notClosed.forEach(function(nm){ model.problems.push("Тег " + nm + " не закрито."); });
+        tk.bad = true;
+        var closing = stack.slice(idx);
+        steps.push(mkStep(ti, stack[idx],
+          "Помилка вкладеності. Закривальний тег <b>&lt;/" + esc(tk.name) + "&gt;</b> зустрівся тоді, " +
+          "коли ще не закрито теги: <b>" + esc(notClosed.join(", ")) + "</b>. Теги треба закривати у " +
+          "зворотному порядку: останній відкритий закривається першим. Браузер змушений сам закрити " +
+          "ці теги, і структура сторінки може виявитися не такою, як задумав автор.",
+          stackNames(stack).slice(0, idx), {closeMany:closing, bad:true}));
+        stack.length = idx;
+        return;
+      }
+      tk.bad = true;
+      model.problems.push("Закривальний тег " + tk.name + " не має відповідного відкривального.");
+      steps.push(mkStep(ti, null,
+        "Закривальний тег <b>&lt;/" + esc(tk.name) + "&gt;</b> не має жодного відповідного " +
+        "відкривального тега. Браузер його ігнорує — такий код вважається помилковим.",
+        stackNames(stack), {bad:true}));
+      return;
+    }
+  });
+
+  /* --- Теги, які залишилися відкритими в кінці документа --- */
+  if(stack.length > 1){
+    var rest = stack.slice(1).map(function(x){ return x.name; });
+    rest.forEach(function(nm){ model.problems.push("Тег " + nm + " не закрито до кінця документа."); });
+    var closing2 = stack.slice(1);
+    steps.push(mkStep(-1, null,
+      "Код закінчився, але залишилися незакриті теги: <b>" + esc(rest.join(", ")) + "</b>. " +
+      "Браузер закриває їх автоматично, проте в стандарті HTML кожен парний тег має бути закритий явно.",
+      [], {closeMany:closing2, bad:true}));
+  }
+
+  /* --- Підсумковий крок --- */
+  var cntEl = model.nodes.filter(function(n){ return n.type === "element"; }).length;
+  var cntTx = model.nodes.filter(function(n){ return n.type === "text"; }).length;
+  steps.push(mkStep(-1, null,
+    "Розбір завершено. Браузер побудував дерево документа: <b>" + cntEl + "</b> вузлів-елементів і <b>" +
+    cntTx + "</b> текстових вузлів, максимальна глибина — <b>" + treeDepth(root) + "</b>. " +
+    (model.problems.length
+      ? "Виявлено помилок у структурі: <b>" + model.problems.length + "</b>."
+      : "Помилок вкладеності не виявлено.") +
+    " Саме за цим деревом браузер малює сторінку.", [], {}));
+
+  model.steps = steps;
+  return steps;
+}
+
+function stackNames(stack){
+  return stack.slice(1).map(function(x){ return x.name; });
+}
+function isInHead(node){
+  var p = node;
+  while(p){ if(p.name === "head") return true; p = p.parent; }
+  return false;
+}
+function nearestName(node, name){
+  var p = node;
+  while(p){ if(p.name === name) return p; p = p.parent; }
+  return null;
+}
+function treeDepth(n){
+  if(!n.children.length) return n.type === "root" ? 0 : 1;
+  var m = 0;
+  n.children.forEach(function(c){ m = Math.max(m, treeDepth(c)); });
+  return (n.type === "root" ? 0 : 1) + m;
+}
+
+/**
+ * Створення кроку. Дія кроку: позначити вузли видимими / закритими
+ * і додати відповідні елементи на сторінку-результат.
+ */
+function mkStep(tokIndex, node, text, stackList, act){
+  act = act || {};
+  return {
+    tok: tokIndex,
+    node: node,
+    text: text,
+    stackList: stackList || [],
+    bad: !!act.bad,
+    apply: function(){
+      if(act.show){ act.show.visible = true; mountNode(act.show); }
+      if(act.close){ act.close.closed = true; }
+      if(act.closeMany){ act.closeMany.forEach(function(x){ x.closed = true; }); }
+    }
+  };
+}
+
+/* ==================================================================
+   5. ПОБУДОВА СТОРІНКИ-РЕЗУЛЬТАТУ
+   ================================================================== */
+var pageRoot = null;
+
+/** Чи треба створювати для вузла реальний елемент сторінки. */
+function needsElement(n){
+  if(n.type === "comment") return false;
+  if(n.type === "element"){
+    if(["html","body","head","title","meta","link","script","style"].indexOf(n.name) >= 0) return false;
+    if(isInHead(n)) return false;
+    return true;
+  }
+  if(n.type === "text"){
+    if(nearestName(n, "title")) return false;   // це назва вкладки
+    if(isInHead(n)) return false;
+    return true;
+  }
+  return false;
+}
+/** Найближчий предок, який має реальний елемент (інакше — корінь перегляду). */
+function mountPoint(n){
+  var p = n.parent;
+  while(p){
+    if(p.el) return p.el;
+    if(p.type === "element" && (p.name === "body" || p.name === "html")) return pageRoot;
+    if(p.type === "root") return pageRoot;
+    p = p.parent;
+  }
+  return pageRoot;
+}
+/** Створення й додавання елемента сторінки для вузла. */
+function mountNode(n){
+  // назва вкладки
+  if(n.type === "text" && nearestName(n, "title")){
+    $("pg-title").textContent = n.text.trim() || "нова вкладка";
+    return;
+  }
+  if(!needsElement(n) || n.el) return;
+  var host = mountPoint(n);
+  if(n.type === "text"){
+    var t = document.createTextNode(n.text);
+    host.appendChild(t);
+    n.el = null; n.textEl = t;
+    return;
+  }
+  var tag = ALLOWED.indexOf(n.name) >= 0 ? n.name : "div";
+  var el;
+  if(n.name === "img"){
+    // Зображення може бути недоступним офлайн — показуємо «заготовку» з alt
+    el = document.createElement("span");
+    el.className = "img-stub";
+    var alt = (n.attrs.filter(function(a){ return a.n === "alt"; })[0] || {}).v;
+    var srcA = (n.attrs.filter(function(a){ return a.n === "src"; })[0] || {}).v;
+    el.textContent = "🖼 зображення" + (alt ? ": " + alt : "") + (srcA ? " (" + srcA + ")" : "");
+  } else {
+    el = document.createElement(tag);
+    n.attrs.forEach(function(a){
+      if(ATTR_OK.indexOf(a.n) < 0) return;
+      if(a.v === null) return;
+      try{ el.setAttribute(a.n, a.v); }catch(e){}
+    });
+    if(tag === "a"){ el.onclick = function(e){ e.preventDefault(); }; }
+  }
+  host.appendChild(el);
+  n.el = el;
+}
+
+/* ==================================================================
+   6. ВІДОБРАЖЕННЯ ТРЬОХ ПАНЕЛЕЙ
+   ================================================================== */
+
+/** Панель 1: код із лексемами. */
+function renderTokens(curTok, hlToks){
+  var parts = [];
+  model.toks.forEach(function(tk, i){
+    var cls = ["tk"];
+    if(curTok !== null && i === curTok) cls.push("cur");
+    else if(hlToks && hlToks.indexOf(i) >= 0) cls.push("hl");
+    if(curTok !== null && i > curTok) cls.push("pending");
+    if(tk.bad) cls.push("bad");
+    parts.push('<span class="' + cls.join(" ") + '" data-tok="' + i + '">' + colorToken(tk) + "</span>");
+  });
+  $("tokens").innerHTML = parts.join("");
+}
+/** Розфарбування однієї лексеми. */
+function colorToken(tk){
+  if(tk.kind === "text") return '<span class="k-txt">' + esc(tk.raw) + "</span>";
+  if(tk.kind === "comment") return '<span class="k-com">' + esc(tk.raw) + "</span>";
+  if(tk.kind === "doctype") return '<span class="k-com">' + esc(tk.raw) + "</span>";
+  if(tk.kind === "close") return '<span class="k-tag">' + esc(tk.raw) + "</span>";
+  // відкривальний тег: ім'я + атрибути
+  var s = '<span class="k-tag">&lt;' + esc(tk.name) + "</span>";
+  tk.attrs.forEach(function(a){
+    s += ' <span class="k-attr">' + esc(a.n) + "</span>";
+    if(a.v !== null) s += '=<span class="k-val">"' + esc(a.v) + '"</span>';
+  });
+  if(tk.selfClose) s += ' <span class="k-tag">/</span>';
+  s += '<span class="k-tag">&gt;</span>';
+  return s;
+}
+
+/** Панель 2: DOM-дерево. */
+function renderTree(curNode, hlNode){
+  function nodeLabel(n){
+    if(n.type === "root") return '<span class="node el" data-id="' + n.id + '">#документ</span>';
+    if(n.type === "text"){
+      return '<span class="node txt" data-id="' + n.id + '">"' + esc(shorten(n.text, 28)) + '"</span>';
+    }
+    if(n.type === "comment"){
+      return '<span class="node com" data-id="' + n.id + '">&lt;!-- ' + esc(shorten(n.text, 20)) + ' --&gt;</span>';
+    }
+    var s = "&lt;" + esc(n.name);
+    n.attrs.forEach(function(a){
+      s += ' <span class="a-n">' + esc(a.n) + "</span>";
+      if(a.v !== null) s += '=<span class="a-v">"' + esc(shorten(a.v, 16)) + '"</span>';
+    });
+    s += "&gt;";
+    var cls = "node el";
+    if(!n.closed && n.type === "element") cls += " open-el";
+    return '<span class="' + cls + '" data-id="' + n.id + '">' + s + "</span>";
+  }
+  function walk(n){
+    var kids = n.children.filter(function(c){ return c.visible; });
+    var cls = "";
+    if(n === curNode) cls = " cur";
+    else if(n === hlNode) cls = " hl";
+    var lbl = nodeLabel(n).replace('class="node', 'class="node' + cls);
+    var html = "<li>" + lbl;
+    if(kids.length){
+      html += "<ul>" + kids.map(walk).join("") + "</ul>";
+    }
+    return html + "</li>";
+  }
+  if(!model.root){ $("tree").innerHTML = ""; return; }
+  $("tree").innerHTML = "<ul>" + walk(model.root) + "</ul>";
+
+  // наведення мишею: підсвітка код ↔ дерево ↔ сторінка
+  Array.prototype.forEach.call($("tree").querySelectorAll(".node"), function(sp){
+    sp.onmouseenter = function(){ highlightNode(Number(sp.dataset.id), true); };
+    sp.onmouseleave = function(){ highlightNode(Number(sp.dataset.id), false); };
+  });
+
+  var cntEl = model.nodes.filter(function(n){ return n.type === "element" && n.visible; }).length;
+  var cntTx = model.nodes.filter(function(n){ return n.type === "text" && n.visible; }).length;
+  $("counts").innerHTML = "<span>Вузлів-елементів: <b>" + cntEl + "</b></span>" +
+    "<span>Текстових вузлів: <b>" + cntTx + "</b></span>" +
+    "<span>Глибина дерева: <b>" + treeDepth(model.root) + "</b></span>";
+}
+
+/** Взаємна підсвітка: вузол дерева → фрагмент коду + елемент сторінки. */
+function highlightNode(id, on){
+  var n = model.nodes[id];
+  if(!n) return;
+  var toks = [];
+  if(n.openTok >= 0) toks.push(n.openTok);
+  if(n.closeTok >= 0) toks.push(n.closeTok);
+  Array.prototype.forEach.call($("tokens").querySelectorAll(".tk"), function(sp){
+    var i = Number(sp.dataset.tok);
+    if(toks.indexOf(i) >= 0) sp.classList.toggle("hl", on);
+  });
+  if(n.el && n.el.classList) n.el.classList.toggle("flash", on);
+  if(n.textEl && n.textEl.parentNode && n.textEl.parentNode.classList){
+    n.textEl.parentNode.classList.toggle("flash", on);
+  }
+}
+
+/** Панель стека відкритих тегів. */
+function renderStack(list){
+  if(!list || !list.length){
+    $("stack").innerHTML = '<span class="lbl">Стек відкритих тегів порожній.</span>';
+    return;
+  }
+  var html = '<span class="lbl">Відкриті теги (поточний батько — останній):</span>';
+  list.forEach(function(nm, i){
+    html += '<span class="chip' + (i === list.length-1 ? " top" : "") + '">' + esc(nm) + "</span>";
+  });
+  $("stack").innerHTML = html;
+}
+
+/* ==================================================================
+   7. ЗВ'ЯЗУВАННЯ ВСЬОГО РАЗОМ
+   ================================================================== */
+var runner = new StepRunner({
+  mount: $("controls"),
+  bar: $("bar"),
+  reset: function(){
+    // чисте полотно: усі вузли приховані, сторінка порожня
+    model.nodes.forEach(function(n){
+      n.visible = false; n.closed = !!n.isVoid; n.el = null; n.textEl = null;
+    });
+    if(model.root) model.root.visible = true;
+    $("page").innerHTML = "";
+    pageRoot = $("page");
+    $("pg-title").textContent = "нова вкладка";
+  },
+  render: function(i, step, steps){
+    renderTokens(step ? (step.tok >= 0 ? step.tok : null) : (steps.length ? -1 : null), null);
+    renderTree(step ? step.node : null, null);
+    renderStack(step ? step.stackList : []);
+    var ex = $("explain");
+    ex.classList.toggle("bad", !!(step && step.bad));
+    if(step) ex.innerHTML = step.text;
+    else ex.innerHTML = steps.length
+      ? "Код підготовлено до розбору. Натискайте «Крок»: браузер читатиме код тег за тегом і " +
+        "одночасно будуватиме дерево документа та сторінку."
+      : "Виберіть приклад або введіть власний код і натисніть «Розібрати покроково».";
+  }
+});
+
+/* ---------- Пресети ---------- */
+var PRESETS = [
+  { name:"Абзаци й форматування",
+    code:
+"<!DOCTYPE html>\n" +
+"<html lang=\"uk\">\n" +
+"<head>\n" +
+"  <title>Моя перша сторінка</title>\n" +
+"</head>\n" +
+"<body>\n" +
+"  <h1>Алгоритми та програми</h1>\n" +
+"  <p>Алгоритм — це <b>скінченна</b> послідовність <i>команд</i>.</p>\n" +
+"  <hr>\n" +
+"  <p>Виконавець виконує команди <u>формально</u>.<br>Це його головна властивість.</p>\n" +
+"</body>\n" +
+"</html>" },
+  { name:"Списки",
+    code:
+"<html>\n" +
+"<head><title>Види алгоритмів</title></head>\n" +
+"<body>\n" +
+"  <h2>Базові структури</h2>\n" +
+"  <ol>\n" +
+"    <li>Слідування</li>\n" +
+"    <li>Розгалуження\n" +
+"      <ul>\n" +
+"        <li>повне</li>\n" +
+"        <li>неповне</li>\n" +
+"      </ul>\n" +
+"    </li>\n" +
+"    <li>Повторення</li>\n" +
+"  </ol>\n" +
+"</body>\n" +
+"</html>" },
+  { name:"Таблиця",
+    code:
+"<html>\n" +
+"<head><title>Таблиця</title></head>\n" +
+"<body>\n" +
+"  <table border=\"1\">\n" +
+"    <tr><th>Мова</th><th>Рік</th></tr>\n" +
+"    <tr><td>Pascal</td><td>1970</td></tr>\n" +
+"    <tr><td>Python</td><td>1991</td></tr>\n" +
+"  </table>\n" +
+"</body>\n" +
+"</html>" },
+  { name:"Гіперпосилання та зображення",
+    code:
+"<html>\n" +
+"<head><title>Посилання</title></head>\n" +
+"<body>\n" +
+"  <h3>Корисні матеріали</h3>\n" +
+"  <p><a href=\"urok2.html\" title=\"Наступний урок\">Перейти до уроку 2</a></p>\n" +
+"  <img src=\"shema.png\" alt=\"Блок-схема алгоритму\">\n" +
+"  <!-- тут буде ще один розділ -->\n" +
+"</body>\n" +
+"</html>" },
+  { name:"Помилка вкладеності",
+    code:
+"<html>\n" +
+"<body>\n" +
+"  <p>Текст із <b>неправильною <i>вкладеністю</b> тегів</i>.</p>\n" +
+"  <p>А цей абзац забули закрити\n" +
+"  <div>Наступний блок</div>\n" +
+"</body>\n" +
+"</html>" }
+];
+
+(function initPresets(){
+  var box = $("presets");
+  PRESETS.forEach(function(pr){
+    var b = document.createElement("button");
+    b.textContent = pr.name;
+    b.onclick = function(){ $("code").value = pr.code; parseNow(); };
+    box.appendChild(b);
+  });
+})();
+
+/* ---------- Перевірка вводу й запуск розбору ---------- */
+function validate(src){
+  if(!src.trim()) return "Поле коду порожнє. Введіть код HTML або виберіть приклад.";
+  if(src.indexOf("<") < 0) return "У коді немає жодного тега. Теги записують у кутових дужках, наприклад <p>.";
+  if(src.length > 6000) return "Код завеликий для навчального розбору (понад 6000 символів). Скоротіть приклад.";
+  if(/<\s*(script|iframe|style)\b/i.test(src))
+    return "Теги script, style та iframe в цьому тренажері не опрацьовуються: вкладка показує лише структуру документа.";
+  return null;
+}
+
+function parseNow(){
+  var src = $("code").value;
+  var bad = validate(src);
+  $("err").innerHTML = "";
+  if(bad){
+    $("err").innerHTML = '<div class="error">Некоректний ввід: ' + esc(bad) + "</div>";
+    model.nodes = []; model.toks = []; model.root = null;
+    runner.setSteps([]);
+    $("tokens").innerHTML = ""; $("tree").innerHTML = ""; $("page").innerHTML = "";
+    return;
+  }
+  var steps = buildModel(src);
+  runner.setSteps(steps);
+  if(model.problems.length){
+    $("err").innerHTML = '<div class="error">У коді знайдено помилки структури (' + model.problems.length +
+      "): " + esc(model.problems.join(" ")) + " Пройдіть розбір покроково, щоб побачити, де саме.</div>";
+  }
+}
+
+$("parse").onclick = parseNow;
+$("all").onclick = function(){
+  parseNow();
+  runner.toEnd();
+};
+$("check").onclick = function(){
+  var src = $("code").value;
+  var bad = validate(src);
+  if(bad){ $("err").innerHTML = '<div class="error">Некоректний ввід: ' + esc(bad) + "</div>"; return; }
+  buildModel(src);
+  if(model.problems.length){
+    $("err").innerHTML = '<div class="error">Знайдено помилок: ' + model.problems.length + ". " +
+      esc(model.problems.join(" ")) + "</div>";
+  } else {
+    $("err").innerHTML = '<div class="error" style="background:var(--ok-soft);border-left-color:var(--ok);color:#0a5c40">' +
+      "Структура коректна: кожен парний тег закрито, порядок вкладеності не порушено.</div>";
+  }
+};
+
+/* ---------- Старт ---------- */
+$("code").value = PRESETS[0].code;
+parseNow();
+</script>
+</body>
+</html>

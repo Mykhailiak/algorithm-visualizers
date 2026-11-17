@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Шлях пакета: DNS і маршрутизація — 10 клас, тема 6.3</title>
+<!--
+  Симулятор «Шлях пакета: DNS і маршрутизація»
+  10 клас, Розділ 6. Комп'ютерні мережі, тема 6.3 «Робота в мережі Internet».
+
+  Файл повністю самодостатній: HTML + CSS + JavaScript, без бібліотек та інтернету.
+  Відкривається подвійним клацанням у будь-якому сучасному браузері (Chrome, Edge, Firefox).
+
+  Дві вкладки:
+   1) «DNS» — покрокове розпізнавання доменного імені: браузер → резолвер → кореневий
+      сервер → сервер домену верхнього рівня → авторитетний сервер → IP-адреса.
+      Довжина ланцюжка залежить від кількості частин імені. Працює кеш резолвера:
+      повторний запит того самого імені виконується за два кроки.
+   2) «Маршрутизація» — граф із 9 маршрутизаторів із вагами каналів (затримка в мс).
+      Покроковий алгоритм Дейкстри з таблицею відстаней, обрив каналу і перебудова
+      маршруту, поділ повідомлення на пакети та збирання їх за номерами.
+
+  Як змінити під себе:
+   - готові доменні імена — масив DNS_PRESETS (розділ 2 скрипта);
+   - маршрутизатори і канали — NET_NODES та NET_EDGES (розділ 4 скрипта);
+   - готові повідомлення для пакетів — MSG_PRESETS;
+   - кольори, розміри шрифту — CSS-змінні в блоці :root нижче.
+-->
+<style>
+/* ======================= 1. Оформлення ======================= */
+:root{
+  --bg:#eef2f7;          /* тло сторінки */
+  --panel:#ffffff;       /* тло панелей */
+  --ink:#13202f;         /* основний текст */
+  --muted:#5b6b7c;       /* другорядний текст */
+  --line:#c7d3e0;        /* рамки */
+  --accent:#1f5fbf;      /* основний (запит, виділення) */
+  --accent-soft:#dce8fb;
+  --ok:#17804a;          /* успіх, відповідь */
+  --ok-soft:#d8f0e2;
+  --warn:#b9690a;        /* увага */
+  --warn-soft:#fdeccf;
+  --bad:#b32020;         /* помилка, обрив */
+  --bad-soft:#fbdcdc;
+  --done:#6b4fbf;        /* опрацьований вузол */
+  --done-soft:#e7e0fb;
+  --fs:17px;             /* базовий розмір шрифту */
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Segoe UI",Tahoma,Verdana,sans-serif;
+  font-size:var(--fs); line-height:1.45;
+}
+header.top{
+  background:#13202f; color:#fff; padding:14px 20px;
+}
+header.top h1{margin:0 0 4px; font-size:1.45em; letter-spacing:.2px}
+header.top .sub{color:#b9c9db; font-size:.92em}
+nav.tabs{
+  display:flex; gap:8px; flex-wrap:wrap;
+  padding:10px 20px 0; background:#13202f;
+}
+nav.tabs button{
+  font:inherit; font-weight:600; cursor:pointer;
+  background:#24364a; color:#cfdceb; border:none;
+  padding:10px 18px; border-radius:10px 10px 0 0;
+}
+nav.tabs button.active{background:var(--bg); color:var(--ink)}
+main{padding:16px 20px 28px; max-width:1500px; margin:0 auto}
+section.tab{display:none}
+section.tab.active{display:block}
+.grid{display:grid; grid-template-columns:minmax(0,2.1fr) minmax(280px,1fr); gap:16px}
+@media (max-width:1100px){ .grid{grid-template-columns:1fr} }
+.panel{
+  background:var(--panel); border:1px solid var(--line);
+  border-radius:12px; padding:14px 16px; margin-bottom:14px;
+}
+.panel h2{margin:0 0 10px; font-size:1.1em}
+.panel h3{margin:14px 0 6px; font-size:1em; color:var(--muted)}
+.row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+label.fld{display:flex; flex-direction:column; gap:4px; font-size:.9em; color:var(--muted)}
+input[type=text],select{
+  font:inherit; padding:8px 10px; border:1px solid var(--line);
+  border-radius:8px; background:#fff; color:var(--ink); min-width:170px;
+}
+button.btn{
+  font:inherit; font-weight:600; cursor:pointer;
+  border:1px solid var(--accent); background:var(--accent); color:#fff;
+  padding:9px 16px; border-radius:9px;
+}
+button.btn.ghost{background:#fff; color:var(--accent)}
+button.btn.quiet{background:#fff; color:var(--muted); border-color:var(--line)}
+button.btn:disabled{opacity:.45; cursor:not-allowed}
+.controls{
+  display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  background:var(--accent-soft); border:1px solid var(--line);
+  border-radius:12px; padding:10px 14px; margin-bottom:12px;
+}
+.controls .spacer{flex:1}
+.controls input[type=range]{width:170px}
+.note{
+  background:#fff; border:1px solid var(--line); border-left:6px solid var(--accent);
+  border-radius:10px; padding:12px 14px; min-height:62px; font-size:1.02em;
+}
+.note.ok{border-left-color:var(--ok)}
+.note.bad{border-left-color:var(--bad)}
+.note.warn{border-left-color:var(--warn)}
+.note b{color:var(--accent)}
+.stage{background:#fff; border:1px solid var(--line); border-radius:12px; padding:6px}
+svg{display:block; width:100%; height:auto; user-select:none}
+table{border-collapse:collapse; width:100%; font-size:.95em}
+th,td{border:1px solid var(--line); padding:6px 8px; text-align:center}
+th{background:#f1f5fa; color:var(--muted); font-weight:600}
+td.name{text-align:left; font-weight:600}
+tr.sel td{background:var(--accent-soft)}
+tr.done td{background:var(--done-soft)}
+.badge{
+  display:inline-block; padding:2px 9px; border-radius:20px;
+  font-size:.85em; font-weight:600; border:1px solid var(--line); background:#f4f7fb;
+}
+.badge.ok{background:var(--ok-soft); color:var(--ok); border-color:var(--ok)}
+.badge.bad{background:var(--bad-soft); color:var(--bad); border-color:var(--bad)}
+.badge.wait{background:var(--warn-soft); color:var(--warn); border-color:var(--warn)}
+ul.plain{margin:6px 0 0 0; padding-left:20px}
+ul.plain li{margin-bottom:4px}
+.kv{display:flex; justify-content:space-between; gap:10px; border-bottom:1px dashed var(--line); padding:5px 0}
+.kv:last-child{border-bottom:none}
+.kv b{font-variant-numeric:tabular-nums}
+.err{color:var(--bad); font-weight:600; min-height:1.3em; font-size:.92em}
+.mono{font-family:Consolas,"Courier New",monospace}
+.hint{color:var(--muted); font-size:.88em}
+footer.bottom{
+  text-align:center; color:var(--muted); font-size:.9em;
+  padding:14px; border-top:1px solid var(--line); background:#fff;
+}
+.pkt-list{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px}
+.pkt{
+  border:2px solid var(--accent); border-radius:8px; padding:4px 8px;
+  background:var(--accent-soft); font-weight:600; font-size:.92em;
+}
+.pkt.arr{border-color:var(--ok); background:var(--ok-soft)}
+.msg-box{
+  font-family:Consolas,"Courier New",monospace; font-size:1.15em; letter-spacing:1px;
+  background:#f1f5fa; border:1px solid var(--line); border-radius:8px; padding:8px 10px;
+  word-break:break-all; min-height:2.2em;
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Симулятор «Шлях пакета: DNS і маршрутизація»</h1>
+  <div class="sub">10 клас · Розділ 6. Комп'ютерні мережі · Тема 6.3 «Робота в мережі Internet»</div>
+</header>
+
+<nav class="tabs">
+  <button id="tabbtn-dns" class="active" onclick="showTab('dns')">Етап 1. DNS: ім'я → IP-адреса</button>
+  <button id="tabbtn-route" onclick="showTab('route')">Етап 2. Маршрутизація пакетів</button>
+</nav>
+
+<main>
+
+<!-- ======================= Вкладка 1: DNS ======================= -->
+<section id="tab-dns" class="tab active">
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h2>Запит доменного імені</h2>
+        <div class="row">
+          <label class="fld">Готові приклади
+            <select id="dns-preset" onchange="dnsUsePreset()"></select>
+          </label>
+          <label class="fld">Доменне ім'я
+            <input type="text" id="dns-domain" value="informatyka.school.ua" spellcheck="false">
+          </label>
+          <button class="btn" onclick="dnsStart()">Надіслати запит</button>
+          <button class="btn quiet" onclick="dnsClearCache()">Очистити кеш резолвера</button>
+        </div>
+        <div class="err" id="dns-err"></div>
+        <div class="hint">Ім'я складається з частин, розділених точками. Чим більше частин, тим довший ланцюжок запитів.</div>
+      </div>
+
+      <div class="controls">
+        <button class="btn" id="dns-step" onclick="dnsPlayer.next()">Крок ▶</button>
+        <button class="btn ghost" id="dns-play" onclick="dnsPlayer.toggle()">Старт</button>
+        <button class="btn quiet" onclick="dnsStart()">Скинути</button>
+        <div class="spacer"></div>
+        <label class="fld">Швидкість
+          <input type="range" id="dns-speed" min="400" max="2600" step="100" value="1400">
+        </label>
+      </div>
+
+      <div class="stage"><svg id="dns-svg" viewBox="0 0 1000 460" role="img" aria-label="Схема DNS-запиту"></svg></div>
+      <div class="note" id="dns-note" style="margin-top:12px">Натисніть «Надіслати запит», а потім «Крок», щоб побачити, як комп'ютер дізнається IP-адресу сайту.</div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>Журнал запитів</h2>
+        <ol id="dns-log" class="plain" style="padding-left:24px"><li class="hint">поки що порожньо</li></ol>
+      </div>
+      <div class="panel">
+        <h2>Результат</h2>
+        <div class="kv"><span>Ім'я</span><b class="mono" id="dns-r-name">—</b></div>
+        <div class="kv"><span>IP-адреса</span><b class="mono" id="dns-r-ip">—</b></div>
+        <div class="kv"><span>Запитів до серверів</span><b id="dns-r-count">0</b></div>
+        <div class="kv"><span>Джерело відповіді</span><b id="dns-r-src">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>Кеш резолвера</h2>
+        <div id="dns-cache" class="hint">кеш порожній</div>
+        <div class="hint" style="margin-top:8px">Кеш — це пам'ять резолвера. Якщо ім'я вже є в кеші, повний ланцюжок запитів не потрібен.</div>
+      </div>
+      <div class="panel">
+        <h2>Що показує етап</h2>
+        <ul class="plain">
+          <li>доменне ім'я зручне людині, а мережа працює з IP-адресою;</li>
+          <li>DNS — це розподілена база: жоден сервер не знає всіх імен;</li>
+          <li>пошук іде від кореня до авторитетного сервера домену;</li>
+          <li>кешування різко зменшує кількість запитів.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== Вкладка 2: Маршрутизація =================== -->
+<section id="tab-route" class="tab">
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h2>Пошук найкоротшого маршруту</h2>
+        <div class="row">
+          <label class="fld">Відправник
+            <select id="rt-src" onchange="rtReset()"></select>
+          </label>
+          <label class="fld">Отримувач
+            <select id="rt-dst" onchange="rtReset()"></select>
+          </label>
+          <button class="btn" onclick="rtStartDijkstra()">Знайти маршрут (алгоритм Дейкстри)</button>
+          <button class="btn quiet" onclick="rtRepairAll()">Відновити всі канали</button>
+        </div>
+        <div class="hint" style="margin-top:6px">Клацніть на підпис каналу (число на лінії), щоб обірвати або відновити цей канал. Число — затримка в мілісекундах.</div>
+      </div>
+
+      <div class="controls">
+        <button class="btn" id="rt-step" onclick="rtPlayer.next()">Крок ▶</button>
+        <button class="btn ghost" id="rt-play" onclick="rtPlayer.toggle()">Старт</button>
+        <button class="btn quiet" onclick="rtReset()">Скинути</button>
+        <div class="spacer"></div>
+        <label class="fld">Швидкість
+          <input type="range" id="rt-speed" min="300" max="2200" step="100" value="1100">
+        </label>
+      </div>
+
+      <div class="stage"><svg id="rt-svg" viewBox="0 0 1000 500" role="img" aria-label="Граф мережі маршрутизаторів"></svg></div>
+      <div class="note" id="rt-note" style="margin-top:12px">Виберіть відправника та отримувача і натисніть «Знайти маршрут». Алгоритм Дейкстри працює покроково.</div>
+
+      <div class="panel" style="margin-top:14px">
+        <h2>Поділ повідомлення на пакети</h2>
+        <div class="row">
+          <label class="fld">Готові приклади
+            <select id="rt-msg-preset" onchange="rtUseMsgPreset()"></select>
+          </label>
+          <label class="fld">Повідомлення
+            <input type="text" id="rt-msg" value="ІНФОРМАТИКА" spellcheck="false">
+          </label>
+          <label class="fld">Пакетів
+            <select id="rt-npkt">
+              <option>2</option><option selected>4</option><option>5</option><option>6</option>
+            </select>
+          </label>
+          <button class="btn" id="rt-send" onclick="rtStartPackets()" disabled>Надіслати пакети</button>
+        </div>
+        <div class="err" id="rt-err"></div>
+        <div class="hint">Кнопка стає доступною після того, як маршрут знайдено.</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>Таблиця відстаней</h2>
+        <table id="rt-table"><tbody></tbody></table>
+        <div class="hint" style="margin-top:6px">∞ означає «шлях поки невідомий».</div>
+      </div>
+      <div class="panel">
+        <h2>Результат маршрутизації</h2>
+        <div class="kv"><span>Кроків алгоритму</span><b id="rt-r-steps">0</b></div>
+        <div class="kv"><span>Маршрут</span><b class="mono" id="rt-r-path">—</b></div>
+        <div class="kv"><span>Сумарна затримка</span><b id="rt-r-cost">—</b></div>
+        <div class="kv"><span>Обірвані канали</span><b id="rt-r-broken">немає</b></div>
+      </div>
+      <div class="panel">
+        <h2>Пакети в дорозі</h2>
+        <div id="rt-pkt-flight" class="pkt-list"><span class="hint">пакети ще не надіслані</span></div>
+        <h3>Порядок прибуття</h3>
+        <div id="rt-pkt-arrived" class="pkt-list"><span class="hint">—</span></div>
+        <h3>Складене повідомлення</h3>
+        <div class="msg-box" id="rt-assembled"></div>
+        <div class="hint" id="rt-assembled-hint"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="bottom">Розроблено автором</footer>
+
+<script>
+"use strict";
+
+/* ======================= 2. Готові приклади ======================= */
+
+// Доменні імена для вкладки «DNS». ip — відповідь авторитетного сервера.
+const DNS_PRESETS = [
+  { domain:"informatyka.school.ua", ip:"193.108.4.17",  title:"тризначне ім'я (школа)" },
+  { domain:"mon.gov.ua",            ip:"91.202.128.45", title:"сайт міністерства" },
+  { domain:"example.com",           ip:"93.184.216.34", title:"двозначне ім'я" },
+  { domain:"bibliteka.osvita.in.ua",ip:"176.36.12.200", title:"чотиризначне ім'я" }
+];
+
+// Повідомлення для поділу на пакети.
+const MSG_PRESETS = ["ІНФОРМАТИКА", "МЕРЕЖА ІНТЕРНЕТ", "ПРИВІТ, 10 КЛАС"];
+
+/* ======================= 3. Покроковий плеєр =======================
+   Один і той самий механізм керування для обох вкладок:
+   список кроків будується заздалегідь, а кнопки «Крок» і «Старт»
+   лише переміщують покажчик по цьому списку. */
+function StepPlayer(opts){
+  this.apply   = opts.apply;              // що робити на кроці
+  this.speedEl = opts.speedEl;            // повзунок швидкості
+  this.btnStep = opts.btnStep;
+  this.btnPlay = opts.btnPlay;
+  this.steps = [];
+  this.index = -1;
+  this.timer = null;
+  this.playing = false;
+}
+StepPlayer.prototype.load = function(steps){
+  this.stop();
+  this.steps = steps || [];
+  this.index = -1;
+  if(this.steps.length) this.next();
+  this.refresh();
+};
+StepPlayer.prototype.clear = function(){
+  this.stop(); this.steps = []; this.index = -1; this.refresh();
+};
+StepPlayer.prototype.next = function(){
+  if(this.index >= this.steps.length - 1){ this.stop(); return false; }
+  this.index++;
+  this.apply(this.steps[this.index], this.index);
+  this.refresh();
+  return true;
+};
+StepPlayer.prototype.toggle = function(){
+  if(this.playing) this.stop(); else this.play();
+};
+StepPlayer.prototype.play = function(){
+  if(this.index >= this.steps.length - 1) return;
+  this.playing = true; this.refresh();
+  const self = this;
+  const tick = function(){
+    if(!self.playing) return;
+    if(!self.next()){ self.stop(); return; }
+    self.timer = setTimeout(tick, Number(self.speedEl.value));
+  };
+  this.timer = setTimeout(tick, Number(this.speedEl.value));
+};
+StepPlayer.prototype.stop = function(){
+  this.playing = false;
+  if(this.timer){ clearTimeout(this.timer); this.timer = null; }
+  this.refresh();
+};
+StepPlayer.prototype.refresh = function(){
+  const atEnd = this.index >= this.steps.length - 1;
+  this.btnStep.disabled = atEnd;
+  this.btnPlay.disabled = atEnd;
+  this.btnPlay.textContent = this.playing ? "Пауза" : "Старт";
+};
+
+/* Перемикання вкладок */
+function showTab(name){
+  dnsPlayer.stop(); rtPlayer.stop();
+  ["dns","route"].forEach(function(n){
+    document.getElementById("tab-"+n).classList.toggle("active", n===name);
+    document.getElementById("tabbtn-"+n).classList.toggle("active", n===name);
+  });
+}
+
+/* Допоміжні функції для SVG */
+function svgEl(tag, attrs, text){
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for(const k in attrs) el.setAttribute(k, attrs[k]);
+  if(text !== undefined) el.textContent = text;
+  return el;
+}
+
+/* ======================= 4. Вкладка «DNS» ======================= */
+
+let dnsState = {
+  domain:"", ip:"", chain:[], steps:[], cache:{},
+  queryCount:0, source:"—", log:[]
+};
+
+const dnsPlayer = new StepPlayer({
+  apply: dnsApplyStep,
+  speedEl: document.getElementById("dns-speed"),
+  btnStep: document.getElementById("dns-step"),
+  btnPlay: document.getElementById("dns-play")
+});
+
+/* Заповнення списку готових імен */
+(function initDnsPresets(){
+  const sel = document.getElementById("dns-preset");
+  sel.appendChild(new Option("— вибрати приклад —",""));
+  DNS_PRESETS.forEach(function(p,i){
+    sel.appendChild(new Option(p.domain+"  ("+p.title+")", String(i)));
+  });
+})();
+
+function dnsUsePreset(){
+  const sel = document.getElementById("dns-preset");
+  if(sel.value === "") return;
+  document.getElementById("dns-domain").value = DNS_PRESETS[Number(sel.value)].domain;
+  document.getElementById("dns-err").textContent = "";
+  dnsStart();
+}
+
+/* Навчальна IP-адреса для власного імені: стала для однакового імені */
+function dnsFakeIp(domain){
+  let h = 7;
+  for(let i=0;i<domain.length;i++) h = (h*31 + domain.charCodeAt(i)) % 100000;
+  const a = 90 + h % 100, b = h % 251, c = (h>>3) % 251, d = 1 + (h>>5) % 250;
+  return a+"."+b+"."+c+"."+d;
+}
+
+function dnsClearCache(){
+  dnsState.cache = {};
+  dnsRenderCache();
+  document.getElementById("dns-note").className = "note warn";
+  document.getElementById("dns-note").innerHTML = "Кеш резолвера очищено. Наступний запит виконається повним ланцюжком.";
+}
+
+function dnsRenderCache(){
+  const box = document.getElementById("dns-cache");
+  const keys = Object.keys(dnsState.cache);
+  if(!keys.length){ box.className="hint"; box.textContent = "кеш порожній"; return; }
+  box.className = "";
+  box.innerHTML = keys.map(function(k){
+    return '<div class="kv"><span class="mono">'+k+'</span><b class="mono">'+dnsState.cache[k]+'</b></div>';
+  }).join("");
+}
+
+/* Перевірка вводу */
+function dnsValidate(d){
+  if(!d) return "Введіть доменне ім'я, наприклад school.ua";
+  if(!/^[a-zа-яіїєґ0-9][a-zа-яіїєґ0-9-]*(\.[a-zа-яіїєґ0-9][a-zа-яіїєґ0-9-]*)+$/i.test(d))
+    return "Ім'я має складатися щонайменше з двох частин, розділених точкою, без пробілів.";
+  if(d.length > 40) return "Задовге ім'я: не більше 40 символів.";
+  return "";
+}
+
+/* Побудова ланцюжка серверів за іменем:
+   informatyka.school.ua → [корінь] → [.ua] → [school.ua] → [авторитетний] */
+function dnsBuildChain(domain){
+  const parts = domain.toLowerCase().split(".");
+  const zones = [];
+  for(let i = parts.length - 1; i >= 1; i--) zones.push(parts.slice(i).join("."));
+  const chain = [{ id:"root", title:"Кореневий сервер", zone:"." }];
+  zones.forEach(function(z, i){
+    chain.push({
+      id:"z"+i,
+      title: i===0 ? ("Сервер домену «."+z+"»") : ("Сервер зони «"+z+"»"),
+      zone: z
+    });
+  });
+  chain.push({ id:"auth", title:"Авторитетний сервер", zone:domain.toLowerCase() });
+  return chain;
+}
+
+/* Побудова списку кроків DNS-запиту */
+function dnsBuildSteps(domain, ip, chain, fromCache){
+  const steps = [];
+  const push = function(o){ steps.push(o); };
+
+  if(fromCache){
+    push({ from:"pc", to:"res", kind:"query", counts:false,
+      note:"Браузер звертається до <b>DNS-резолвера</b> провайдера: «Яка IP-адреса імені <span class='mono'>"+domain+"</span>?»",
+      log:"Запит до резолвера: "+domain });
+    push({ from:"res", to:"pc", kind:"answer", counts:false, cacheHit:true,
+      note:"Резолвер знаходить запис у <b>власному кеші</b> і відразу відповідає: <span class='mono'>"+ip+"</span>. Звертатися до інших серверів не потрібно.",
+      log:"Відповідь із кешу: "+ip });
+    push({ from:null, to:null, kind:"final", counts:false, done:true,
+      note:"Браузер встановлює з'єднання з вузлом <span class='mono'>"+ip+"</span>. Завдяки кешу знадобився лише один запит.",
+      log:"З'єднання з "+ip });
+    return steps;
+  }
+
+  push({ from:null, to:null, kind:"local", counts:false,
+    note:"Браузер перевіряє <b>власний кеш</b>: записів про <span class='mono'>"+domain+"</span> немає, отже потрібен DNS-запит.",
+    log:"Перевірка кешу браузера — запису немає" });
+  push({ from:"pc", to:"res", kind:"query", counts:false,
+    note:"Комп'ютер надсилає запит до <b>DNS-резолвера</b> провайдера: «Яка IP-адреса імені <span class='mono'>"+domain+"</span>?»",
+    log:"Запит до резолвера: "+domain });
+  push({ from:null, to:null, kind:"local", counts:false, atRes:true,
+    note:"Резолвер шукає в <b>своєму кеші</b> — запису немає. Тому він опитує сервери DNS по черзі, починаючи з кореневого.",
+    log:"Кеш резолвера порожній для цього імені" });
+
+  for(let i=0;i<chain.length;i++){
+    const node = chain[i];
+    const next = chain[i+1];
+    push({ from:"res", to:node.id, kind:"query", counts:true,
+      note:"Резолвер запитує <b>"+node.title.toLowerCase()+"</b>: «Хто відповідає за <span class='mono'>"+domain+"</span>?»",
+      log:"Запит → "+node.title });
+    if(next){
+      push({ from:node.id, to:"res", kind:"answer", counts:false,
+        note:"<b>"+node.title+"</b> не знає IP-адреси, але повідомляє адресу сервера, який відповідає за зону <span class='mono'>"+next.zone+"</span>. Це називають <b>посиланням на зону нижчого рівня</b>.",
+        log:"Відповідь: звертайтеся до зони "+next.zone });
+    } else {
+      push({ from:node.id, to:"res", kind:"answer", final:true,
+        note:"<b>Авторитетний сервер</b> зони <span class='mono'>"+node.zone+"</span> зберігає сам запис і повертає <b>A-запис</b>: <span class='mono'>"+ip+"</span>.",
+        log:"Відповідь: A-запис "+ip });
+    }
+  }
+
+  push({ from:null, to:null, kind:"local", atRes:true, storeCache:true,
+    note:"Резолвер <b>зберігає запис у кеші</b> на певний час (TTL), щоб наступного разу відповісти одразу.",
+    log:"Запис збережено в кеші резолвера" });
+  push({ from:"res", to:"pc", kind:"answer",
+    note:"Резолвер повертає комп'ютеру IP-адресу <span class='mono'>"+ip+"</span>.",
+    log:"Відповідь комп'ютеру: "+ip });
+  push({ from:null, to:null, kind:"final", done:true,
+    note:"Ім'я розпізнано. Тепер браузер може надсилати пакети на адресу <span class='mono'>"+ip+"</span>. Далі працює маршрутизація — див. етап 2.",
+    log:"З'єднання з "+ip });
+  return steps;
+}
+
+/* Малювання схеми DNS */
+let dnsNodePos = {};
+function dnsRender(active){
+  active = active || {};
+  const svg = document.getElementById("dns-svg");
+  svg.innerHTML = "";
+  const chain = dnsState.chain;
+  const W = 1000, H = 460;
+  svg.setAttribute("viewBox","0 0 "+W+" "+H);
+
+  dnsNodePos = {
+    pc:  { x:90,  y:H/2, w:140, h:70, title:"Комп'ютер учня", sub:"браузер" },
+    res: { x:330, y:H/2, w:170, h:76, title:"DNS-резолвер", sub:"сервер провайдера" }
+  };
+  const n = chain.length;
+  const top = 50, bottom = H - 50;
+  const stepY = n > 1 ? (bottom - top) / (n - 1) : 0;
+  chain.forEach(function(c, i){
+    dnsNodePos[c.id] = {
+      x: 760, y: n>1 ? top + stepY*i : H/2, w:300, h:64,
+      title:c.title, sub:"зона: "+c.zone
+    };
+  });
+
+  // лінії зв'язку
+  const links = [["pc","res"]].concat(chain.map(function(c){ return ["res", c.id]; }));
+  links.forEach(function(l){
+    const a = dnsNodePos[l[0]], b = dnsNodePos[l[1]];
+    const isActive = active.from && active.to &&
+      ((active.from===l[0] && active.to===l[1]) || (active.from===l[1] && active.to===l[0]));
+    const color = isActive ? (active.kind==="answer" ? "var(--ok)" : "var(--accent)") : "#cfd9e4";
+    svg.appendChild(svgEl("line",{
+      x1:a.x, y1:a.y, x2:b.x, y2:b.y,
+      stroke:color, "stroke-width": isActive ? 6 : 3,
+      "stroke-dasharray": isActive ? "none" : "7 7"
+    }));
+  });
+
+  // вузли
+  for(const id in dnsNodePos){
+    const p = dnsNodePos[id];
+    const isEnd = active.to === id || active.from === id;
+    let fill = "#ffffff", stroke = "var(--line)";
+    if(id === "pc"){ fill = "#f4f8ff"; }
+    if(id === "res"){ fill = "#fffaf0"; }
+    if(isEnd){ stroke = active.kind==="answer" ? "var(--ok)" : "var(--accent)"; fill = active.kind==="answer" ? "var(--ok-soft)" : "var(--accent-soft)"; }
+    if(active.atRes && id==="res"){ stroke="var(--warn)"; fill="var(--warn-soft)"; }
+    if(active.done && id==="pc"){ stroke="var(--ok)"; fill="var(--ok-soft)"; }
+    const g = svgEl("g",{});
+    g.appendChild(svgEl("rect",{
+      x:p.x-p.w/2, y:p.y-p.h/2, width:p.w, height:p.h, rx:12,
+      fill:fill, stroke:stroke, "stroke-width":isEnd?4:2
+    }));
+    g.appendChild(svgEl("text",{
+      x:p.x, y:p.y-4, "text-anchor":"middle", "font-size":"17", "font-weight":"700", fill:"#13202f"
+    }, p.title));
+    g.appendChild(svgEl("text",{
+      x:p.x, y:p.y+17, "text-anchor":"middle", "font-size":"13", fill:"#5b6b7c"
+    }, p.sub));
+    svg.appendChild(g);
+  }
+
+  // пакет (кружок) на активній лінії
+  if(active.from && active.to && dnsNodePos[active.from] && dnsNodePos[active.to]){
+    const a = dnsNodePos[active.from], b = dnsNodePos[active.to];
+    const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+    const col = active.kind==="answer" ? "var(--ok)" : "var(--accent)";
+    svg.appendChild(svgEl("circle",{ cx:mx, cy:my, r:16, fill:col, stroke:"#fff", "stroke-width":3 }));
+    svg.appendChild(svgEl("text",{
+      x:mx, y:my+6, "text-anchor":"middle", "font-size":"15", "font-weight":"700", fill:"#fff"
+    }, active.kind==="answer" ? "◀" : "▶"));
+    const label = active.kind==="answer" ? "відповідь" : "запит";
+    svg.appendChild(svgEl("text",{
+      x:mx, y:my-26, "text-anchor":"middle", "font-size":"14", "font-weight":"700", fill:col
+    }, label));
+  }
+
+  // підпис результату
+  if(dnsState.ip){
+    svg.appendChild(svgEl("text",{
+      x:20, y:26, "font-size":"15", fill:"#5b6b7c"
+    }, "Ім'я: "+dnsState.domain));
+  }
+}
+
+function dnsApplyStep(step){
+  dnsRender(step);
+  const note = document.getElementById("dns-note");
+  note.className = "note" + (step.kind==="answer" || step.done ? " ok" : (step.atRes ? " warn" : ""));
+  note.innerHTML = step.note;
+
+  if(step.counts){ dnsState.queryCount++; document.getElementById("dns-r-count").textContent = dnsState.queryCount; }
+  if(step.cacheHit){ dnsState.source = "кеш резолвера"; document.getElementById("dns-r-src").textContent = dnsState.source; }
+  if(step.final){ dnsState.source = "авторитетний сервер"; document.getElementById("dns-r-src").textContent = dnsState.source; }
+  if(step.done){ document.getElementById("dns-r-ip").textContent = dnsState.ip; }
+  if(step.storeCache){ dnsState.cache[dnsState.domain] = dnsState.ip; dnsRenderCache(); }
+
+  if(step.log){
+    dnsState.log.push(step.log);
+    document.getElementById("dns-log").innerHTML =
+      dnsState.log.map(function(s){ return "<li>"+s+"</li>"; }).join("");
+  }
+}
+
+function dnsStart(){
+  const domain = document.getElementById("dns-domain").value.trim();
+  const err = dnsValidate(domain);
+  document.getElementById("dns-err").textContent = err;
+  if(err){ dnsPlayer.clear(); return; }
+
+  const preset = DNS_PRESETS.filter(function(p){ return p.domain === domain.toLowerCase(); })[0];
+  const ip = preset ? preset.ip : dnsFakeIp(domain.toLowerCase());
+  const fromCache = Object.prototype.hasOwnProperty.call(dnsState.cache, domain.toLowerCase());
+
+  dnsState.domain = domain.toLowerCase();
+  dnsState.ip = fromCache ? dnsState.cache[dnsState.domain] : ip;
+  dnsState.chain = dnsBuildChain(dnsState.domain);
+  dnsState.queryCount = 0;
+  dnsState.source = "—";
+  dnsState.log = [];
+
+  document.getElementById("dns-r-name").textContent = dnsState.domain;
+  document.getElementById("dns-r-ip").textContent = "—";
+  document.getElementById("dns-r-count").textContent = "0";
+  document.getElementById("dns-r-src").textContent = "—";
+  document.getElementById("dns-log").innerHTML = '<li class="hint">поки що порожньо</li>';
+
+  dnsRender({});
+  dnsPlayer.load(dnsBuildSteps(dnsState.domain, dnsState.ip, dnsState.chain, fromCache));
+}
+
+/* ======================= 5. Вкладка «Маршрутизація» ======================= */
+
+/* Вузли мережі: id, підпис, координати в системі 1000×500 */
+const NET_NODES = [
+  { id:"M1", x: 80, y:250 },
+  { id:"M2", x:250, y:120 },
+  { id:"M3", x:250, y:390 },
+  { id:"M4", x:450, y:255 },
+  { id:"M5", x:450, y: 60 },
+  { id:"M6", x:450, y:445 },
+  { id:"M7", x:680, y:140 },
+  { id:"M8", x:680, y:370 },
+  { id:"M9", x:890, y:250 }
+];
+
+/* Канали: a, b — вузли; w — затримка в мс */
+const NET_EDGES = [
+  { a:"M1", b:"M2", w:4 },
+  { a:"M1", b:"M3", w:3 },
+  { a:"M2", b:"M4", w:2 },
+  { a:"M2", b:"M5", w:5 },
+  { a:"M3", b:"M4", w:6 },
+  { a:"M3", b:"M6", w:4 },
+  { a:"M4", b:"M7", w:7 },
+  { a:"M4", b:"M8", w:5 },
+  { a:"M5", b:"M7", w:3 },
+  { a:"M6", b:"M8", w:2 },
+  { a:"M7", b:"M9", w:4 },
+  { a:"M8", b:"M9", w:6 }
+];
+
+let rtState = {
+  broken:{},          // ключ "M1-M2" → true
+  src:"M1", dst:"M9",
+  path:null, cost:null,
+  view:{},            // що підсвітити на графі
+  table:null,         // знімок таблиці відстаней
+  phase:"idle",
+  packets:[], arrived:[]
+};
+
+const rtPlayer = new StepPlayer({
+  apply: rtApplyStep,
+  speedEl: document.getElementById("rt-speed"),
+  btnStep: document.getElementById("rt-step"),
+  btnPlay: document.getElementById("rt-play")
+});
+
+(function initRouteControls(){
+  const s = document.getElementById("rt-src"), d = document.getElementById("rt-dst");
+  NET_NODES.forEach(function(n){
+    s.appendChild(new Option(n.id, n.id));
+    d.appendChild(new Option(n.id, n.id));
+  });
+  s.value = "M1"; d.value = "M9";
+  const mp = document.getElementById("rt-msg-preset");
+  mp.appendChild(new Option("— вибрати приклад —",""));
+  MSG_PRESETS.forEach(function(m,i){ mp.appendChild(new Option(m, String(i))); });
+})();
+
+function rtUseMsgPreset(){
+  const sel = document.getElementById("rt-msg-preset");
+  if(sel.value==="") return;
+  document.getElementById("rt-msg").value = MSG_PRESETS[Number(sel.value)];
+  document.getElementById("rt-err").textContent = "";
+}
+
+function edgeKey(a,b){ return a < b ? a+"-"+b : b+"-"+a; }
+function isBroken(a,b){ return !!rtState.broken[edgeKey(a,b)]; }
+function nodeById(id){ return NET_NODES.filter(function(n){ return n.id===id; })[0]; }
+
+function rtNeighbors(id){
+  const out = [];
+  NET_EDGES.forEach(function(e){
+    if(e.a===id) out.push({ id:e.b, w:e.w, edge:e });
+    else if(e.b===id) out.push({ id:e.a, w:e.w, edge:e });
+  });
+  return out.filter(function(n){ return !isBroken(id, n.id); });
+}
+
+function rtToggleEdge(e){
+  const k = edgeKey(e.a, e.b);
+  if(rtState.broken[k]) delete rtState.broken[k]; else rtState.broken[k] = true;
+  rtReset();
+  const list = Object.keys(rtState.broken);
+  const note = document.getElementById("rt-note");
+  note.className = "note " + (list.length ? "bad" : "");
+  note.innerHTML = list.length
+    ? "Канал <b>"+k.replace("-"," — ")+"</b> змінив стан. Обірвані канали: <b>"+list.join(", ")+"</b>. Натисніть «Знайти маршрут», щоб алгоритм перебудував шлях."
+    : "Усі канали працюють. Натисніть «Знайти маршрут».";
+}
+
+function rtRepairAll(){ rtState.broken = {}; rtReset(); }
+
+function rtReset(){
+  rtPlayer.clear();
+  rtState.src = document.getElementById("rt-src").value;
+  rtState.dst = document.getElementById("rt-dst").value;
+  rtState.path = null; rtState.cost = null; rtState.table = null;
+  rtState.view = {}; rtState.phase = "idle";
+  rtState.packets = []; rtState.arrived = [];
+  document.getElementById("rt-send").disabled = true;
+  document.getElementById("rt-r-steps").textContent = "0";
+  document.getElementById("rt-r-path").textContent = "—";
+  document.getElementById("rt-r-cost").textContent = "—";
+  const bl = Object.keys(rtState.broken);
+  document.getElementById("rt-r-broken").textContent = bl.length ? bl.join(", ") : "немає";
+  document.getElementById("rt-pkt-flight").innerHTML = '<span class="hint">пакети ще не надіслані</span>';
+  document.getElementById("rt-pkt-arrived").innerHTML = '<span class="hint">—</span>';
+  document.getElementById("rt-assembled").textContent = "";
+  document.getElementById("rt-assembled-hint").textContent = "";
+  rtRenderTable(null);
+  rtRender();
+  const note = document.getElementById("rt-note");
+  note.className = "note";
+  note.innerHTML = "Виберіть відправника та отримувача і натисніть «Знайти маршрут». Алгоритм Дейкстри працює покроково.";
+}
+
+/* ---- Побудова кроків алгоритму Дейкстри ---- */
+function rtBuildDijkstraSteps(src, dst){
+  const dist = {}, prev = {}, done = {};
+  NET_NODES.forEach(function(n){ dist[n.id] = Infinity; prev[n.id] = null; done[n.id] = false; });
+  dist[src] = 0;
+  const steps = [];
+  const snap = function(){
+    return { dist:Object.assign({},dist), prev:Object.assign({},prev), done:Object.assign({},done) };
+  };
+
+  steps.push({
+    note:"<b>Підготовка.</b> Відстань до відправника <b>"+src+"</b> дорівнює 0, до всіх інших вузлів поки невідома (∞). Жоден вузол не опрацьований.",
+    table:snap(), view:{ selected:src }
+  });
+
+  let guard = 0;
+  while(guard++ < 200){
+    let u = null, best = Infinity;
+    NET_NODES.forEach(function(n){
+      if(!done[n.id] && dist[n.id] < best){ best = dist[n.id]; u = n.id; }
+    });
+    if(u === null){
+      steps.push({
+        note:"Серед неопрацьованих вузлів не залишилося жодного з відомою відстанню. <b>Отримувач недосяжний</b>: обірвані канали розділили мережу на частини.",
+        table:snap(), view:{}, failed:true
+      });
+      break;
+    }
+    done[u] = true;
+    steps.push({
+      note:"<b>Вибір вузла.</b> Серед неопрацьованих вузлів найменшу відстань має <b>"+u+"</b> ("+dist[u]+" мс). Позначаємо його опрацьованим: коротшого шляху до нього вже не буде.",
+      table:snap(), view:{ selected:u }
+    });
+    if(u === dst){
+      const path = [];
+      let cur = dst;
+      while(cur){ path.unshift(cur); cur = prev[cur]; }
+      steps.push({
+        note:"<b>Маршрут знайдено:</b> "+path.join(" → ")+". Сумарна затримка — <b>"+dist[dst]+" мс</b>. Відновити маршрут можна за стовпцем «попередній», рухаючись від отримувача до відправника.",
+        table:snap(), view:{ path:path }, result:{ path:path, cost:dist[dst] }
+      });
+      break;
+    }
+    const nbs = rtNeighbors(u).filter(function(n){ return !done[n.id]; });
+    if(!nbs.length){
+      steps.push({
+        note:"У вузла <b>"+u+"</b> немає неопрацьованих сусідів із робочими каналами. Переходимо до наступного вузла.",
+        table:snap(), view:{ selected:u }
+      });
+    }
+    nbs.forEach(function(nb){
+      const nd = dist[u] + nb.w;
+      const old = dist[nb.id];
+      if(nd < old){
+        dist[nb.id] = nd; prev[nb.id] = u;
+        steps.push({
+          note:"<b>Перевірка каналу "+u+" — "+nb.id+".</b> Шлях через "+u+": "+dist[u]+" + "+nb.w+" = <b>"+nd+" мс</b>, а було "+(old===Infinity?"невідомо (∞)":old+" мс")+". Нове значення менше, тому запам'ятовуємо його та попередній вузол "+u+".",
+          table:snap(), view:{ selected:u, edge:[u, nb.id], improved:true }
+        });
+      } else {
+        steps.push({
+          note:"<b>Перевірка каналу "+u+" — "+nb.id+".</b> Шлях через "+u+": "+dist[u]+" + "+nb.w+" = "+nd+" мс, що не менше за вже відоме "+old+" мс. Відстань <b>не змінюємо</b>.",
+          table:snap(), view:{ selected:u, edge:[u, nb.id], improved:false }
+        });
+      }
+    });
+  }
+  return steps;
+}
+
+function rtStartDijkstra(){
+  rtState.src = document.getElementById("rt-src").value;
+  rtState.dst = document.getElementById("rt-dst").value;
+  if(rtState.src === rtState.dst){
+    const note = document.getElementById("rt-note");
+    note.className = "note bad";
+    note.innerHTML = "Відправник і отримувач збігаються. Виберіть різні вузли.";
+    return;
+  }
+  rtState.phase = "dijkstra";
+  rtState.path = null; rtState.cost = null;
+  document.getElementById("rt-send").disabled = true;
+  rtPlayer.load(rtBuildDijkstraSteps(rtState.src, rtState.dst));
+}
+
+/* ---- Моделювання руху пакетів ----
+   Кожен пакет рухається маршрутом по одному каналу за такт, але на
+   маршрутизаторах може затримуватися в черзі (0–2 такти). Саме через
+   черги пакети прибувають не в тому порядку, в якому їх надіслали. */
+function rtSimulatePackets(path, parts){
+  const pkts = parts.map(function(p, i){
+    const extra = [];
+    for(let h=0; h<path.length; h++) extra.push(Math.floor(Math.random()*3));
+    return {
+      num:p.num, data:p.data,
+      pos:0,          // індекс вузла маршруту, на якому зараз пакет
+      wait:i,         // такти до відправлення (пакети виходять по черзі)
+      extra:extra,    // затримки в чергах
+      arrived:false
+    };
+  });
+  const frames = [], arrived = [];
+  let tick = 0;
+  while(tick++ < 300){
+    let moved = false;
+    pkts.forEach(function(p){
+      if(p.arrived) return;
+      if(p.wait > 0){ p.wait--; moved = true; return; }
+      p.pos++;
+      moved = true;
+      if(p.pos >= path.length - 1){
+        p.arrived = true;
+        arrived.push(p.num);
+      } else {
+        p.wait = p.extra[p.pos] || 0;
+      }
+    });
+    if(!moved) break;
+    frames.push({ tick:tick, list:pkts.map(clonePkt), arrived:arrived.slice() });
+    if(pkts.every(function(p){ return p.arrived; })) break;
+  }
+  return { pkts:pkts, frames:frames, arrived:arrived };
+}
+
+/* ---- Кроки передавання пакетів ---- */
+function rtBuildPacketSteps(path, msg, count){
+  // поділ повідомлення на приблизно рівні частини
+  const size = Math.ceil(msg.length / count);
+  const parts = [];
+  for(let i=0;i<count;i++){
+    const chunk = msg.slice(i*size, (i+1)*size);
+    if(chunk.length) parts.push({ num:parts.length+1, data:chunk });
+  }
+  count = parts.length;
+
+  // Моделюємо кілька разів, щоб порядок прибуття відрізнявся від порядку
+  // номерів: саме на цьому тримається пояснення про збирання за номерами.
+  let sim = null;
+  for(let attempt=0; attempt<20; attempt++){
+    sim = rtSimulatePackets(path, parts);
+    const sorted = sim.arrived.every(function(n,i){ return n === i+1; });
+    if(!sorted || count < 2) break;
+  }
+  const pkts = sim.pkts, arrived = sim.arrived;
+
+  const steps = [];
+  steps.push({
+    pkt:{ list:parts.map(function(p){ return { num:p.num, data:p.data, pos:0, wait:0, arrived:false }; }), arrived:[] },
+    note:"Повідомлення поділено на <b>"+count+"</b> пакетів. Кожен пакет має <b>номер</b> і частину даних. Пакети вирушають маршрутом "+path.join(" → ")+" і можуть затримуватися в чергах на маршрутизаторах.",
+    view:{ path:path }
+  });
+
+  sim.frames.forEach(function(f){
+    const inFlight = f.list.filter(function(p){ return !p.arrived; }).length;
+    steps.push({
+      pkt:{ list:f.list, arrived:f.arrived },
+      note: inFlight
+        ? "Такт "+f.tick+". Пакети просуваються маршрутом. У дорозі — <b>"+inFlight+"</b>, уже прибуло — <b>"+f.arrived.length+"</b>. Знак ⏳ означає, що пакет чекає в черзі маршрутизатора."
+        : "Такт "+f.tick+". Усі пакети прибули. Порядок прибуття: <b>"+f.arrived.join(", ")+"</b>, а надсилали їх у порядку 1–"+count+".",
+      view:{ path:path }
+    });
+  });
+
+  const wrong = arrived.map(function(num){
+    return pkts.filter(function(p){ return p.num===num; })[0].data;
+  }).join("");
+  const right = pkts.slice().sort(function(a,b){ return a.num-b.num; })
+                    .map(function(p){ return p.data; }).join("");
+
+  steps.push({
+    pkt:{ list:pkts.map(clonePkt), arrived:arrived.slice() },
+    note:"Якщо скласти дані в тому порядку, у якому пакети прибули, вийде «<span class='mono'>"+wrong+"</span>» — текст може бути спотворений.",
+    view:{ path:path }, assembled:{ text:wrong, ok:false }
+  });
+  steps.push({
+    pkt:{ list:pkts.map(clonePkt), arrived:arrived.slice().sort(function(a,b){return a-b;}) },
+    note:"Отримувач упорядковує пакети <b>за номерами</b> і лише тоді з'єднує дані. Повідомлення відновлено без помилок: «<span class='mono'>"+right+"</span>».",
+    view:{ path:path }, assembled:{ text:right, ok:true }
+  });
+  return steps;
+}
+
+function clonePkt(p){
+  return { num:p.num, data:p.data, pos:p.pos, wait:p.wait, arrived:p.arrived };
+}
+
+function rtStartPackets(){
+  const msg = document.getElementById("rt-msg").value;
+  const err = document.getElementById("rt-err");
+  if(!msg.trim()){ err.textContent = "Введіть текст повідомлення."; return; }
+  if(msg.length > 40){ err.textContent = "Задовге повідомлення: не більше 40 символів."; return; }
+  if(!rtState.path){ err.textContent = "Спочатку знайдіть маршрут."; return; }
+  err.textContent = "";
+  const count = Number(document.getElementById("rt-npkt").value);
+  rtState.phase = "packets";
+  rtPlayer.load(rtBuildPacketSteps(rtState.path, msg, count));
+}
+
+/* ---- Таблиця відстаней ---- */
+function rtRenderTable(snapshot){
+  const tb = document.querySelector("#rt-table tbody");
+  let html = "<tr><th>Вузол</th><th>Відстань, мс</th><th>Попередній</th><th>Стан</th></tr>";
+  NET_NODES.forEach(function(n){
+    if(!snapshot){
+      html += "<tr><td class='name'>"+n.id+"</td><td>—</td><td>—</td><td>—</td></tr>";
+      return;
+    }
+    const d = snapshot.dist[n.id];
+    const cls = snapshot.done[n.id] ? "done" : "";
+    const state = snapshot.done[n.id]
+      ? '<span class="badge ok">опрацьовано</span>'
+      : (d === Infinity ? '<span class="badge">невідомо</span>' : '<span class="badge wait">у черзі</span>');
+    html += "<tr class='"+cls+"'><td class='name'>"+n.id+"</td><td>"+
+            (d===Infinity ? "∞" : d)+"</td><td>"+(snapshot.prev[n.id] || "—")+"</td><td>"+state+"</td></tr>";
+  });
+  tb.innerHTML = html;
+}
+
+/* ---- Малювання графа мережі ---- */
+function rtRender(){
+  const svg = document.getElementById("rt-svg");
+  svg.innerHTML = "";
+  const v = rtState.view || {};
+  const pathEdges = {};
+  if(v.path){
+    for(let i=0;i<v.path.length-1;i++) pathEdges[edgeKey(v.path[i], v.path[i+1])] = true;
+  }
+
+  // канали
+  NET_EDGES.forEach(function(e){
+    const a = nodeById(e.a), b = nodeById(e.b);
+    const k = edgeKey(e.a, e.b);
+    const broken = !!rtState.broken[k];
+    const onPath = !!pathEdges[k];
+    const isActive = v.edge && edgeKey(v.edge[0], v.edge[1]) === k;
+    let color = "#b9c7d6", width = 4;
+    if(onPath){ color = "var(--ok)"; width = 9; }
+    if(isActive){ color = v.improved ? "var(--accent)" : "var(--warn)"; width = 8; }
+    if(broken){ color = "var(--bad)"; width = 4; }
+    svg.appendChild(svgEl("line",{
+      x1:a.x, y1:a.y, x2:b.x, y2:b.y, stroke:color, "stroke-width":width,
+      "stroke-dasharray": broken ? "10 10" : "none", "stroke-linecap":"round"
+    }));
+    // підпис ваги — клікабельний
+    const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+    const g = svgEl("g",{ style:"cursor:pointer" });
+    g.appendChild(svgEl("rect",{
+      x:mx-19, y:my-15, width:38, height:30, rx:8,
+      fill: broken ? "var(--bad-soft)" : "#fff",
+      stroke: broken ? "var(--bad)" : (onPath ? "var(--ok)" : "var(--line)"),
+      "stroke-width": onPath || broken ? 3 : 2
+    }));
+    g.appendChild(svgEl("text",{
+      x:mx, y:my+6, "text-anchor":"middle", "font-size":"15", "font-weight":"700",
+      fill: broken ? "var(--bad)" : "#13202f"
+    }, broken ? "✕" : String(e.w)));
+    g.addEventListener("click", function(){ rtToggleEdge(e); });
+    svg.appendChild(g);
+  });
+
+  // вузли
+  NET_NODES.forEach(function(n){
+    const isSrc = n.id === rtState.src, isDst = n.id === rtState.dst;
+    const isSel = v.selected === n.id;
+    const onPath = v.path && v.path.indexOf(n.id) >= 0;
+    const doneNode = rtState.table && rtState.table.done[n.id];
+    let fill = "#fff", stroke = "var(--line)", sw = 3;
+    if(doneNode){ fill = "var(--done-soft)"; stroke = "var(--done)"; }
+    if(onPath){ fill = "var(--ok-soft)"; stroke = "var(--ok)"; sw = 4; }
+    if(isSel){ fill = "var(--accent-soft)"; stroke = "var(--accent)"; sw = 5; }
+    if(isSrc || isDst){ sw = Math.max(sw, 4); }
+    const g = svgEl("g",{});
+    g.appendChild(svgEl("circle",{ cx:n.x, cy:n.y, r:34, fill:fill, stroke:stroke, "stroke-width":sw }));
+    g.appendChild(svgEl("text",{
+      x:n.x, y:n.y+6, "text-anchor":"middle", "font-size":"17", "font-weight":"700", fill:"#13202f"
+    }, n.id));
+    // відстань біля вузла
+    if(rtState.table){
+      const d = rtState.table.dist[n.id];
+      g.appendChild(svgEl("text",{
+        x:n.x, y:n.y-44, "text-anchor":"middle", "font-size":"14", "font-weight":"700",
+        fill: d===Infinity ? "#90a0b0" : "var(--accent)"
+      }, d===Infinity ? "∞" : d+" мс"));
+    }
+    if(isSrc) g.appendChild(svgEl("text",{ x:n.x, y:n.y+56, "text-anchor":"middle", "font-size":"13", fill:"var(--muted)" }, "відправник"));
+    if(isDst) g.appendChild(svgEl("text",{ x:n.x, y:n.y+56, "text-anchor":"middle", "font-size":"13", fill:"var(--muted)" }, "отримувач"));
+    svg.appendChild(g);
+  });
+
+  // пакети на маршруті
+  if(rtState.packets && rtState.packets.length && v.path){
+    const groups = {};
+    rtState.packets.forEach(function(p){
+      if(p.arrived) return;
+      const key = String(p.pos);
+      groups[key] = groups[key] || [];
+      groups[key].push(p);
+    });
+    for(const key in groups){
+      const idx = Math.min(Number(key), v.path.length-1);
+      const node = nodeById(v.path[idx]);
+      groups[key].forEach(function(p, i){
+        const ox = -26 + i*26, oy = 46;
+        svg.appendChild(svgEl("rect",{
+          x:node.x+ox-13, y:node.y-oy-13, width:26, height:26, rx:6,
+          fill:"var(--accent)", stroke:"#fff", "stroke-width":2
+        }));
+        svg.appendChild(svgEl("text",{
+          x:node.x+ox, y:node.y-oy+5, "text-anchor":"middle",
+          "font-size":"14", "font-weight":"700", fill:"#fff"
+        }, String(p.num)));
+      });
+    }
+  }
+}
+
+function rtApplyStep(step){
+  if(step.table) rtState.table = step.table;
+  rtState.view = step.view || {};
+  if(step.pkt){
+    rtState.packets = step.pkt.list;
+    rtRenderPackets(step.pkt);
+  }
+  if(step.result){
+    rtState.path = step.result.path;
+    rtState.cost = step.result.cost;
+    document.getElementById("rt-r-path").textContent = step.result.path.join(" → ");
+    document.getElementById("rt-r-cost").textContent = step.result.cost + " мс";
+    document.getElementById("rt-send").disabled = false;
+  }
+  if(step.failed){
+    document.getElementById("rt-r-path").textContent = "недосяжно";
+    document.getElementById("rt-r-cost").textContent = "—";
+  }
+  if(step.assembled){
+    const box = document.getElementById("rt-assembled");
+    box.textContent = step.assembled.text;
+    box.style.color = step.assembled.ok ? "var(--ok)" : "var(--bad)";
+    document.getElementById("rt-assembled-hint").textContent = step.assembled.ok
+      ? "Дані складено за номерами пакетів — повідомлення правильне."
+      : "Дані складено за порядком прибуття — можлива помилка.";
+  }
+  if(rtState.phase === "dijkstra") document.getElementById("rt-r-steps").textContent = String(rtPlayer.index + 1);
+
+  rtRenderTable(rtState.table);
+  rtRender();
+  const note = document.getElementById("rt-note");
+  note.className = "note" + (step.failed ? " bad" : (step.result || (step.assembled && step.assembled.ok) ? " ok" : ""));
+  note.innerHTML = step.note;
+}
+
+function rtRenderPackets(pkt){
+  const flight = document.getElementById("rt-pkt-flight");
+  const arr = document.getElementById("rt-pkt-arrived");
+  const inFlight = pkt.list.filter(function(p){ return !p.arrived; });
+  flight.innerHTML = inFlight.length
+    ? inFlight.map(function(p){
+        return '<span class="pkt">№'+p.num+' «'+p.data+'»'+(p.wait>0 ? " ⏳" : "")+'</span>';
+      }).join("")
+    : '<span class="hint">усі пакети прибули</span>';
+  arr.innerHTML = pkt.arrived.length
+    ? pkt.arrived.map(function(num){
+        const p = pkt.list.filter(function(x){ return x.num===num; })[0];
+        return '<span class="pkt arr">№'+num+' «'+p.data+'»</span>';
+      }).join("")
+    : '<span class="hint">—</span>';
+}
+
+/* ======================= 6. Початковий стан ======================= */
+dnsStart();
+rtReset();
+</script>
+</body>
+</html>

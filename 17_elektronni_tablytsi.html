@@ -1,0 +1,1672 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тренажер «Формули, посилання та фільтри в електронній таблиці»</title>
+<!--
+  Навчальний візуалізатор для уроків технологій профільного рівня
+  Спеціалізація «Обробка інформації та програмне забезпечення»
+  11 клас. Розділ 8. Тема 8.2 «Обробка табличної інформації»
+
+  Один самодостатній файл: HTML + CSS + JS. Жодних зовнішніх бібліотек і CDN,
+  працює офлайн (можна запускати з флешки).
+  Код не мінімізований і прокомментований, щоб учитель міг його змінити.
+-->
+<style>
+/* ===================== Спільне оформлення ===================== */
+:root{
+  --bg:#eef2f7;
+  --panel:#ffffff;
+  --ink:#16222e;
+  --ink-soft:#52657a;
+  --line:#c7d3e0;
+  --accent:#1e5fa8;        /* основний синій */
+  --accent-soft:#dce8f7;
+  --ok:#0f8a5f;            /* зелений: результат, абсолютне посилання */
+  --ok-soft:#d8f1e6;
+  --warn:#c9741a;          /* оранжевий: змішане посилання */
+  --warn-soft:#fdeedd;
+  --err:#bf3330;           /* червоний: помилка, відносне посилання */
+  --err-soft:#fbe0df;
+  --hl:#fff3b0;            /* підсвітка поточного кроку */
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:"Segoe UI",Tahoma,Verdana,sans-serif;
+  font-size:17px;
+  line-height:1.45;
+}
+header.app{
+  background:linear-gradient(180deg,#1e5fa8,#174a85);
+  color:#fff;
+  padding:14px 20px;
+}
+header.app h1{margin:0;font-size:1.45rem;line-height:1.2;}
+header.app .meta{margin-top:4px;font-size:1rem;opacity:.92;}
+main{max-width:1500px;margin:0 auto;padding:16px 16px 10px;}
+footer.app{
+  text-align:center;
+  padding:14px;
+  color:var(--ink-soft);
+  border-top:1px solid var(--line);
+  margin-top:18px;
+  font-size:.95rem;
+}
+
+/* ---- вкладки ---- */
+nav.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+nav.tabs button{
+  font:inherit;font-weight:600;
+  padding:11px 18px;
+  border:2px solid var(--accent);
+  background:var(--panel);
+  color:var(--accent);
+  border-radius:10px 10px 0 0;
+  cursor:pointer;
+}
+nav.tabs button[aria-selected="true"]{background:var(--accent);color:#fff;}
+section.tab{display:none;}
+section.tab.active{display:block;}
+
+/* ---- панелі ---- */
+.panel{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:14px 16px;
+  margin-bottom:14px;
+}
+.panel h2{margin:0 0 10px;font-size:1.15rem;color:var(--accent);}
+.panel h3{margin:14px 0 6px;font-size:1.02rem;color:var(--ink-soft);}
+.cols{display:flex;gap:14px;flex-wrap:wrap;}
+.cols > *{flex:1 1 420px;min-width:300px;}
+
+/* ---- керування кроками ---- */
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 10px;}
+.controls button{
+  font:inherit;font-weight:600;
+  padding:10px 16px;border-radius:9px;border:2px solid var(--accent);
+  background:var(--accent);color:#fff;cursor:pointer;
+}
+.controls button.ghost{background:var(--panel);color:var(--accent);}
+.controls button:disabled{opacity:.45;cursor:default;}
+.controls .speed{display:flex;align-items:center;gap:8px;}
+.controls input[type=range]{width:150px;}
+.controls .counter{font-weight:700;color:var(--ink-soft);margin-left:auto;}
+.progress{height:8px;background:var(--accent-soft);border-radius:5px;overflow:hidden;margin-bottom:10px;}
+.progress > div{height:100%;width:0;background:var(--accent);transition:width .2s;}
+
+/* ---- пояснення кроку ---- */
+.explain{
+  background:var(--hl);
+  border-left:6px solid var(--warn);
+  border-radius:8px;
+  padding:11px 14px;
+  min-height:62px;
+  font-size:1.05rem;
+}
+.explain b{color:#000;}
+.note{color:var(--ink-soft);font-size:.95rem;}
+.error{
+  background:var(--err-soft);border-left:6px solid var(--err);
+  padding:10px 14px;border-radius:8px;color:#5b1512;font-weight:600;
+}
+
+/* ---- елементи вводу ---- */
+label.field{display:block;margin:8px 0;font-weight:600;}
+label.field span{display:block;font-weight:600;margin-bottom:4px;}
+input[type=text],select{
+  font:inherit;padding:9px 10px;border:2px solid var(--line);
+  border-radius:8px;background:#fff;color:var(--ink);width:100%;
+}
+input[type=text]:focus,select:focus{outline:none;border-color:var(--accent);}
+.inline{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;}
+.inline > *{flex:0 1 auto;}
+.presets{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+.presets button{
+  font:inherit;padding:8px 13px;border-radius:20px;cursor:pointer;
+  border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600;
+}
+.presets button:hover{background:#cadcf2;}
+
+/* ===================== Таблиця (аркуш) ===================== */
+.sheet-wrap{position:relative;overflow-x:auto;}
+table.sheet{border-collapse:collapse;font-size:1rem;background:#fff;}
+table.sheet th,table.sheet td{
+  border:1px solid var(--line);
+  min-width:78px;height:38px;
+  padding:2px 7px;text-align:right;white-space:nowrap;
+}
+table.sheet th{
+  background:#e3eaf2;color:var(--ink-soft);text-align:center;
+  font-weight:700;min-width:44px;
+}
+table.sheet td{cursor:cell;}
+table.sheet td.text{text-align:left;}
+table.sheet td.sel{outline:3px solid var(--accent);outline-offset:-3px;background:#eaf3ff;}
+table.sheet td.ref-hl{background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--accent);}
+table.sheet td.range-hl{background:var(--ok-soft);box-shadow:inset 0 0 0 2px var(--ok);}
+table.sheet td.target{background:#fff8d6;font-weight:700;}
+table.sheet td.filled{background:var(--ok-soft);}
+table.sheet td.formula::after{content:"ƒ";color:var(--accent);float:left;font-size:.8rem;opacity:.6;}
+svg.arrows{position:absolute;left:0;top:0;pointer-events:none;overflow:visible;}
+
+/* ---- рядок формул ---- */
+.formula-bar{display:flex;gap:8px;align-items:center;margin:10px 0;flex-wrap:wrap;}
+.formula-bar .addr{
+  font-weight:700;background:#e3eaf2;border:2px solid var(--line);
+  border-radius:8px;padding:9px 14px;min-width:70px;text-align:center;
+}
+.formula-bar input{flex:1 1 280px;font-family:Consolas,"Courier New",monospace;font-size:1.05rem;}
+
+/* ---- вираз, що обчислюється ---- */
+.expr{
+  font-family:Consolas,"Courier New",monospace;
+  font-size:1.35rem;
+  background:#f7fafd;border:2px dashed var(--line);border-radius:10px;
+  padding:14px;margin:10px 0;word-break:break-word;
+}
+.tok-val{background:var(--ok-soft);color:#0a5c40;border-radius:5px;padding:1px 6px;font-weight:700;}
+.tok-ref{color:var(--accent);font-weight:700;}
+.tok-fn{color:#7a3fa0;font-weight:700;}
+.tok-num{color:var(--ink);}
+.tok-str{color:var(--warn);}
+.tok-cur{background:var(--hl);box-shadow:0 0 0 3px var(--hl);border-radius:4px;}
+
+/* ---- таблиця трасування / порівнянь ---- */
+table.log{border-collapse:collapse;width:100%;font-size:.98rem;margin-top:8px;}
+table.log th,table.log td{border:1px solid var(--line);padding:6px 9px;text-align:left;}
+table.log th{background:#e3eaf2;}
+table.log tr.cur td{background:var(--hl);font-weight:600;}
+
+/* ---- копіювання формули ---- */
+.copy-step{font-family:Consolas,"Courier New",monospace;font-size:1.2rem;margin:6px 0;}
+.rel{color:var(--err);font-weight:700;}
+.abs{color:var(--ok);font-weight:700;}
+.mix{color:var(--warn);font-weight:700;}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0;font-size:.96rem;}
+.legend span b{font-family:Consolas,monospace;}
+
+/* ---- фільтр і сортування ---- */
+table.data{border-collapse:collapse;width:100%;font-size:1rem;}
+table.data th,table.data td{border:1px solid var(--line);padding:7px 9px;text-align:left;}
+table.data th{background:#e3eaf2;cursor:default;}
+table.data th.key1{background:#cfe0f5;}
+table.data th.key2{background:#e4eefc;}
+table.data tr.checking td{background:var(--hl);}
+table.data tr.keep td{background:var(--ok-soft);}
+table.data tr.hidden-row td{background:#f0f2f5;color:#aab4c0;text-decoration:line-through;}
+table.data tr.cmp-a td{background:#dce8f7;}
+table.data tr.cmp-b td{background:#fdeedd;}
+table.data td.num{text-align:right;}
+
+@media (max-width:900px){
+  body{font-size:16px;}
+  .cols > *{flex:1 1 100%;}
+  header.app h1{font-size:1.2rem;}
+}
+</style>
+</head>
+<body>
+
+<header class="app">
+  <h1>Тренажер «Формули, посилання та фільтри в електронній таблиці»</h1>
+  <div class="meta">11 клас · Розділ 8. Технології комп'ютерної обробки інформації · Тема 8.2 «Обробка табличної інформації»</div>
+</header>
+
+<main>
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true"  data-tab="t1">1. Обчислення формули</button>
+    <button role="tab" aria-selected="false" data-tab="t2">2. Копіювання формули</button>
+    <button role="tab" aria-selected="false" data-tab="t3">3. Сортування і фільтр</button>
+  </nav>
+
+  <!-- ============================================================= -->
+  <!-- ВКЛАДКА 1. Обчислення формули                                 -->
+  <!-- ============================================================= -->
+  <section class="tab active" id="t1">
+    <div class="cols">
+      <div>
+        <div class="panel">
+          <h2>Аркуш</h2>
+          <div class="presets" id="t1-presets"></div>
+          <div class="formula-bar">
+            <div class="addr" id="t1-addr">C1</div>
+            <input type="text" id="t1-input" spellcheck="false"
+                   placeholder="Число, текст або формула, що починається зі знака =">
+            <button class="ghost" style="font:inherit;font-weight:600;padding:9px 14px;border:2px solid var(--accent);border-radius:9px;background:#fff;color:var(--accent);cursor:pointer" id="t1-apply">Записати (Enter)</button>
+          </div>
+          <div class="sheet-wrap" id="t1-wrap">
+            <table class="sheet" id="t1-sheet"></table>
+            <svg class="arrows" id="t1-arrows"></svg>
+          </div>
+          <p class="note">Клацніть комірку, щоб побачити її вміст у рядку формул. Формула починається зі знака <b>=</b>.
+            Доступні функції: СУМ, СЕРЕДНЄ, МАКС, МІН, РАХУНОК, ЯКЩО. Аргументи відокремлюються знаком «;».</p>
+          <div id="t1-err"></div>
+        </div>
+      </div>
+      <div>
+        <div class="panel">
+          <h2>Покрокове обчислення</h2>
+          <div class="controls" id="t1-controls"></div>
+          <div class="progress"><div id="t1-bar"></div></div>
+          <div class="expr" id="t1-expr">—</div>
+          <div class="explain" id="t1-explain">Виберіть комірку з формулою та натисніть «Крок».</div>
+          <h3>Порядок обчислення (стрілки залежностей показано на аркуші)</h3>
+          <table class="log" id="t1-log">
+            <thead><tr><th style="width:62px">Крок</th><th>Дія</th><th style="width:120px">Результат</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================= -->
+  <!-- ВКЛАДКА 2. Копіювання формули                                 -->
+  <!-- ============================================================= -->
+  <section class="tab" id="t2">
+    <div class="cols">
+      <div>
+        <div class="panel">
+          <h2>Протягування формули</h2>
+          <div class="presets" id="t2-presets"></div>
+          <div class="inline">
+            <label class="field" style="flex:1 1 150px"><span>Комірка з формулою</span>
+              <input type="text" id="t2-src" value="C2" spellcheck="false"></label>
+            <label class="field" style="flex:2 1 240px"><span>Формула</span>
+              <input type="text" id="t2-formula" value="=A2*$B$1" spellcheck="false"></label>
+            <label class="field" style="flex:1 1 150px"><span>Напрям копіювання</span>
+              <select id="t2-dir">
+                <option value="down">вниз ↓</option>
+                <option value="right">вправо →</option>
+              </select></label>
+            <label class="field" style="flex:1 1 120px"><span>Кількість комірок</span>
+              <select id="t2-count">
+                <option>3</option><option selected>4</option><option>5</option><option>6</option>
+              </select></label>
+          </div>
+          <button id="t2-build" style="font:inherit;font-weight:600;padding:10px 16px;border-radius:9px;border:2px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer">Підготувати копіювання</button>
+          <div id="t2-err" style="margin-top:8px"></div>
+          <div class="sheet-wrap" style="margin-top:12px">
+            <table class="sheet" id="t2-sheet"></table>
+          </div>
+          <div class="legend">
+            <span><b class="rel">A2</b> — відносне посилання (змінюється)</span>
+            <span><b class="abs">$B$1</b> — абсолютне (не змінюється)</span>
+            <span><b class="mix">$A2 / B$1</b> — змішане (змінюється частково)</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="panel">
+          <h2>Що відбувається з посиланнями</h2>
+          <div class="controls" id="t2-controls"></div>
+          <div class="progress"><div id="t2-bar"></div></div>
+          <div class="explain" id="t2-explain">Натисніть «Підготувати копіювання», потім «Крок».</div>
+          <h3>Протокол копіювання</h3>
+          <table class="log" id="t2-log">
+            <thead><tr><th style="width:80px">Комірка</th><th>Формула</th><th style="width:110px">Значення</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p class="note">Правило: при копіюванні відносне посилання зсувається на стільки ж рядків і стовпців,
+            на скільки перемістилася сама формула. Знак <b>$</b> «заморожує» номер рядка або ім'я стовпця.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================= -->
+  <!-- ВКЛАДКА 3. Сортування і фільтр                                -->
+  <!-- ============================================================= -->
+  <section class="tab" id="t3">
+    <div class="cols">
+      <div>
+        <div class="panel">
+          <h2>Таблиця «Успішність учнів»</h2>
+          <table class="data" id="t3-table"></table>
+          <p class="note" id="t3-stat"></p>
+        </div>
+      </div>
+      <div>
+        <div class="panel">
+          <h2>Операція</h2>
+          <div class="presets" id="t3-presets"></div>
+          <div class="inline" id="t3-filter-box">
+            <label class="field" style="flex:1 1 150px"><span>Поле (автофільтр)</span>
+              <select id="t3-f-col"></select></label>
+            <label class="field" style="flex:1 1 120px"><span>Умова</span>
+              <select id="t3-f-op">
+                <option value=">=">&ge;</option>
+                <option value="&lt;=">&le;</option>
+                <option value="=">=</option>
+                <option value="&lt;&gt;">&ne;</option>
+              </select></label>
+            <label class="field" style="flex:1 1 120px"><span>Значення</span>
+              <input type="text" id="t3-f-val" value="8" spellcheck="false"></label>
+          </div>
+          <div class="inline" id="t3-sort-box">
+            <label class="field" style="flex:1 1 170px"><span>Ключ 1 сортування</span>
+              <select id="t3-s-col1"></select></label>
+            <label class="field" style="flex:1 1 130px"><span>Порядок</span>
+              <select id="t3-s-dir1"><option value="asc">за зростанням</option><option value="desc">за спаданням</option></select></label>
+            <label class="field" style="flex:1 1 170px"><span>Ключ 2 (при рівності)</span>
+              <select id="t3-s-col2"></select></label>
+            <label class="field" style="flex:1 1 130px"><span>Порядок</span>
+              <select id="t3-s-dir2"><option value="asc">за зростанням</option><option value="desc">за спаданням</option></select></label>
+          </div>
+          <div class="inline" style="margin-top:6px">
+            <button id="t3-run-filter" style="font:inherit;font-weight:600;padding:10px 16px;border-radius:9px;border:2px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer">Застосувати фільтр</button>
+            <button id="t3-run-sort" style="font:inherit;font-weight:600;padding:10px 16px;border-radius:9px;border:2px solid var(--accent);background:#fff;color:var(--accent);cursor:pointer">Виконати сортування</button>
+          </div>
+          <div id="t3-err" style="margin-top:8px"></div>
+          <div class="controls" id="t3-controls"></div>
+          <div class="progress"><div id="t3-bar"></div></div>
+          <div class="explain" id="t3-explain">Виберіть умову фільтра або ключі сортування та натисніть «Крок».</div>
+          <table class="log" id="t3-log">
+            <thead><tr><th style="width:62px">Крок</th><th>Дія</th><th style="width:130px">Результат</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="app">Розроблено автором</footer>
+
+<script>
+"use strict";
+
+/* ==================================================================
+   1. ЗАГАЛЬНІ ДОПОМІЖНІ ФУНКЦІЇ
+   ================================================================== */
+
+/** Короткий доступ до елемента за id. */
+function $(id){ return document.getElementById(id); }
+
+/** Екранування тексту, щоб безпечно вставляти його в HTML. */
+function esc(s){
+  return String(s).replace(/[&<>"]/g, function(ch){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch];
+  });
+}
+
+/** Форматування числа для показу учневі (без «хвостів» подвійної точності). */
+function fmtNum(v){
+  if(typeof v === "string") return '"' + v + '"';
+  if(typeof v === "boolean") return v ? "ТАК" : "НІ";
+  if(!isFinite(v)) return "помилка";
+  var r = Math.round(v*1000)/1000;
+  return String(r).replace(".", ",");
+}
+
+/* ------------------------------------------------------------------
+   Універсальний «кроковий виконавець».
+   Кроки заздалегідь обчислені. Стан завжди відтворюється з нуля:
+   reset() + apply() кроків 0..i. Так «Скинути» і повтор працюють надійно.
+   ------------------------------------------------------------------ */
+function StepRunner(opts){
+  this.o = opts;            // {mount, reset, render}
+  this.steps = [];
+  this.i = -1;              // -1 означає «ще нічого не виконано»
+  this.timer = null;
+  this.delay = 900;
+  this.build();
+}
+StepRunner.prototype.build = function(){
+  var self = this;
+  var box = this.o.mount;
+  box.innerHTML =
+    '<button class="btn-step">Крок</button>' +
+    '<button class="btn-play ghost">Старт</button>' +
+    '<button class="btn-reset ghost">Скинути</button>' +
+    '<span class="speed"><label>Швидкість</label>' +
+      '<input type="range" min="150" max="2000" step="50" value="900"></span>' +
+    '<span class="counter">крок 0 з 0</span>';
+  this.bStep  = box.querySelector(".btn-step");
+  this.bPlay  = box.querySelector(".btn-play");
+  this.bReset = box.querySelector(".btn-reset");
+  this.range  = box.querySelector("input[type=range]");
+  this.counter= box.querySelector(".counter");
+
+  this.bStep.onclick  = function(){ self.pause(); self.next(); };
+  this.bPlay.onclick  = function(){ self.timer ? self.pause() : self.play(); };
+  this.bReset.onclick = function(){ self.reset(); };
+  this.range.oninput  = function(){
+    // Повзунок зліва = повільніше, тому інвертуємо значення.
+    self.delay = 2150 - Number(self.range.value);
+    if(self.timer){ self.pause(); self.play(); }
+  };
+  this.delay = 2150 - Number(this.range.value);
+};
+StepRunner.prototype.setSteps = function(steps){
+  this.pause();
+  this.steps = steps || [];
+  this.i = -1;
+  this.apply();
+};
+StepRunner.prototype.apply = function(){
+  if(this.o.reset) this.o.reset();
+  for(var k=0; k<=this.i; k++) this.steps[k].apply();
+  if(this.o.render) this.o.render(this.i, this.steps[this.i] || null, this.steps);
+  this.counter.textContent = "крок " + (this.i+1) + " з " + this.steps.length;
+  this.bPlay.textContent = this.timer ? "Пауза" : "Старт";
+  var done = this.steps.length === 0;
+  this.bStep.disabled = done || this.i >= this.steps.length-1;
+  this.bPlay.disabled = done;
+  if(this.o.bar){
+    var p = this.steps.length ? (this.i+1)/this.steps.length*100 : 0;
+    this.o.bar.style.width = p + "%";
+  }
+};
+StepRunner.prototype.next = function(){
+  if(this.i >= this.steps.length-1){ this.pause(); return false; }
+  this.i++; this.apply(); return true;
+};
+StepRunner.prototype.play = function(){
+  var self = this;
+  if(!this.steps.length) return;
+  if(this.i >= this.steps.length-1){ this.i = -1; }
+  this.timer = setInterval(function(){
+    if(!self.next()){ self.pause(); }
+  }, this.delay);
+  this.apply();
+};
+StepRunner.prototype.pause = function(){
+  if(this.timer){ clearInterval(this.timer); this.timer = null; }
+  this.bPlay.textContent = "Старт";
+};
+StepRunner.prototype.reset = function(){
+  this.pause(); this.i = -1; this.apply();
+};
+
+/* ------------------------------------------------------------------
+   Перемикання вкладок
+   ------------------------------------------------------------------ */
+(function initTabs(){
+  var btns = document.querySelectorAll("nav.tabs button");
+  Array.prototype.forEach.call(btns, function(b){
+    b.onclick = function(){
+      Array.prototype.forEach.call(btns, function(x){ x.setAttribute("aria-selected","false"); });
+      b.setAttribute("aria-selected","true");
+      Array.prototype.forEach.call(document.querySelectorAll("section.tab"), function(s){
+        s.classList.toggle("active", s.id === b.dataset.tab);
+      });
+      // Стрілки залежностей перемальовуємо, бо розміри могли змінитися.
+      if(b.dataset.tab === "t1") T1.drawArrows();
+    };
+  });
+})();
+
+
+/* ==================================================================
+   2. МІНІ-ТАБЛИЧНИЙ ПРОЦЕСОР: модель, розбір і обчислення формул
+   ================================================================== */
+
+var COLS = ["A","B","C","D","E","F","G","H"];
+var ROWS = 10;
+
+/** Перетворення «A1» → {col:0,row:0}. */
+function addrToRC(a){
+  var m = /^([A-H])(\d{1,2})$/.exec(a.toUpperCase());
+  if(!m) return null;
+  var c = COLS.indexOf(m[1]);
+  var r = Number(m[2]) - 1;
+  if(c < 0 || r < 0 || r >= ROWS) return null;
+  return {col:c, row:r};
+}
+function rcToAddr(c, r){ return COLS[c] + (r+1); }
+
+/* ---------- Функції таблиці (українські назви з англійськими синонімами) ---------- */
+var FUNCS = {
+  "СУМ":        function(v){ return v.reduce(function(a,b){ return a+b; }, 0); },
+  "СЕРЕДНЄ":    function(v){ if(!v.length) throw new FErr("Діапазон порожній"); return v.reduce(function(a,b){return a+b;},0)/v.length; },
+  "МАКС":       function(v){ if(!v.length) throw new FErr("Діапазон порожній"); return Math.max.apply(null, v); },
+  "МІН":        function(v){ if(!v.length) throw new FErr("Діапазон порожній"); return Math.min.apply(null, v); },
+  "РАХУНОК":    function(v){ return v.length; }
+};
+var FUNC_ALIAS = {"SUM":"СУМ","AVERAGE":"СЕРЕДНЄ","MAX":"МАКС","MIN":"МІН","COUNT":"РАХУНОК","IF":"ЯКЩО"};
+
+/** Помилка формули з українським текстом для учня. */
+function FErr(msg){ this.msg = msg; }
+
+/* ---------- Лексичний аналіз формули ---------- */
+function tokenize(src){
+  var toks = [], i = 0;
+  var reRef = /^(\$?)([A-Ha-h])(\$?)(\d{1,2})/;
+  while(i < src.length){
+    var ch = src[i];
+    if(ch === " " || ch === "\t"){ i++; continue; }
+    // число
+    var mNum = /^\d+([.,]\d+)?/.exec(src.slice(i));
+    if(mNum){ toks.push({t:"num", v:Number(mNum[0].replace(",", ".")), text:mNum[0]}); i += mNum[0].length; continue; }
+    // рядок у лапках
+    if(ch === '"'){
+      var end = src.indexOf('"', i+1);
+      if(end < 0) throw new FErr("Не закрито лапки в текстовому значенні");
+      toks.push({t:"str", v:src.slice(i+1, end)});
+      i = end + 1; continue;
+    }
+    // посилання на комірку або діапазон
+    var mRef = reRef.exec(src.slice(i));
+    if(mRef){
+      var first = mRef[0];
+      i += first.length;
+      // чи це діапазон A1:A5 ?
+      if(src[i] === ":"){
+        var mRef2 = reRef.exec(src.slice(i+1));
+        if(!mRef2) throw new FErr("Після знака «:» очікується посилання на комірку");
+        i += 1 + mRef2[0].length;
+        toks.push({t:"range", text:first + ":" + mRef2[0], a:first, b:mRef2[0]});
+      } else {
+        toks.push({t:"ref", text:first});
+      }
+      continue;
+    }
+    // ім'я функції (українські або латинські літери)
+    var mName = /^[A-Za-zА-Яа-яЄєІіЇїҒґ_]+/.exec(src.slice(i));
+    if(mName){ toks.push({t:"name", v:mName[0].toUpperCase()}); i += mName[0].length; continue; }
+    // двосимвольні операції порівняння
+    var two = src.substr(i, 2);
+    if(two === "<=" || two === ">=" || two === "<>"){ toks.push({t:"op", v:two}); i += 2; continue; }
+    if("+-*/^()=<>;,".indexOf(ch) >= 0){
+      toks.push({t: (ch === "(" || ch === ")") ? ch : (ch === ";" || ch === ",") ? "sep" : "op", v:ch});
+      i++; continue;
+    }
+    throw new FErr("Незрозумілий символ «" + ch + "» у формулі");
+  }
+  return toks;
+}
+
+/* ---------- Синтаксичний аналіз: будуємо дерево виразу ---------- */
+var PREC = {"=":1,"<>":1,"<":1,">":1,"<=":1,">=":1,"+":2,"-":2,"*":3,"/":3,"^":4};
+
+function parseFormula(src){
+  var toks = tokenize(src), p = 0;
+
+  function peek(){ return toks[p]; }
+  function eat(cond){
+    var t = toks[p];
+    if(!t) throw new FErr("Формула закінчилася раніше, ніж очікувалося");
+    p++; return t;
+  }
+  function parseExpr(minPrec){
+    var left = parseUnary();
+    while(true){
+      var t = peek();
+      if(!t || t.t !== "op" || !PREC[t.v] || PREC[t.v] < minPrec) break;
+      var op = eat().v;
+      var right = parseExpr(PREC[op] + (op === "^" ? 0 : 1)); // ^ правоасоціативна
+      left = {type:"bin", op:op, l:left, r:right};
+    }
+    return left;
+  }
+  function parseUnary(){
+    var t = peek();
+    if(t && t.t === "op" && (t.v === "-" || t.v === "+")){
+      eat();
+      return {type:"un", op:t.v, arg:parseUnary()};
+    }
+    return parsePrimary();
+  }
+  function parsePrimary(){
+    var t = peek();
+    if(!t) throw new FErr("У формулі пропущено значення");
+    if(t.t === "num"){ eat(); return {type:"num", v:t.v, text:t.text}; }
+    if(t.t === "str"){ eat(); return {type:"str", v:t.v}; }
+    if(t.t === "ref"){ eat(); return {type:"ref", text:t.text}; }
+    if(t.t === "range"){ eat(); return {type:"range", text:t.text, a:t.a, b:t.b}; }
+    if(t.t === "("){
+      eat();
+      var e = parseExpr(1);
+      if(!peek() || peek().t !== ")") throw new FErr("Не закрито дужку");
+      eat();
+      return {type:"paren", arg:e};
+    }
+    if(t.t === "name"){
+      eat();
+      var name = FUNC_ALIAS[t.v] || t.v;
+      if(!peek() || peek().t !== "("){
+        throw new FErr("Після назви функції «" + name + "» потрібна відкривна дужка");
+      }
+      eat();
+      var args = [];
+      if(peek() && peek().t === ")"){ eat(); }
+      else {
+        while(true){
+          args.push(parseExpr(1));
+          var nx = peek();
+          if(!nx) throw new FErr("Не закрито дужку у функції «" + name + "»");
+          if(nx.t === "sep"){ eat(); continue; }
+          if(nx.t === ")"){ eat(); break; }
+          throw new FErr("У функції «" + name + "» очікувався знак «;» або дужка");
+        }
+      }
+      if(name !== "ЯКЩО" && !FUNCS[name]){
+        throw new FErr("Невідома функція «" + name + "». Доступні: СУМ, СЕРЕДНЄ, МАКС, МІН, РАХУНОК, ЯКЩО");
+      }
+      if(name === "ЯКЩО" && args.length !== 3){
+        throw new FErr("Функція ЯКЩО потребує трьох аргументів: умова; значення_якщо_так; значення_якщо_ні");
+      }
+      return {type:"func", name:name, args:args};
+    }
+    throw new FErr("Несподіваний елемент формули");
+  }
+
+  var root = parseExpr(1);
+  if(p < toks.length) throw new FErr("Зайві символи в кінці формули");
+  return root;
+}
+
+/* ---------- Модель аркуша ---------- */
+function Sheet(){
+  this.cells = {};      // addr -> raw (рядок, який ввів учень)
+}
+Sheet.prototype.setRaw = function(addr, raw){
+  if(raw === "" || raw === null || raw === undefined) delete this.cells[addr];
+  else this.cells[addr] = raw;
+};
+Sheet.prototype.getRaw = function(addr){ return this.cells[addr] || ""; };
+Sheet.prototype.isFormula = function(addr){
+  var r = this.getRaw(addr);
+  return r.charAt(0) === "=";
+};
+/** Значення комірки: число, рядок або 0 для порожньої. */
+Sheet.prototype.value = function(addr, stack){
+  stack = stack || {};
+  var raw = this.getRaw(addr);
+  if(raw === "") return 0;
+  if(raw.charAt(0) !== "="){
+    var n = Number(raw.replace(",", "."));
+    return isNaN(n) ? raw : n;
+  }
+  if(stack[addr]) throw new FErr("Циклічне посилання: комірка " + addr + " посилається на себе");
+  stack[addr] = true;
+  var v = this.evalNode(parseFormula(raw.slice(1)), stack);
+  delete stack[addr];
+  return v;
+};
+/** Обчислення дерева без формування кроків (для перерахунку аркуша). */
+Sheet.prototype.evalNode = function(n, stack){
+  var self = this;
+  switch(n.type){
+    case "num": case "str": return n.v;
+    case "paren": return this.evalNode(n.arg, stack);
+    case "ref": {
+      var rc = addrToRC(n.text.replace(/\$/g, ""));
+      if(!rc) throw new FErr("Посилання «" + n.text + "» виходить за межі аркуша A1:H10");
+      return this.value(rcToAddr(rc.col, rc.row), stack);
+    }
+    case "range": return this.rangeValues(n, stack).reduce(function(a,b){ return a+b; }, 0);
+    case "un": {
+      var v = this.evalNode(n.arg, stack);
+      return n.op === "-" ? -num(v) : num(v);
+    }
+    case "bin": {
+      var a = this.evalNode(n.l, stack), b = this.evalNode(n.r, stack);
+      return applyOp(n.op, a, b);
+    }
+    case "func": {
+      if(n.name === "ЯКЩО"){
+        var cond = this.evalNode(n.args[0], stack);
+        return this.evalNode(cond ? n.args[1] : n.args[2], stack);
+      }
+      var vals = [];
+      n.args.forEach(function(a){
+        if(a.type === "range") vals = vals.concat(self.rangeValues(a, stack));
+        else {
+          var v = self.evalNode(a, stack);
+          if(typeof v === "number") vals.push(v);
+        }
+      });
+      return FUNCS[n.name](vals);
+    }
+  }
+  throw new FErr("Не вдалося обчислити формулу");
+};
+/** Список числових значень діапазону + список адрес. */
+Sheet.prototype.rangeAddrs = function(node){
+  var a = addrToRC(node.a.replace(/\$/g, "")), b = addrToRC(node.b.replace(/\$/g, ""));
+  if(!a || !b) throw new FErr("Діапазон «" + node.text + "» виходить за межі аркуша A1:H10");
+  var list = [];
+  for(var r = Math.min(a.row,b.row); r <= Math.max(a.row,b.row); r++){
+    for(var c = Math.min(a.col,b.col); c <= Math.max(a.col,b.col); c++){
+      list.push(rcToAddr(c, r));
+    }
+  }
+  return list;
+};
+Sheet.prototype.rangeValues = function(node, stack){
+  var self = this, out = [];
+  this.rangeAddrs(node).forEach(function(ad){
+    var v = self.value(ad, stack);
+    if(typeof v === "number" && self.getRaw(ad) !== "") out.push(v);
+  });
+  return out;
+};
+
+function num(v){
+  if(typeof v === "number") return v;
+  var n = Number(String(v).replace(",", "."));
+  if(isNaN(n)) throw new FErr("Текст «" + v + "» не можна використати в арифметичній операції");
+  return n;
+}
+function applyOp(op, a, b){
+  switch(op){
+    case "+": return num(a) + num(b);
+    case "-": return num(a) - num(b);
+    case "*": return num(a) * num(b);
+    case "/":
+      if(num(b) === 0) throw new FErr("Ділення на нуль");
+      return num(a) / num(b);
+    case "^": return Math.pow(num(a), num(b));
+    case "=":  return a === b;
+    case "<>": return a !== b;
+    case "<":  return num(a) <  num(b);
+    case ">":  return num(a) >  num(b);
+    case "<=": return num(a) <= num(b);
+    case ">=": return num(a) >= num(b);
+  }
+  throw new FErr("Невідома операція " + op);
+}
+
+/* ---------- Відображення виразу з урахуванням пріоритету ---------- */
+function renderExpr(n, parentPrec, curNode){
+  var cur = (n === curNode) ? " tok-cur" : "";
+  if(n._done){
+    return '<span class="tok-val' + cur + '">' + esc(fmtNum(n._v)) + "</span>";
+  }
+  switch(n.type){
+    case "num": return '<span class="tok-num">' + esc(n.text || n.v) + "</span>";
+    case "str": return '<span class="tok-str">"' + esc(n.v) + '"</span>';
+    case "ref": return '<span class="tok-ref' + cur + '">' + esc(n.text) + "</span>";
+    case "range": return '<span class="tok-ref' + cur + '">' + esc(n.text) + "</span>";
+    case "paren": return "(" + renderExpr(n.arg, 0, curNode) + ")";
+    case "un": return '<span class="' + cur.trim() + '">' + n.op + renderExpr(n.arg, 5, curNode) + "</span>";
+    case "bin": {
+      var p = PREC[n.op];
+      var s = renderExpr(n.l, p, curNode) + " " + esc(n.op) + " " +
+              renderExpr(n.r, n.op === "^" ? p : p+1, curNode);
+      return (parentPrec > p) ? "(" + s + ")" : s;
+    }
+    case "func": {
+      var inner = n.args.map(function(a){ return renderExpr(a, 0, curNode); }).join("; ");
+      return '<span class="tok-fn' + cur + '">' + esc(n.name) + "</span>(" + inner + ")";
+    }
+  }
+  return "?";
+}
+
+/* ==================================================================
+   3. ВКЛАДКА 1 — покрокове обчислення формули
+   ================================================================== */
+var T1 = (function(){
+  var sheet = new Sheet();
+  var sel = "C1";           // вибрана комірка
+  var ast = null;           // дерево поточної формули
+  var curFormulaCell = null;
+  var runner;
+
+  /* --- Пресети --- */
+  var PRESETS = [
+    { name:"Сума і середнє",
+      data:{A1:"12",A2:"25",A3:"8",A4:"31",A5:"14", C1:"=СУМ(A1:A5)", C2:"=СЕРЕДНЄ(A1:A5)"},
+      sel:"C1" },
+    { name:"Абсолютне посилання",
+      data:{A1:"150",A2:"220",A3:"95",A4:"310", B1:"1,2", C1:"=A1*$B$1"},
+      sel:"C1" },
+    { name:"Пріоритет операцій",
+      data:{A1:"2",A2:"3",A3:"4", D1:"=A1+A2*A3^2"},
+      sel:"D1" },
+    { name:"Функція ЯКЩО",
+      data:{A1:"Бал", B1:"7", D1:'=ЯКЩО(B1>=6;"зараховано";"не зараховано")'},
+      sel:"D1" }
+  ];
+
+  function loadPreset(pr){
+    sheet.cells = {};
+    Object.keys(pr.data).forEach(function(k){ sheet.setRaw(k, pr.data[k]); });
+    sel = pr.sel;
+    renderSheet();
+    syncBar();
+    buildSteps();
+  }
+
+  /* --- Побудова аркуша --- */
+  function renderSheet(){
+    var t = $("t1-sheet"), html = "<thead><tr><th></th>";
+    COLS.forEach(function(c){ html += "<th>" + c + "</th>"; });
+    html += "</tr></thead><tbody>";
+    for(var r=0; r<ROWS; r++){
+      html += "<tr><th>" + (r+1) + "</th>";
+      for(var c=0; c<COLS.length; c++){
+        var ad = rcToAddr(c, r);
+        var raw = sheet.getRaw(ad);
+        var disp = "", cls = [];
+        if(raw !== ""){
+          if(raw.charAt(0) === "="){
+            cls.push("formula");
+            try { disp = fmtNum(sheet.value(ad)); }
+            catch(e){ disp = "#ПОМИЛКА"; }
+          } else {
+            var n = Number(raw.replace(",", "."));
+            if(isNaN(n)){ disp = raw; cls.push("text"); } else { disp = raw; }
+          }
+        }
+        if(ad === sel) cls.push("sel");
+        html += '<td data-addr="' + ad + '" class="' + cls.join(" ") + '">' + esc(disp) + "</td>";
+      }
+      html += "</tr>";
+    }
+    html += "</tbody>";
+    t.innerHTML = html;
+    Array.prototype.forEach.call(t.querySelectorAll("td"), function(td){
+      td.onclick = function(){
+        sel = td.dataset.addr;
+        renderSheet(); syncBar(); buildSteps();
+      };
+    });
+  }
+
+  function syncBar(){
+    $("t1-addr").textContent = sel;
+    $("t1-input").value = sheet.getRaw(sel);
+  }
+
+  /* --- Побудова списку кроків обчислення --- */
+  function buildSteps(){
+    $("t1-err").innerHTML = "";
+    ast = null; curFormulaCell = null;
+    $("t1-log").querySelector("tbody").innerHTML = "";
+    if(!sheet.isFormula(sel)){
+      $("t1-expr").textContent = sheet.getRaw(sel) === "" ? "—" : sheet.getRaw(sel);
+      $("t1-explain").innerHTML = "Комірка <b>" + sel + "</b> не містить формули. " +
+        "Виберіть комірку зі значком ƒ або введіть власну формулу зі знака «=».";
+      runner.setSteps([]);
+      drawArrows();
+      return;
+    }
+    var steps = [];
+    try{
+      ast = parseFormula(sheet.getRaw(sel).slice(1));
+      curFormulaCell = sel;
+      collect(ast, steps);
+      steps.push({
+        node:null, cells:[],
+        text:"Готово. У комірці <b>" + sel + "</b> відображається результат <b>" +
+             esc(fmtNum(ast._vFinal)) + "</b>.",
+        apply:function(){}
+      });
+    }catch(e){
+      var msg = (e instanceof FErr) ? e.msg : "Не вдалося розібрати формулу";
+      $("t1-err").innerHTML = '<div class="error">Помилка: ' + esc(msg) + "</div>";
+      $("t1-expr").textContent = sheet.getRaw(sel);
+      $("t1-explain").innerHTML = "Виправте формулу в рядку формул.";
+      runner.setSteps([]);
+      drawArrows();
+      return;
+    }
+    runner.setSteps(steps);
+  }
+
+  /** Рекурсивний обхід дерева «знизу вгору»: спочатку діти, потім вузол. */
+  function collect(n, steps){
+    switch(n.type){
+      case "num": case "str":
+        n._v = n.v; n._doneInit = true;
+        break;
+      case "paren":
+        collect(n.arg, steps);
+        n._v = n.arg._v; n._passthrough = true;
+        break;
+      case "ref": {
+        var clean = n.text.replace(/\$/g, "");
+        var rc = addrToRC(clean);
+        if(!rc) throw new FErr("Посилання «" + n.text + "» виходить за межі аркуша A1:H10");
+        var ad = rcToAddr(rc.col, rc.row);
+        if(ad === sel) throw new FErr("Циклічне посилання: комірка " + sel + " посилається на себе");
+        n._v = sheet.value(ad);
+        n._addr = ad;
+        steps.push(makeStep(n, [ad],
+          "Крок читання даних. Формула містить посилання <b>" + esc(n.text) + "</b>. " +
+          "Табличний процесор бере значення з комірки <b>" + ad + "</b>: <b>" + esc(fmtNum(n._v)) + "</b>." +
+          (n.text.indexOf("$") >= 0 ? " Знак $ означає, що це посилання не зміниться при копіюванні." : "")));
+        break;
+      }
+      case "range": {
+        var addrs = sheet.rangeAddrs(n);
+        var vals = sheet.rangeValues(n);
+        n._addrs = addrs; n._vals = vals;
+        n._v = vals.reduce(function(a,b){ return a+b; }, 0);
+        steps.push(makeStep(n, addrs,
+          "Опрацювання діапазону <b>" + esc(n.text) + "</b>: він охоплює " + addrs.length +
+          " комірок, з них заповнено " + vals.length + ". Значення: " +
+          vals.map(fmtNum).join("; ") + ".", true));
+        break;
+      }
+      case "un":
+        collect(n.arg, steps);
+        n._v = n.op === "-" ? -num(n.arg._v) : num(n.arg._v);
+        steps.push(makeStep(n, collectCells(n.arg),
+          "Унарна операція <b>" + n.op + "</b>: " + esc(fmtNum(n.arg._v)) + " → <b>" + esc(fmtNum(n._v)) + "</b>."));
+        break;
+      case "bin":
+        collect(n.l, steps);
+        collect(n.r, steps);
+        n._v = applyOp(n.op, n.l._v, n.r._v);
+        steps.push(makeStep(n, collectCells(n.l).concat(collectCells(n.r)),
+          "Виконуємо операцію <b>" + esc(n.op) + "</b> (пріоритет " + PREC[n.op] + " з 4): " +
+          esc(fmtNum(n.l._v)) + " " + esc(n.op) + " " + esc(fmtNum(n.r._v)) +
+          " = <b>" + esc(fmtNum(n._v)) + "</b>."));
+        break;
+      case "func": {
+        var cells = [];
+        if(n.name === "ЯКЩО"){
+          collect(n.args[0], steps);
+          var cond = n.args[0]._v;
+          collect(n.args[1], steps);
+          collect(n.args[2], steps);
+          n._v = cond ? n.args[1]._v : n.args[2]._v;
+          n.args.forEach(function(a){ cells = cells.concat(collectCells(a)); });
+          steps.push(makeStep(n, cells,
+            "Функція <b>ЯКЩО</b>: умова дала результат <b>" + (cond ? "ТАК" : "НІ") +
+            "</b>, тому повертається " + (cond ? "другий" : "третій") + " аргумент: <b>" +
+            esc(fmtNum(n._v)) + "</b>."));
+        } else {
+          var vals = [];
+          n.args.forEach(function(a){
+            collect(a, steps);
+            cells = cells.concat(collectCells(a));
+            if(a.type === "range") vals = vals.concat(a._vals);
+            else if(typeof a._v === "number") vals.push(a._v);
+          });
+          n._v = FUNCS[n.name](vals);
+          steps.push(makeStep(n, cells,
+            "Функція <b>" + esc(n.name) + "</b> опрацьовує " + vals.length + " значень: " +
+            vals.map(fmtNum).join("; ") + " → <b>" + esc(fmtNum(n._v)) + "</b>."));
+        }
+        break;
+      }
+    }
+    n._vFinal = n._v;
+  }
+
+  /** Крок = підсвітити комірки + позначити вузол обчисленим. */
+  function makeStep(node, cells, text, isRange){
+    return {
+      node:node, cells:cells, text:text, isRange:!!isRange,
+      apply:function(){ node._done = true; }
+    };
+  }
+  /** Усі адреси комірок, задіяні в піддереві (для стрілок). */
+  function collectCells(n){
+    if(!n) return [];
+    if(n._addr) return [n._addr];
+    if(n._addrs) return n._addrs.slice();
+    if(n.type === "bin") return collectCells(n.l).concat(collectCells(n.r));
+    if(n.type === "un" || n.type === "paren") return collectCells(n.arg || n.arg);
+    if(n.type === "func") {
+      var out = [];
+      n.args.forEach(function(a){ out = out.concat(collectCells(a)); });
+      return out;
+    }
+    return [];
+  }
+
+  /* --- Скидання позначок перед повторним застосуванням кроків --- */
+  function resetFlags(){
+    (function walk(n){
+      if(!n) return;
+      n._done = !!n._doneInit;
+      if(n.type === "bin"){ walk(n.l); walk(n.r); }
+      if(n.type === "un" || n.type === "paren") walk(n.arg);
+      if(n.type === "func") n.args.forEach(walk);
+    })(ast);
+  }
+
+  /* --- Малювання стрілок залежностей --- */
+  function drawArrows(cells){
+    var svg = $("t1-arrows"), wrap = $("t1-wrap");
+    svg.innerHTML = "";
+    svg.setAttribute("width", wrap.clientWidth);
+    svg.setAttribute("height", wrap.clientHeight);
+    if(!cells || !cells.length || !curFormulaCell) return;
+    var tgt = $("t1-sheet").querySelector('td[data-addr="' + curFormulaCell + '"]');
+    if(!tgt) return;
+    var wb = wrap.getBoundingClientRect();
+    var tb = tgt.getBoundingClientRect();
+    var x2 = tb.left - wb.left + tb.width/2 + wrap.scrollLeft;
+    var y2 = tb.top  - wb.top  + tb.height/2;
+    var seen = {}, parts = [
+      '<defs><marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">' +
+      '<path d="M0,0 L9,4.5 L0,9 z" fill="#1e5fa8"></path></marker></defs>'
+    ];
+    cells.forEach(function(ad){
+      if(seen[ad]) return; seen[ad] = true;
+      var td = $("t1-sheet").querySelector('td[data-addr="' + ad + '"]');
+      if(!td) return;
+      var cb = td.getBoundingClientRect();
+      var x1 = cb.left - wb.left + cb.width/2 + wrap.scrollLeft;
+      var y1 = cb.top  - wb.top  + cb.height/2;
+      parts.push('<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 +
+        '" stroke="#1e5fa8" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#ah)" opacity="0.85"></line>');
+    });
+    svg.innerHTML = parts.join("");
+  }
+
+  /* --- Відображення стану після кроку --- */
+  function render(i, step, steps){
+    // підсвітка комірок
+    Array.prototype.forEach.call($("t1-sheet").querySelectorAll("td"), function(td){
+      td.classList.remove("ref-hl","range-hl","target");
+    });
+    if(curFormulaCell){
+      var tc = $("t1-sheet").querySelector('td[data-addr="' + curFormulaCell + '"]');
+      if(tc) tc.classList.add("target");
+    }
+    if(step && step.cells){
+      step.cells.forEach(function(ad){
+        var td = $("t1-sheet").querySelector('td[data-addr="' + ad + '"]');
+        if(td) td.classList.add(step.isRange ? "range-hl" : "ref-hl");
+      });
+    }
+    drawArrows(step ? step.cells : null);
+
+    // вираз
+    if(ast){
+      $("t1-expr").innerHTML = "= " + renderExpr(ast, 0, step ? step.node : null);
+    }
+    // пояснення
+    if(step) $("t1-explain").innerHTML = step.text;
+    else if(ast) $("t1-explain").innerHTML =
+      "Формула комірки <b>" + sel + "</b> готова до обчислення. Натискайте «Крок»: " +
+      "процесор спочатку підставляє значення посилань, а потім виконує операції за пріоритетом.";
+
+    // журнал
+    var tb = $("t1-log").querySelector("tbody"), rows = "";
+    steps.forEach(function(s, k){
+      if(k > i) return;
+      var res = s.node ? fmtNum(s.node._v) : "—";
+      rows += '<tr class="' + (k === i ? "cur" : "") + '"><td>' + (k+1) + "</td><td>" +
+              s.text.replace(/<b>|<\/b>/g, "") + "</td><td>" + esc(res) + "</td></tr>";
+    });
+    tb.innerHTML = rows;
+  }
+
+  /* --- Ініціалізація --- */
+  function init(){
+    runner = new StepRunner({
+      mount: $("t1-controls"),
+      bar: $("t1-bar"),
+      reset: function(){ resetFlags(); },
+      render: render
+    });
+    // пресети
+    var box = $("t1-presets");
+    PRESETS.forEach(function(pr){
+      var b = document.createElement("button");
+      b.textContent = pr.name;
+      b.onclick = function(){ loadPreset(pr); };
+      box.appendChild(b);
+    });
+    // рядок формул
+    function applyInput(){
+      var raw = $("t1-input").value.trim();
+      $("t1-err").innerHTML = "";
+      if(raw.charAt(0) === "="){
+        try{ parseFormula(raw.slice(1)); }
+        catch(e){
+          var msg = (e instanceof FErr) ? e.msg : "Формула записана неправильно";
+          $("t1-err").innerHTML = '<div class="error">Некоректний ввід: ' + esc(msg) + "</div>";
+          return;
+        }
+      }
+      sheet.setRaw(sel, raw);
+      // перевірка на циклічність і помилки обчислення
+      try{ sheet.value(sel); }
+      catch(e2){
+        var m2 = (e2 instanceof FErr) ? e2.msg : "Помилка обчислення";
+        $("t1-err").innerHTML = '<div class="error">Некоректний ввід: ' + esc(m2) + "</div>";
+      }
+      renderSheet(); buildSteps();
+    }
+    $("t1-apply").onclick = applyInput;
+    $("t1-input").onkeydown = function(e){ if(e.key === "Enter") applyInput(); };
+
+    loadPreset(PRESETS[0]);
+    window.addEventListener("resize", function(){
+      drawArrows(runner.steps[runner.i] ? runner.steps[runner.i].cells : null);
+    });
+  }
+
+  return { init:init, drawArrows:function(){ drawArrows(runner && runner.steps[runner.i] ? runner.steps[runner.i].cells : null); } };
+})();
+
+
+/* ==================================================================
+   4. ВКЛАДКА 2 — копіювання формули (відносні/абсолютні посилання)
+   ================================================================== */
+var T2 = (function(){
+  var sheet = new Sheet();
+  var runner;
+  var plan = [];     // [{addr, formula, parts:[...], value}]
+  var written = [];  // усі комірки, у які вже писали (щоб коректно скидати)
+  var srcAddr = "C2";
+
+  var PRESETS = [
+    { name:"Відносне + абсолютне (вниз)",
+      data:{A1:"Ціна",B1:"1,2",A2:"150",A3:"220",A4:"95",A5:"310",A6:"180"},
+      src:"C2", f:"=A2*$B$1", dir:"down", count:"4" },
+    { name:"Тільки відносні (вниз)",
+      data:{A1:"5",A2:"8",A3:"12",A4:"7",A5:"3",B1:"2",B2:"4",B3:"6",B4:"1",B5:"9"},
+      src:"C1", f:"=A1+B1", dir:"down", count:"5" },
+    { name:"Змішане посилання (вправо)",
+      data:{A1:"2",A2:"3",B1:"10",C1:"20",D1:"30",E1:"40"},
+      src:"B2", f:"=B$1*$A2", dir:"right", count:"4" },
+    { name:"Абсолютний діапазон (вниз)",
+      data:{A1:"12",A2:"25",A3:"8",A4:"31",A5:"14",A6:"20"},
+      src:"C1", f:"=A1/СУМ($A$1:$A$6)", dir:"down", count:"6" }
+  ];
+
+  /** Розкладання формули на частини: текст і посилання. */
+  function splitRefs(f){
+    var parts = [], re = /(\$?)([A-Ha-h])(\$?)(\d{1,2})/g, last = 0, m;
+    while((m = re.exec(f))){
+      if(m.index > last) parts.push({t:"txt", s:f.slice(last, m.index)});
+      parts.push({t:"ref", s:m[0], colAbs:m[1] === "$", col:m[2].toUpperCase(), rowAbs:m[3] === "$", row:Number(m[4])});
+      last = m.index + m[0].length;
+    }
+    if(last < f.length) parts.push({t:"txt", s:f.slice(last)});
+    return parts;
+  }
+  /** Класифікація посилання для розфарбування. */
+  function refClass(p){
+    if(p.colAbs && p.rowAbs) return "abs";
+    if(p.colAbs || p.rowAbs) return "mix";
+    return "rel";
+  }
+  /** Зсув посилань на dc стовпців і dr рядків. */
+  function shift(parts, dc, dr){
+    return parts.map(function(p){
+      if(p.t !== "ref") return {t:"txt", s:p.s};
+      var c = COLS.indexOf(p.col), r = p.row;
+      var nc = p.colAbs ? c : c + dc;
+      var nr = p.rowAbs ? r : r + dr;
+      if(nc < 0 || nc >= COLS.length || nr < 1 || nr > ROWS) throw new FErr("Копіювання виводить посилання за межі аркуша A1:H10");
+      return {t:"ref", s:(p.colAbs?"$":"") + COLS[nc] + (p.rowAbs?"$":"") + nr,
+              colAbs:p.colAbs, col:COLS[nc], rowAbs:p.rowAbs, row:nr,
+              from:p.s, changedCol:(!p.colAbs && dc !== 0), changedRow:(!p.rowAbs && dr !== 0)};
+    });
+  }
+  function partsToStr(parts){ return parts.map(function(p){ return p.s; }).join(""); }
+  function partsToHtml(parts, markChanges){
+    return parts.map(function(p){
+      if(p.t !== "ref") return esc(p.s);
+      var cls = refClass(p);
+      var mark = markChanges && (p.changedCol || p.changedRow) ? " tok-cur" : "";
+      return '<span class="' + cls + mark + '">' + esc(p.s) + "</span>";
+    }).join("");
+  }
+
+  function renderSheet(fillTo){
+    var t = $("t2-sheet"), html = "<thead><tr><th></th>";
+    COLS.forEach(function(c){ html += "<th>" + c + "</th>"; });
+    html += "</tr></thead><tbody>";
+    for(var r=0; r<ROWS; r++){
+      html += "<tr><th>" + (r+1) + "</th>";
+      for(var c=0; c<COLS.length; c++){
+        var ad = rcToAddr(c, r), cls = [], disp = "";
+        var raw = sheet.getRaw(ad);
+        if(raw !== ""){
+          if(raw.charAt(0) === "="){
+            cls.push("formula");
+            try{ disp = fmtNum(sheet.value(ad)); }catch(e){ disp = "#ПОМИЛКА"; }
+          }else{
+            var n = Number(raw.replace(",", "."));
+            if(isNaN(n)){ disp = raw; cls.push("text"); } else disp = raw;
+          }
+        }
+        if(ad === srcAddr) cls.push("target");
+        else if(raw !== "" && isPlanCell(ad)) cls.push("filled");
+        html += '<td class="' + cls.join(" ") + '">' + esc(disp) + "</td>";
+      }
+      html += "</tr>";
+    }
+    t.innerHTML = html + "</tbody>";
+  }
+  function isPlanCell(ad){
+    return plan.some(function(p){ return p.addr === ad; });
+  }
+
+  function build(){
+    $("t2-err").innerHTML = "";
+    srcAddr = $("t2-src").value.trim().toUpperCase();
+    var f = $("t2-formula").value.trim();
+    var dir = $("t2-dir").value;
+    var count = Number($("t2-count").value);
+    var rc = addrToRC(srcAddr);
+    if(!rc){ fail("Адреса «" + srcAddr + "» некоректна. Використовуйте комірки від A1 до H10."); return; }
+    if(f.charAt(0) !== "="){ fail("Формула має починатися зі знака «=»."); return; }
+    try{ parseFormula(f.slice(1)); }
+    catch(e){ fail((e instanceof FErr) ? e.msg : "Формула записана неправильно"); return; }
+
+    var baseParts = splitRefs(f);
+    plan = [];
+    try{
+      for(var k=1; k<=count; k++){
+        var dc = dir === "right" ? k : 0;
+        var dr = dir === "down"  ? k : 0;
+        if(rc.col + dc >= COLS.length || rc.row + dr >= ROWS){
+          fail("Не вистачає місця на аркуші: зменшіть кількість комірок."); return;
+        }
+        var np = shift(baseParts, dc, dr);
+        plan.push({ addr:rcToAddr(rc.col+dc, rc.row+dr), parts:np, formula:partsToStr(np) });
+      }
+    }catch(e2){ fail((e2 instanceof FErr) ? e2.msg : "Помилка копіювання"); return; }
+
+    sheet.setRaw(srcAddr, f);
+    // будуємо кроки
+    var steps = [{
+      text:"Початок. У комірці <b>" + srcAddr + "</b> записано формулу <b>" + esc(f) +
+           "</b>. Зараз вона міститься у своїй «домашній» позиції.",
+      html:'<div class="copy-step">' + srcAddr + ": " + partsToHtml(baseParts, false) + "</div>",
+      apply:function(){}
+    }];
+    plan.forEach(function(p, idx){
+      var dirWord = dir === "down" ? ("на " + (idx+1) + " рядок(ів) нижче") : ("на " + (idx+1) + " стовпець(ів) правіше");
+      var changed = p.parts.filter(function(x){ return x.t === "ref" && (x.changedCol || x.changedRow); });
+      var frozen  = p.parts.filter(function(x){ return x.t === "ref" && !(x.changedCol || x.changedRow); });
+      var expl = "Копіюємо формулу в комірку <b>" + p.addr + "</b> (" + dirWord + "). ";
+      if(changed.length){
+        expl += "Відносні частини зсунулися: " + changed.map(function(x){
+          return "<b>" + esc(x.from) + " → " + esc(x.s) + "</b>";
+        }).join(", ") + ". ";
+      }
+      if(frozen.length){
+        expl += "Посилання зі знаком $ залишилися незмінними: " + frozen.map(function(x){
+          return "<b>" + esc(x.s) + "</b>";
+        }).join(", ") + ". ";
+      }
+      var val;
+      steps.push({
+        text:expl,
+        html:'<div class="copy-step">' + p.addr + ": " + partsToHtml(p.parts, true) + "</div>",
+        apply:function(){
+          sheet.setRaw(p.addr, p.formula);
+          if(written.indexOf(p.addr) < 0) written.push(p.addr);
+        },
+        after:function(){
+          try{ val = fmtNum(sheet.value(p.addr)); }catch(e){ val = "#ПОМИЛКА"; }
+          return val;
+        },
+        cellAddr:p.addr
+      });
+    });
+    steps.push({
+      text:"Копіювання завершено. Зверніть увагу: усі формули різні, хоча учень записав лише одну. " +
+           "Саме тому відносні посилання роблять електронну таблицю потужним інструментом.",
+      html:"", apply:function(){}
+    });
+    runner.setSteps(steps);
+  }
+
+  function fail(msg){
+    $("t2-err").innerHTML = '<div class="error">Некоректний ввід: ' + esc(msg) + "</div>";
+    plan = [];
+    runner.setSteps([]);
+  }
+
+  function resetSheet(){
+    // лишаємо тільки початкові дані і формулу-джерело,
+    // усі скопійовані комірки (у тому числі з попередніх запусків) очищаємо
+    written.forEach(function(ad){ if(ad !== srcAddr) sheet.setRaw(ad, ""); });
+    plan.forEach(function(p){ sheet.setRaw(p.addr, ""); });
+  }
+
+  function render(i, step, steps){
+    renderSheet();
+    var explain = $("t2-explain");
+    if(step){
+      explain.innerHTML = step.text;
+    }else{
+      explain.innerHTML = "Натисніть «Крок», щоб побачити, як змінюються посилання під час протягування формули.";
+    }
+    var rows = "";
+    if(steps.length){
+      var f = $("t2-formula").value.trim();
+      rows += '<tr class="' + (i === 0 ? "cur" : "") + '"><td><b>' + srcAddr + "</b></td><td>" +
+              partsToHtml(splitRefs(f), false) + "</td><td>" + escVal(srcAddr) + "</td></tr>";
+      plan.forEach(function(p, idx){
+        if(idx+1 > i) return;      // ще не скопійовано
+        rows += '<tr class="' + (idx+1 === i ? "cur" : "") + '"><td><b>' + p.addr + "</b></td><td>" +
+                partsToHtml(p.parts, true) + "</td><td>" + escVal(p.addr) + "</td></tr>";
+      });
+    }
+    $("t2-log").querySelector("tbody").innerHTML = rows;
+    var hb = step && step.html ? step.html : "";
+    if(hb) explain.innerHTML = step.text + hb;
+  }
+  function escVal(ad){
+    try{ return esc(fmtNum(sheet.value(ad))); }catch(e){ return "#ПОМИЛКА"; }
+  }
+
+  function loadPreset(pr){
+    sheet.cells = {};
+    Object.keys(pr.data).forEach(function(k){ sheet.setRaw(k, pr.data[k]); });
+    $("t2-src").value = pr.src;
+    $("t2-formula").value = pr.f;
+    $("t2-dir").value = pr.dir;
+    $("t2-count").value = pr.count;
+    build();
+  }
+
+  function init(){
+    runner = new StepRunner({
+      mount: $("t2-controls"),
+      bar: $("t2-bar"),
+      reset: resetSheet,
+      render: render
+    });
+    var box = $("t2-presets");
+    PRESETS.forEach(function(pr){
+      var b = document.createElement("button");
+      b.textContent = pr.name;
+      b.onclick = function(){ loadPreset(pr); };
+      box.appendChild(b);
+    });
+    $("t2-build").onclick = build;
+    loadPreset(PRESETS[0]);
+  }
+  return { init:init };
+})();
+
+
+/* ==================================================================
+   5. ВКЛАДКА 3 — автофільтр і багаторівневе сортування
+   ================================================================== */
+var T3 = (function(){
+  var runner;
+  var FIELDS = [
+    {key:"name", title:"Прізвище та ім'я", num:false},
+    {key:"cls",  title:"Клас", num:false},
+    {key:"inf",  title:"Інформатика", num:true},
+    {key:"tech", title:"Технології", num:true},
+    {key:"avg",  title:"Середній бал", num:true}
+  ];
+  var DATA = [
+    {name:"Бондар Олена",     cls:"11-А", inf:11, tech:10},
+    {name:"Гаврилюк Петро",   cls:"11-Б", inf:7,  tech:9},
+    {name:"Дяченко Ірина",    cls:"11-А", inf:9,  tech:9},
+    {name:"Ковальчук Андрій", cls:"11-Б", inf:12, tech:11},
+    {name:"Лисенко Марія",    cls:"11-А", inf:6,  tech:8},
+    {name:"Мороз Сергій",     cls:"11-Б", inf:9,  tech:7},
+    {name:"Нечипорук Ольга",  cls:"11-А", inf:10, tech:12},
+    {name:"Савчук Віталій",   cls:"11-Б", inf:4,  tech:6},
+    {name:"Ткачук Назар",     cls:"11-А", inf:8,  tech:8},
+    {name:"Шевченко Дарина",  cls:"11-Б", inf:11, tech:12}
+  ];
+  DATA.forEach(function(d){ d.avg = Math.round((d.inf + d.tech)/2*10)/10; });
+
+  var order = DATA.map(function(_, i){ return i; });   // поточний порядок рядків
+  var state = {};                                      // i -> "keep"/"hidden"/"checking"
+  var mode = "filter";
+  var keyCols = [];                                    // підсвічені заголовки
+
+  function renderTable(extra){
+    var t = $("t3-table");
+    var html = "<thead><tr>";
+    FIELDS.forEach(function(f, idx){
+      var cls = "";
+      if(keyCols[0] === f.key) cls = "key1";
+      else if(keyCols[1] === f.key) cls = "key2";
+      html += '<th class="' + cls + '">' + esc(f.title) + "</th>";
+    });
+    html += "</tr></thead><tbody>";
+    order.forEach(function(i){
+      var d = DATA[i], cls = state[i] || "";
+      if(extra && extra.a === i) cls += " cmp-a";
+      if(extra && extra.b === i) cls += " cmp-b";
+      html += '<tr class="' + cls + '">';
+      FIELDS.forEach(function(f){
+        // дробові числа записуємо з комою, як прийнято в українській мові
+        var v = (f.key === "avg") ? String(d[f.key]).replace(".", ",") : d[f.key];
+        html += '<td class="' + (f.num ? "num" : "") + '">' + esc(v) + "</td>";
+      });
+      html += "</tr>";
+    });
+    t.innerHTML = html + "</tbody>";
+    var shown = order.filter(function(i){ return state[i] !== "hidden-row"; }).length;
+    $("t3-stat").innerHTML = "Усього записів: <b>" + DATA.length + "</b>. Показано: <b>" + shown + "</b>.";
+  }
+
+  function resetState(){
+    order = DATA.map(function(_, i){ return i; });
+    state = {};
+    keyCols = [];
+  }
+
+  /* ---------- Кроки автофільтра ---------- */
+  function buildFilter(){
+    $("t3-err").innerHTML = "";
+    var col = $("t3-f-col").value;
+    var op  = $("t3-f-op").value;
+    var raw = $("t3-f-val").value.trim();
+    var fld = FIELDS.filter(function(f){ return f.key === col; })[0];
+    var val = fld.num ? Number(raw.replace(",", ".")) : raw;
+    if(fld.num && (raw === "" || isNaN(val))){
+      $("t3-err").innerHTML = '<div class="error">Некоректний ввід: для поля «' + esc(fld.title) +
+        '» потрібно ввести число (наприклад, 8).</div>';
+      runner.setSteps([]); return;
+    }
+    if(!fld.num && raw === ""){
+      $("t3-err").innerHTML = '<div class="error">Некоректний ввід: введіть значення для порівняння.</div>';
+      runner.setSteps([]); return;
+    }
+    mode = "filter";
+    var opText = {">=":"не менше","<=":"не більше","=":"дорівнює","<>":"не дорівнює"}[op];
+    var steps = [{
+      text:"Умова автофільтра: <b>" + esc(fld.title) + " " + esc(opDisplay(op)) + " " + esc(raw) +
+           "</b>. Табличний процесор перевіряє кожен рядок окремо, зверху вниз.",
+      apply:function(){}, log:null
+    }];
+    var kept = 0;
+    DATA.forEach(function(d, i){
+      var ok = compare(d[col], val, op, fld.num);
+      if(ok) kept++;
+      steps.push({
+        text:"Рядок " + (i+1) + " (<b>" + esc(d.name) + "</b>): значення поля «" + esc(fld.title) +
+             "» дорівнює <b>" + esc(d[col]) + "</b>. Умова «" + esc(opText) + " " + esc(raw) + "» " +
+             (ok ? "<b>виконується</b> — рядок залишається видимим." : "<b>не виконується</b> — рядок згортається."),
+        apply:function(){ state[i] = ok ? "keep" : "hidden-row"; },
+        log:{ act:"Рядок " + (i+1) + ": " + d.name + " → " + d[col], res: ok ? "залишити" : "сховати" }
+      });
+    });
+    steps.push({
+      text:"Фільтрування завершено: з " + DATA.length + " записів умові відповідають <b>" + kept +
+           "</b>. Важливо: сховані рядки не видалено — вони залишаються в таблиці й повернуться, " +
+           "коли фільтр буде знято.",
+      apply:function(){}, log:{ act:"Разом", res: kept + " з " + DATA.length }
+    });
+    runner.setSteps(steps);
+  }
+  function opDisplay(op){ return {">=":"≥","<=":"≤","=":"=","<>":"≠"}[op] || op; }
+  function compare(a, b, op, isNum){
+    if(isNum){ a = Number(a); b = Number(b); }
+    else { a = String(a).toLowerCase(); b = String(b).toLowerCase(); }
+    switch(op){
+      case ">=": return a >= b;
+      case "<=": return a <= b;
+      case "=":  return a === b;
+      case "<>": return a !== b;
+    }
+    return false;
+  }
+
+  /* ---------- Кроки сортування за двома ключами ---------- */
+  function buildSort(){
+    $("t3-err").innerHTML = "";
+    var c1 = $("t3-s-col1").value, d1 = $("t3-s-dir1").value;
+    var c2 = $("t3-s-col2").value, d2 = $("t3-s-dir2").value;
+    if(c1 === c2 && c2 !== ""){
+      $("t3-err").innerHTML = '<div class="error">Некоректний ввід: ключі сортування мають бути різними полями.</div>';
+      runner.setSteps([]); return;
+    }
+    mode = "sort";
+    var f1 = field(c1), f2 = c2 ? field(c2) : null;
+
+    /* Сортування вставками: добре видно кожне порівняння. */
+    var arr = DATA.map(function(_, i){ return i; });
+    var startOrder = arr.slice();   // знімок початкового порядку
+    var steps = [{
+      text:"Сортування за двома ключами. Ключ 1: <b>" + esc(f1.title) + " " + dirWord(d1) + "</b>" +
+           (f2 ? ", ключ 2 (застосовується при однакових значеннях ключа 1): <b>" + esc(f2.title) + " " + dirWord(d2) + "</b>" : "") +
+           ". Використано алгоритм сортування вставками: кожен наступний елемент переміщується вліво, поки стоїть «не на місці».",
+      apply:function(){ order = startOrder.slice(); }, log:null
+    }];
+    for(var i=1; i<arr.length; i++){
+      var j = i;
+      while(j > 0){
+        var a = arr[j-1], b = arr[j];
+        var cmp = cmpRows(a, b, f1, d1, f2, d2);
+        var detail = describeCmp(a, b, f1, d1, f2, d2);
+        if(cmp > 0){
+          var tmp = arr[j-1]; arr[j-1] = arr[j]; arr[j] = tmp;
+          var snapA = arr.slice(), ja = j-1, jb = j;
+          steps.push({
+            text:detail + " Порядок порушено, тому рядки <b>міняємо місцями</b>.",
+            apply:(function(s){ return function(){ order = s.slice(); }; })(snapA),
+            hl:{a:a, b:b},
+            log:{ act:"Порівняння: " + DATA[a].name + " ↔ " + DATA[b].name, res:"обмін" }
+          });
+          j--;
+        } else {
+          var snapB = arr.slice();
+          steps.push({
+            text:detail + " Порядок правильний, рухаємося далі.",
+            apply:(function(s){ return function(){ order = s.slice(); }; })(snapB),
+            hl:{a:a, b:b},
+            log:{ act:"Порівняння: " + DATA[a].name + " ↔ " + DATA[b].name, res:"без обміну" }
+          });
+          break;
+        }
+      }
+    }
+    var fin = arr.slice();
+    steps.push({
+      text:"Сортування завершено. Рядки впорядковано за полем <b>" + esc(f1.title) + "</b> " + dirWord(d1) +
+           (f2 ? ", а записи з однаковим значенням — за полем <b>" + esc(f2.title) + "</b> " + dirWord(d2) : "") +
+           ". Зверніть увагу: рядок переміщується цілком, разом з усіма своїми полями.",
+      apply:function(){ order = fin.slice(); }, log:{ act:"Разом", res:"упорядковано" }
+    });
+    runner.setSteps(steps);
+  }
+  function field(k){ return FIELDS.filter(function(f){ return f.key === k; })[0]; }
+  function dirWord(d){ return d === "asc" ? "за зростанням" : "за спаданням"; }
+  function cmpOne(a, b, f, dir){
+    var x = DATA[a][f.key], y = DATA[b][f.key];
+    var r;
+    if(f.num) r = Number(x) - Number(y);
+    else r = String(x).localeCompare(String(y), "uk");
+    return dir === "asc" ? r : -r;
+  }
+  function cmpRows(a, b, f1, d1, f2, d2){
+    var r = cmpOne(a, b, f1, d1);
+    if(r !== 0 || !f2) return r;
+    return cmpOne(a, b, f2, d2);
+  }
+  function describeCmp(a, b, f1, d1, f2, d2){
+    var x = DATA[a][f1.key], y = DATA[b][f1.key];
+    var s = "Порівнюємо за ключем 1 «" + esc(f1.title) + "»: <b>" + esc(x) + "</b> (" + esc(DATA[a].name) +
+            ") і <b>" + esc(y) + "</b> (" + esc(DATA[b].name) + ").";
+    if(String(x) === String(y) && f2){
+      s += " Значення однакові, тому переходимо до ключа 2 «" + esc(f2.title) + "»: <b>" +
+           esc(DATA[a][f2.key]) + "</b> і <b>" + esc(DATA[b][f2.key]) + "</b>.";
+    }
+    return s;
+  }
+
+  function render(i, step, steps){
+    renderTable(step && step.hl ? step.hl : null);
+    $("t3-explain").innerHTML = step ? step.text :
+      (mode === "filter"
+        ? "Задайте умову автофільтра і натискайте «Крок»: процесор перевірятиме рядки по одному."
+        : "Задайте ключі сортування і натискайте «Крок»: буде видно кожне порівняння рядків.");
+    var rows = "";
+    steps.forEach(function(s, k){
+      if(k > i || !s.log) return;
+      rows += '<tr class="' + (k === i ? "cur" : "") + '"><td>' + (k+1) + "</td><td>" +
+              esc(s.log.act) + "</td><td>" + esc(s.log.res) + "</td></tr>";
+    });
+    $("t3-log").querySelector("tbody").innerHTML = rows;
+  }
+
+  var PRESETS = [
+    { name:"Фільтр: інформатика ≥ 9", go:function(){
+        $("t3-f-col").value="inf"; $("t3-f-op").value=">="; $("t3-f-val").value="9";
+        keyCols=["inf"]; buildFilter(); } },
+    { name:"Фільтр: клас = 11-А", go:function(){
+        $("t3-f-col").value="cls"; $("t3-f-op").value="="; $("t3-f-val").value="11-А";
+        keyCols=["cls"]; buildFilter(); } },
+    { name:"Сортування: середній бал ↓, прізвище ↑", go:function(){
+        $("t3-s-col1").value="avg"; $("t3-s-dir1").value="desc";
+        $("t3-s-col2").value="name"; $("t3-s-dir2").value="asc";
+        keyCols=["avg","name"]; buildSort(); } },
+    { name:"Сортування: клас ↑, інформатика ↓", go:function(){
+        $("t3-s-col1").value="cls"; $("t3-s-dir1").value="asc";
+        $("t3-s-col2").value="inf"; $("t3-s-dir2").value="desc";
+        keyCols=["cls","inf"]; buildSort(); } }
+  ];
+
+  function init(){
+    // заповнюємо списки полів
+    var opts = FIELDS.map(function(f){ return '<option value="' + f.key + '">' + esc(f.title) + "</option>"; }).join("");
+    $("t3-f-col").innerHTML = opts;
+    $("t3-s-col1").innerHTML = opts;
+    $("t3-s-col2").innerHTML = '<option value="">— не використовувати —</option>' + opts;
+    $("t3-f-col").value = "inf";
+    $("t3-s-col1").value = "avg";
+    $("t3-s-col2").value = "name";
+
+    runner = new StepRunner({
+      mount: $("t3-controls"),
+      bar: $("t3-bar"),
+      reset: resetState,
+      render: render
+    });
+
+    $("t3-run-filter").onclick = function(){
+      keyCols = [$("t3-f-col").value];
+      buildFilter();
+    };
+    $("t3-run-sort").onclick = function(){
+      keyCols = [$("t3-s-col1").value, $("t3-s-col2").value];
+      buildSort();
+    };
+    var box = $("t3-presets");
+    PRESETS.forEach(function(pr){
+      var b = document.createElement("button");
+      b.textContent = pr.name;
+      b.onclick = pr.go;
+      box.appendChild(b);
+    });
+
+    keyCols = ["inf"];
+    buildFilter();
+  }
+  return { init:init };
+})();
+
+/* ==================================================================
+   6. СТАРТ
+   ================================================================== */
+T1.init();
+T2.init();
+T3.init();
+</script>
+</body>
+</html>

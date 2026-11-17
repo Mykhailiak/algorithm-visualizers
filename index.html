@@ -9,19 +9,19 @@
 :root{
   --bg:#eef2f7; --panel:#fff; --ink:#111827; --muted:#475569; --line:#cbd5e1;
   --accent:#1d4ed8; --accent-soft:#dbeafe; --head:#0f172a; --chip:#1e3a8a;
-  --c1:#7c3aed; --c4:#0f766e; --c7:#b45309;
+  --c1:#7c3aed; --c4:#0f766e; --c7:#b45309; --c6:#1d4ed8; --c8:#15803d; --c9:#be185d; --c10:#c2410c; --cdb:#0e7490;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --bg:#0b1220; --panel:#131c2e; --ink:#e5e9f2; --muted:#a3b0c5; --line:#2a3750;
     --accent:#6ea0ff; --accent-soft:#1c2a4a; --head:#050a14; --chip:#23407f;
-    --c1:#b794f6; --c4:#4fd1c5; --c7:#f6ad55;
+    --c1:#b794f6; --c4:#4fd1c5; --c7:#f6ad55; --c6:#7aa2ff; --c8:#68d391; --c9:#f687b3; --c10:#fb923c; --cdb:#4fd1e8;
   }
 }
 :root[data-theme="dark"]{
   --bg:#0b1220; --panel:#131c2e; --ink:#e5e9f2; --muted:#a3b0c5; --line:#2a3750;
   --accent:#6ea0ff; --accent-soft:#1c2a4a; --head:#050a14; --chip:#23407f;
-  --c1:#b794f6; --c4:#4fd1c5; --c7:#f6ad55;
+  --c1:#b794f6; --c4:#4fd1c5; --c7:#f6ad55; --c6:#7aa2ff; --c8:#68d391; --c9:#f687b3; --c10:#fb923c; --cdb:#4fd1e8;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
@@ -59,7 +59,7 @@ h2{font-size:28px;margin:0 0 6px}
 
 .group{margin-bottom:26px}
 .group h3{font-size:21px;margin:0 0 12px;padding-left:12px;border-left:6px solid var(--g)}
-.g1{--g:var(--c1)} .g4{--g:var(--c4)} .g7{--g:var(--c7)}
+.g1{--g:var(--c1)} .g4{--g:var(--c4)} .g7{--g:var(--c7)} .g6{--g:var(--c6)} .g8{--g:var(--c8)} .g9{--g:var(--c9)} .g10{--g:var(--c10)} .gdb{--g:var(--cdb)}
 .cards{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
 .card{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-top:6px solid var(--g);border-radius:14px;padding:16px 18px;text-decoration:none;color:var(--ink);transition:transform .15s,box-shadow .15s}
 .card:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(15,23,42,.18)}
@@ -97,8 +97,8 @@ footer{text-align:center;color:var(--muted);padding:20px 16px;border-top:1px sol
 <div class="hero" id="top">
   <div class="wrap">
     <h1>Використання засобів візуалізації алгоритмів на уроках технологій профільного рівня</h1>
-    <p>Спеціалізація «Обробка інформації та програмне забезпечення». Інтерактивні симулятори, у яких алгоритм можна виконати по кроках, побачити зміну даних і зрозуміти, чому він працює саме так.</p>
-    <div class="chips"><span>10 клас</span><span>Профільний рівень</span><span>Працює в браузері, без встановлення</span></div>
+    <p>Спеціалізація «Обробка інформації та програмне забезпечення», 10–11 класи. Інтерактивні симулятори, у яких алгоритм можна виконати по кроках, побачити зміну даних і зрозуміти, чому він працює саме так.</p>
+    <div class="chips"><span>10–11 клас</span><span>Профільний рівень</span><span>Працює в браузері, без встановлення</span></div>
     <a class="cta" href="#tools">Перейти до засобів ↓</a>
   </div>
 </div>
@@ -224,6 +224,19 @@ footer{text-align:center;color:var(--muted);padding:20px 16px;border-top:1px sol
       </div>
     </div>
 
+    <div class="group g6">
+      <h3>Розділ 6. Комп'ютерні мережі</h3>
+      <div class="grid cards">
+        <a class="card g6" href="14_marshrutyzatsiia.html">
+          <span class="tag">Тема 6.3 · 10 клас</span>
+          <h4>Шлях пакета: DNS і маршрутизація</h4>
+          <p>Покрокове розпізнавання доменного імені з кешем резолвера та пошук найкоротшого маршруту алгоритмом Дейкстри.</p>
+          <ul><li>обрив каналу й перебудова маршруту</li><li>поділ повідомлення на пакети</li></ul>
+          <span class="go">Відкрити →</span>
+        </a>
+      </div>
+    </div>
+
     <div class="group g7">
       <h3>Розділ 7. Операційні системи та їх обслуговування</h3>
       <div class="grid cards">
@@ -239,6 +252,55 @@ footer{text-align:center;color:var(--muted);padding:20px 16px;border-top:1px sol
           <h4>Як архіватор стискає дані: RLE і Хаффман</h4>
           <p>Пакування й розпакування RLE (текст і піксельна картинка), покрокова побудова дерева Хаффмана та декодування.</p>
           <ul><li>коефіцієнт стиснення</li><li>стиснення без втрат</li></ul>
+          <span class="go">Відкрити →</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="group g8">
+      <h3>Розділ 8. Технології комп'ютерної обробки інформації</h3>
+      <div class="grid cards">
+        <a class="card g8" href="17_elektronni_tablytsi.html">
+          <span class="tag">Тема 8.2 · 11 клас</span>
+          <h4>Формули, посилання та фільтри в електронній таблиці</h4>
+          <p>Тренажер з обробки табличної інформації: формули, посилання на клітинки та фільтрування даних.</p>
+          <span class="go">Відкрити →</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="group g9">
+      <h3>Розділ 9. Основи веб-дизайну</h3>
+      <div class="grid cards">
+        <a class="card g9" href="18_html_dom.html">
+          <span class="tag">Тема 9.2 · 11 клас</span>
+          <h4>HTML → DOM-дерево → сторінка</h4>
+          <p>Браузер читає код тег за тегом: видно стек відкритих тегів, побудову DOM-дерева та результат на сторінці.</p>
+          <ul><li>перевірка вкладеності тегів</li><li>взаємна підсвітка коду, дерева й сторінки</li></ul>
+          <span class="go">Відкрити →</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="group g10">
+      <h3>Розділ 10. Графіка, мультимедіа та технічне креслення</h3>
+      <div class="grid cards">
+        <a class="card g10" href="19_koduvannia_hrafiky.html">
+          <span class="tag">Тема 10.1 · 11 клас</span>
+          <h4>Растр і вектор: як кодується зображення</h4>
+          <p>Лабораторія порівняння растрового та векторного способів кодування графічної інформації.</p>
+          <span class="go">Відкрити →</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="group gdb">
+      <h3>Бази даних</h3>
+      <div class="grid cards">
+        <a class="card gdb" href="subd_zapyt.html">
+          <span class="tag">10 клас</span>
+          <h4>Як СУБД виконує запит</h4>
+          <p>Впорядкування, пошук і фільтрування даних: запити на вибірку та покрокове виконання запиту в СУБД.</p>
           <span class="go">Відкрити →</span>
         </a>
       </div>

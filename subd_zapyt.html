@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Як СУБД виконує запит</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef3f3; --surface:#ffffff; --ink:#0f2e35; --muted:#4f6b70; --line:#c9d8d9;
+  --teal:#00796b; --tealsoft:#d7efec; --amber:#ffb300; --ambersoft:#fff1c7; --curink:#0f2e35;
+  --fail:#c2410c; --failsoft:#fde3d6; --violet:#6b46c1; --violetsoft:#ece5fb;
+  --band:#0b5f5a; --bandink:#ffffff;
+  --head:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",Consolas,"Courier New",monospace;
+  color-scheme:light; box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0c1d21; --surface:#12282d; --ink:#e3f1f1; --muted:#9cb5b8; --line:#2a4549;
+    --teal:#37c2b0; --tealsoft:#143a37; --amber:#ffc233; --ambersoft:#4a3b12;
+    --fail:#ff8a5c; --failsoft:#3d2219; --violet:#b49cff; --violetsoft:#2c2445; --band:#0f3d3a; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0c1d21; --surface:#12282d; --ink:#e3f1f1; --muted:#9cb5b8; --line:#2a4549;
+  --teal:#37c2b0; --tealsoft:#143a37; --amber:#ffc233; --ambersoft:#4a3b12;
+  --fail:#ff8a5c; --failsoft:#3d2219; --violet:#b49cff; --violetsoft:#2c2445; --band:#0f3d3a; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17.5px;line-height:1.45}
+button,input,select{font:inherit;color:inherit}
+.band{background:var(--band);color:var(--bandink)}
+.band .in{max-width:1480px;margin:0 auto;padding:16px clamp(12px,3vw,32px) 0;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px 24px}
+h1{font-family:var(--head);font-weight:700;font-size:clamp(28px,3.8vw,46px);line-height:1;margin:0;letter-spacing:.005em}
+.band .sub{margin:6px 0 12px;opacity:.85;font-weight:500}
+.score{font-weight:600;margin-bottom:12px;display:flex;gap:10px;align-items:center}
+.score b{font-family:var(--mono);font-size:22px;background:rgba(255,255,255,.14);padding:2px 10px;border-radius:6px}
+.score button{background:none;border:none;color:inherit;text-decoration:underline;cursor:pointer;opacity:.85}
+.tabs{display:flex;gap:2px;flex-wrap:wrap;width:100%}
+.tab{background:transparent;border:none;color:var(--bandink);padding:12px 18px;font-weight:600;font-size:18px;cursor:pointer;border-radius:8px 8px 0 0;opacity:.8}
+.tab[aria-pressed="true"]{background:var(--bg);color:var(--ink);opacity:1}
+.wrap{max-width:1480px;margin:0 auto;padding:16px clamp(12px,3vw,32px) 40px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.panel h2{font-family:var(--head);font-weight:700;font-size:22px;margin:0 0 10px}
+.panel h2 small{font-family:var(--body);font-weight:500;color:var(--muted);font-size:15px;margin-left:6px}
+
+/* builder */
+.builder{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;margin-bottom:14px}
+@media (max-width:1000px){.builder{grid-template-columns:1fr}}
+.qrow{display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:start;padding:8px 0;border-bottom:1px dashed var(--line)}
+.qrow:last-child{border-bottom:none}
+.qrow > span{font-weight:700;padding-top:7px}
+.qrow > span code{display:block;font-family:var(--mono);font-size:13px;color:var(--teal);font-weight:600}
+@media (max-width:560px){.qrow{grid-template-columns:1fr}}
+.ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+select,input[type=text],input[type=number]{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 8px;font-weight:600;min-height:40px}
+input[type=number]{width:100px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{border:none;background:var(--surface);padding:7px 12px;cursor:pointer;font-weight:600;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:none}
+.seg button[aria-pressed="true"]{background:var(--teal);color:var(--surface)}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:5px 12px;cursor:pointer;font-weight:600;background:var(--surface)}
+.chip input{accent-color:var(--teal);width:18px;height:18px}
+.xbtn,.addbtn{border:1px dashed var(--line);background:none;border-radius:6px;padding:6px 10px;cursor:pointer;font-weight:600;color:var(--muted)}
+.condwrap{display:flex;flex-direction:column;gap:6px}
+.sql{font-family:var(--mono);font-size:clamp(17px,1.6vw,21px);line-height:1.55;background:var(--bg);border-radius:8px;padding:12px 14px;white-space:pre-wrap;word-break:break-word;margin:0}
+.sql .kw{color:var(--teal);font-weight:600}
+.sql .st{color:var(--fail)}
+.sql .active{background:var(--amber);color:var(--curink);border-radius:4px;padding:0 3px}
+.aside-note{margin:10px 0 0;color:var(--muted);font-size:15px}
+
+/* pipeline */
+.pipe{display:flex;align-items:stretch;gap:0;margin-bottom:14px;overflow-x:auto}
+.stagebox{flex:1 1 0;min-width:150px;background:var(--surface);border:1px solid var(--line);padding:10px 14px 10px 22px;position:relative;clip-path:polygon(0 0,calc(100% - 16px) 0,100% 50%,calc(100% - 16px) 100%,0 100%,16px 50%)}
+.stagebox:first-child{clip-path:polygon(0 0,calc(100% - 16px) 0,100% 50%,calc(100% - 16px) 100%,0 100%);padding-left:14px}
+.stagebox .k{font-family:var(--mono);font-weight:600;color:var(--teal);font-size:15px}
+.stagebox .v{font-weight:700;font-size:18px;line-height:1.2}
+.stagebox .c{font-family:var(--mono);font-size:14px;color:var(--muted)}
+.stagebox.on{background:var(--amber);color:var(--curink)}
+.stagebox.on .k,.stagebox.on .c{color:var(--curink)}
+.stagebox.done{background:var(--tealsoft)}
+.stagebox.skip{opacity:.45}
+
+/* tables */
+.tables{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px}
+@media (max-width:1100px){.tables{grid-template-columns:1fr}}
+.tw{overflow-x:auto}
+table.db{border-collapse:collapse;width:100%;font-size:16px}
+.db th{background:var(--teal);color:var(--surface);text-align:left;padding:7px 9px;font-weight:600;white-space:nowrap}
+.db th.hl{background:var(--violet)}
+.db th.cond{box-shadow:inset 0 -4px 0 var(--amber)}
+.db td{padding:6px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+.db tr:nth-child(even) td{background:color-mix(in srgb,var(--bg) 55%,var(--surface))}
+.db td.st{font-weight:700;width:2.2em;text-align:center}
+.db tr.cur td{background:var(--amber) !important;color:var(--curink);font-weight:600}
+.db tr.pass td.st{color:var(--teal)}
+.db tr.fail td{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--fail)}
+.db tr.fail td.st{color:var(--fail);text-decoration:none}
+.db tr.sorted td{background:var(--tealsoft) !important}
+.db tr.kk td{background:var(--violetsoft) !important}
+.db tr.jj td{background:var(--ambersoft) !important}
+.db td.hlc{font-weight:700}
+.mk{display:inline-block;font-family:var(--mono);font-size:12px;font-weight:600;border-radius:4px;padding:0 5px;margin-right:2px}
+.mk.i{background:var(--teal);color:var(--surface)} .mk.k{background:var(--violet);color:var(--surface)} .mk.j{background:var(--amber);color:var(--curink)}
+.pk{font-family:var(--mono);font-size:11px;background:var(--amber);color:var(--curink);border-radius:3px;padding:0 4px;margin-left:4px;vertical-align:middle}
+.empty{color:var(--muted);font-weight:600;padding:14px 4px}
+
+/* lower */
+.lower{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin-top:14px;align-items:start}
+@media (max-width:1000px){.lower{grid-template-columns:1fr}}
+.code{font-family:var(--mono);font-size:15.5px;line-height:1.3;background:var(--bg);border-radius:8px;padding:6px 0;overflow-x:auto}
+.code .ln{display:flex;gap:10px;padding:3px 12px 3px 0;white-space:pre;border-left:5px solid transparent}
+.code .num{color:var(--muted);min-width:2.2ch;text-align:right;user-select:none}
+.code .cm{color:var(--muted)}
+.code .ln.ctx{background:var(--ambersoft);border-left-color:var(--line)}
+.code .ln.cur{background:var(--amber);color:var(--curink);border-left-color:var(--teal);font-weight:600}
+.code .ln.cur .num,.code .ln.cur .cm{color:var(--curink)}
+.code .tag{margin-left:8px;padding:0 7px;border-radius:5px;font-weight:600;background:var(--curink);color:var(--amber)}
+.counters{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.counter{background:var(--bg);border-radius:8px;padding:6px 10px}
+.counter span{display:block;font-size:13px;color:var(--muted);font-weight:600}
+.counter b{font-family:var(--mono);font-size:24px}
+.now{border-left:6px solid var(--amber);background:var(--bg);border-radius:0 8px 8px 0;padding:10px 14px}
+.now .t{font-weight:700;color:var(--muted);font-size:14px;margin:0 0 2px}
+.now p{margin:0;font-weight:600;font-size:19px;line-height:1.4}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.btn{border:2px solid var(--teal);background:var(--surface);color:var(--ink);border-radius:8px;padding:9px 18px;font-weight:700;font-size:18px;cursor:pointer;min-height:50px}
+.btn.primary{background:var(--teal);color:var(--surface)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.grp{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--muted)}
+.grp input[type=range]{accent-color:var(--teal);width:110px}
+:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+
+.quiz{margin-top:12px;border:2px solid var(--violet);border-radius:10px;padding:12px 14px;background:var(--violetsoft)}
+.quiz[hidden]{display:none}
+.quiz h3{font-family:var(--head);font-weight:700;font-size:22px;margin:0 0 4px;line-height:1.25}
+.quiz .hint{margin:0 0 10px;font-weight:600}
+.opts{display:flex;flex-wrap:wrap;gap:8px}
+.opt{flex:1 1 160px;border:2px solid var(--line);background:var(--surface);border-radius:8px;padding:12px;cursor:pointer;font-weight:700;font-size:18px}
+.opt.num{font-family:var(--mono);font-size:28px}
+.opt.right{border-color:var(--teal);background:var(--tealsoft)}
+.opt.wrong{border-color:var(--fail);background:var(--failsoft)}
+.opt:disabled{cursor:default}
+.feedback{margin:10px 0 0;font-weight:700;font-size:18px}
+.feedback.good{color:var(--teal)} .feedback.badc{color:var(--fail)}
+
+/* search */
+.searchtop{display:flex;flex-wrap:wrap;gap:10px 20px;align-items:center;margin-bottom:14px}
+.searchgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:900px){.searchgrid{grid-template-columns:1fr}}
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:5px;margin-bottom:10px}
+.key{border:1px solid var(--line);border-radius:6px;padding:6px 2px;text-align:center;font-family:var(--mono);font-weight:600;font-size:17px;background:var(--surface);position:relative}
+.key small{display:block;font-family:var(--body);font-size:11px;color:var(--muted);font-weight:500}
+.key.out{opacity:.3}
+.key.seen{background:var(--bg);color:var(--muted)}
+.key.range{background:var(--tealsoft);border-color:var(--teal)}
+.key.cur{background:var(--amber);color:var(--curink);border-color:var(--amber)}
+.key.found{background:var(--teal);color:var(--surface)}
+.key .tagm{position:absolute;top:-9px;left:50%;transform:translateX(-50%);font-size:11px;background:var(--violet);color:var(--surface);border-radius:3px;padding:0 4px;font-family:var(--mono)}
+.result{font-weight:700;font-size:18px;margin:8px 0 0}
+
+details.box{margin-top:16px;border:1px solid var(--line);border-radius:10px;padding:2px 16px;background:var(--surface)}
+details.box summary{cursor:pointer;font-weight:700;font-size:19px;padding:10px 0}
+details.box ol,details.box ul{padding-left:1.3em;max-width:80ch}
+details.box li{margin-bottom:7px}
+details.box p{max-width:80ch}
+details.box code{font-family:var(--mono);background:var(--bg);padding:0 4px;border-radius:4px}
+.hidden{display:none !important}
+@media (prefers-reduced-motion: reduce){*{transition:none !important;scroll-behavior:auto !important}}
+</style>
+</head>
+<body>
+<div class="band"><div class="in">
+  <div>
+    <h1>Як СУБД виконує запит</h1>
+    <p class="sub">Інформатика, 10 клас. Впорядкування, пошук і фільтрування даних. Запити на вибірку</p>
+  </div>
+  <div class="score" aria-live="polite">Передбач: <b id="scPredict">0 / 0</b><button type="button" id="resetScores">обнулити</button></div>
+  <nav class="tabs" aria-label="Режим">
+    <button class="tab" data-mode="query" aria-pressed="true" type="button">Запит на вибірку</button>
+    <button class="tab" data-mode="predict" aria-pressed="false" type="button">Передбач результат</button>
+    <button class="tab" data-mode="search" aria-pressed="false" type="button">Пошук за ключем</button>
+  </nav>
+</div></div>
+
+<div class="wrap">
+<div id="queryView">
+  <div class="builder">
+    <section class="panel" aria-label="Конструктор запиту">
+      <h2>Конструктор запиту</h2>
+      <div class="qrow"><span>З таблиці<code>FROM</code></span><div class="ctl" id="tblSeg"></div></div>
+      <div class="qrow"><span>Умова відбору<code>WHERE</code></span><div class="condwrap" id="conds"></div></div>
+      <div class="qrow"><span>Сортування<code>ORDER BY</code></span><div class="ctl" id="orderCtl"></div></div>
+      <div class="qrow"><span>Показати поля<code>SELECT</code></span><div class="ctl" id="selCtl"></div></div>
+    </section>
+    <section class="panel" aria-label="Запит мовою SQL">
+      <h2>Той самий запит мовою SQL</h2>
+      <pre class="sql" id="sql"></pre>
+      <p class="aside-note">Змінюйте запит у конструкторі ліворуч — SQL оновиться, а виконання почнеться спочатку.</p>
+    </section>
+  </div>
+
+  <div class="pipe" id="pipe" aria-label="Етапи виконання"></div>
+
+  <div class="tables">
+    <section class="panel"><h2 id="srcTitle">Таблиця</h2><div class="tw" id="src"></div></section>
+    <section class="panel"><h2>Результат запиту <small id="resInfo"></small></h2><div class="tw" id="res"></div></section>
+  </div>
+
+  <div class="lower">
+    <section class="panel" aria-label="Алгоритм">
+      <h2>Що робить СУБД <small>(алгоритм)</small></h2>
+      <div class="code" id="code"></div>
+      <div class="counters" id="counters"></div>
+    </section>
+    <section class="panel">
+      <div class="now"><p class="t">Зараз</p><p id="note">Натисніть «Крок», щоб СУБД почала виконувати запит.</p></div>
+      <div class="controls">
+        <button class="btn primary" id="stepBtn" type="button">Крок</button>
+        <span class="grp">Крок —<span class="seg" id="granSeg"></span></span>
+      </div>
+      <div class="controls">
+        <button class="btn" id="autoBtn" type="button">Авто</button>
+        <label class="grp">Швидкість <input type="range" id="speed" min="1" max="5" value="3"></label>
+        <button class="btn" id="resetBtn" type="button">Скинути</button>
+      </div>
+      <div class="quiz" id="quiz" hidden aria-live="polite"></div>
+    </section>
+  </div>
+</div>
+
+<div id="searchView" class="hidden">
+  <section class="panel">
+    <div class="searchtop">
+      <h2 style="margin:0">Знайти запис за ключем</h2>
+      <label class="ctl">Таблиця <select id="sTable"></select></label>
+      <label class="ctl">Шуканий ключ <select id="sTarget"></select></label>
+      <label class="chip"><input type="checkbox" id="sPredict"> перевіряти мене (передбач)</label>
+    </div>
+    <p class="aside-note" style="margin:-4px 0 12px">СУБД зберігає для ключового поля <strong>індекс</strong> — упорядкований список ключів. Тому вона може шукати не перебором, а половинним поділом.</p>
+    <div class="searchgrid">
+      <div>
+        <h2>Перебір <small>по одному ключу</small></h2>
+        <div class="keys" id="linKeys"></div>
+        <div class="code" id="linCode"></div>
+        <p class="result" id="linRes"></p>
+      </div>
+      <div>
+        <h2>Половинний поділ <small>за впорядкованим індексом</small></h2>
+        <div class="keys" id="binKeys"></div>
+        <div class="code" id="binCode"></div>
+        <p class="result" id="binRes"></p>
+      </div>
+    </div>
+    <div class="now" style="margin-top:12px"><p class="t">Зараз</p><p id="sNote">Натисніть «Крок»: обидва алгоритми зроблять по одному кроку.</p></div>
+    <div class="controls">
+      <button class="btn primary" id="sStep" type="button">Крок</button>
+      <button class="btn" id="sAuto" type="button">Авто</button>
+      <button class="btn" id="sReset" type="button">Скинути</button>
+    </div>
+    <div class="quiz" id="sQuiz" hidden aria-live="polite"></div>
+  </section>
+</div>
+
+<details class="box">
+  <summary>Пам’ятка: запит у SQL і в конструкторі Access</summary>
+  <ul>
+    <li><strong>SELECT</strong> — які поля показати (у конструкторі Access — прапорець «Вивід на екран»).</li>
+    <li><strong>FROM</strong> — з якої таблиці брати дані.</li>
+    <li><strong>WHERE</strong> — умова відбору (рядок «Умови відбору»). Умови в одному рядку конструктора з’єднуються через <code>AND</code> (І), у різних рядках — через <code>OR</code> (АБО).</li>
+    <li><strong>ORDER BY … ASC / DESC</strong> — сортування за зростанням / спаданням (рядок «Сортування»).</li>
+    <li><strong>«містить»</strong> у SQL записують як <code>LIKE '%роман%'</code>; в Access замість <code>%</code> використовують <code>*</code>: <code>Like "*роман*"</code>.</li>
+    <li><strong>Фільтр перед сортуванням економить роботу.</strong> Сортування вибором для m рядків робить m·(m − 1)/2 порівнянь. Для 12 рядків це 66 порівнянь, а для 4 відібраних — лише 6.</li>
+    <li><strong>Порядок етапів тут спрощено.</strong> За стандартом SQL логічний порядок такий: FROM → WHERE → SELECT → ORDER BY. Засіб сортує до вибору стовпців, щоб можна було сортувати й за полем, яке не показується. Справжні СУБД також вибирають власні, швидші алгоритми сортування та пошуку.</li>
+  </ul>
+</details>
+
+<details class="box">
+  <summary>Інструкція для вчителя</summary>
+  <ol>
+    <li><strong>Запит як алгоритм (8 хв).</strong> Вкладка «Запит на вибірку», готовий запит (книги після 1900 року, за назвою). Кроком «рядок» пройдіть фільтрування: таблиця ліворуч, рядок за рядком, ✓ або ✗. Звертайте увагу на умову в алгоритмі й на те, як росте результат праворуч.</li>
+    <li><strong>Сортування (7 хв).</strong> Кроком «крок» пройдіть перший прохід сортування вибором: i — місце, яке заповнюємо, k — найкращий кандидат, j — рядок, з яким порівнюємо. Потім «етап» або «Авто». Покажіть лічильник порівнянь.</li>
+    <li><strong>Учні складають запити (8 хв).</strong> Завдання: «романи з бібліотеки, яких є хоча б 2 примірники, від найновішого», «учасники зі Львова, які набрали понад 80 балів, за балами». Порівняйте кількість порівнянь із фільтром і без нього. Покажіть різницю між «=» та «містить» (у Жанрі є «роман у віршах»).</li>
+    <li><strong>Перевірка (7 хв).</strong> Вкладка «Передбач результат»: скільки рядків поверне запит, чи пройде рядок через фільтр, хто стане на наступне місце. Фронтально або на телефонах.</li>
+    <li><strong>Пошук (5 хв).</strong> Вкладка «Пошук за ключем»: перебір проти половинного поділу. Спробуйте ключ, якого немає в таблиці. Зв’язок з уроком 29.10: ключове поле має індекс.</li>
+  </ol>
+  <p>Рахунок зберігається лише в браузері конкретного пристрою. Для звіту попросіть учнів сфотографувати рахунок угорі сторінки, а перед новим класом натисніть «обнулити». Клавіші «→» або «Page Down» роблять крок.</p>
+</details>
+</div>
+
+<script>
+(function(){
+"use strict";
+const TABLES={
+  books:{name:"Книги",label:"Книги бібліотеки",key:"Код",title:"Назва",
+    cols:[["Код","num"],["Назва","text"],["Автор","text"],["Рік","num"],["Жанр","text"],["Сторінок","num"],["Примірників","num"]],
+    rows:[
+      [119,"Місто","Валер’ян Підмогильний",1928,"роман",300,0],
+      [104,"Кобзар","Тарас Шевченко",1840,"поезія",480,6],
+      [128,"Собор","Олесь Гончар",1968,"роман",350,1],
+      [101,"Енеїда","Іван Котляревський",1798,"поема",320,4],
+      [113,"Лісова пісня","Леся Українка",1911,"драма",140,7],
+      [134,"Ворошиловград","Сергій Жадан",2010,"роман",440,2],
+      [107,"Кайдашева сім’я","Іван Нечуй-Левицький",1879,"повість",190,5],
+      [125,"Зачарована Десна","Олександр Довженко",1956,"кіноповість",110,4],
+      [122,"Тигролови","Іван Багряний",1944,"роман",280,3],
+      [110,"Захар Беркут","Іван Франко",1883,"повість",210,3],
+      [131,"Маруся Чурай","Ліна Костенко",1979,"роман у віршах",230,5],
+      [116,"Тіні забутих предків","Михайло Коцюбинський",1911,"повість",120,2]
+    ],
+    def:{conds:[{f:"Рік",op:">",v:"1900"}],join:"AND",order:{f:"Назва",dir:"ASC"},sel:["Назва","Автор","Рік"]},
+    missing:[115,140]},
+  olymp:{name:"Учасники",label:"Учасники олімпіади",key:"Код",title:"Прізвище",
+    cols:[["Код","num"],["Прізвище","text"],["Ім’я","text"],["Клас","num"],["Місто","text"],["Бали","num"]],
+    rows:[
+      [316,"Коваленко","Олена",10,"Київ",87],[302,"Бондар","Андрій",11,"Львів",92],[330,"Ткаченко","Марія",9,"Харків",64],
+      [309,"Шевчук","Дмитро",10,"Львів",71],[341,"Кравчук","Софія",11,"Одеса",95],[323,"Мельник","Іван",10,"Дніпро",58],
+      [305,"Олійник","Анна",9,"Львів",80],[338,"Поліщук","Максим",11,"Київ",76],[311,"Лисенко","Ірина",10,"Харків",88],
+      [327,"Савчук","Богдан",9,"Одеса",69],[318,"Романюк","Юлія",11,"Дніпро",83],[334,"Гнатюк","Тарас",10,"Київ",91]
+    ],
+    def:{conds:[{f:"Місто",op:"=",v:"Львів"}],join:"AND",order:{f:"Бали",dir:"DESC"},sel:["Прізвище","Ім’я","Бали"]},
+    missing:[300,320]}
+};
+const OPS_NUM=["=","≠",">","<","≥","≤"], OPS_TXT=["=","≠","містить"];
+const GRANS={step:"крок",sub:"рядок",stage:"етап"};
+const SPEEDS=[1300,850,520,280,120];
+const st={mode:"query",table:"books",q:null,gran:"sub",pos:-1,auto:false,timer:null,answered:new Set(),pending:null,feedbackShown:false,
+  scores:loadJSON("zapyty-scores",{ok:0,total:0}),
+  s:{table:"books",target:null,predict:false,pos:[-1,-1],answered:new Set(),pending:null,auto:false,timer:null}};
+let P=null, S=null;
+const $=id=>document.getElementById(id);
+function loadJSON(k,d){ try{ return JSON.parse(localStorage.getItem(k)||"null")||d; }catch(e){ return d; } }
+function saveJSON(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+function esc(s){ return String(s).replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch])); }
+function T(){ return TABLES[st.table]; }
+function colIdx(t,f){ return t.cols.findIndex(c=>c[0]===f); }
+function colType(t,f){ return t.cols[colIdx(t,f)][1]; }
+function fv(t,f,v){ return colType(t,f)==="num" ? String(v) : `«${v}»`; }
+function cmpVals(a,b,type){ return type==="num" ? a-b : String(a).localeCompare(String(b),"uk"); }
+function plural(n,a,b,c){ const m10=n%10,m100=n%100; if(m10===1&&m100!==11) return a; if(m10>=2&&m10<=4&&(m100<12||m100>14)) return b; return c; }
+const rowsW=n=>`${n} ${plural(n,"рядок","рядки","рядків")}`;
+
+/* ---------- conditions ---------- */
+function evalCond(t,row,c){
+  const type=colType(t,c.f), a=row[colIdx(t,c.f)];
+  if(type==="num"){ const b=Number(c.v); return {"=":a===b,"≠":a!==b,">":a>b,"<":a<b,"≥":a>=b,"≤":a<=b}[c.op]; }
+  const A=String(a).toLowerCase(), B=String(c.v).toLowerCase();
+  return c.op==="=" ? A===B : c.op==="≠" ? A!==B : A.includes(B);
+}
+function condText(t,c){ return `${c.f} ${c.op} ${fv(t,c.f,c.v)}`; }
+function evalRow(t,q,row){
+  if(!q.conds.length) return {ok:true,parts:[]};
+  const parts=q.conds.map(c=>({c,ok:evalCond(t,row,c),val:row[colIdx(t,c.f)]}));
+  const ok = q.join==="AND" ? parts.every(p=>p.ok) : parts.some(p=>p.ok);
+  return {ok,parts};
+}
+function sqlOf(t,q){
+  const kw=s=>`<span class="kw" data-s="${s}">${s}</span>`;
+  const val=(c)=>{ if(colType(t,c.f)==="num") return esc(c.v); return `<span class="st">'${c.op==="містить"?"%":""}${esc(c.v)}${c.op==="містить"?"%":""}'</span>`; };
+  const op=c=>({"=":"=","≠":"&lt;&gt;",">":"&gt;","<":"&lt;","≥":"&gt;=","≤":"&lt;=","містить":"LIKE"})[c.op];
+  let s=`<span data-part="select">${kw("SELECT")} ${q.sel.length?q.sel.map(esc).join(", "):"*"}</span>\n<span data-part="from">${kw("FROM")} ${esc(t.name)}</span>`;
+  if(q.conds.length) s+=`\n<span data-part="where">${kw("WHERE")} ${q.conds.map(c=>`${esc(c.f)} ${op(c)} ${val(c)}`).join(` ${kw(q.join)} `)}</span>`;
+  if(q.order) s+=`\n<span data-part="order">${kw("ORDER BY")} ${esc(q.order.f)} ${kw(q.order.dir)}</span>`;
+  return s+";";
+}
+
+/* ---------- program ---------- */
+function build(){
+  const t=T(), q=st.q, n=t.rows.length, ti=colIdx(t,t.title);
+  const nameOf=r=>`«${t.rows[r][ti]}»`;
+  const condPseudo = q.conds.length ? q.conds.map(c=>`r.${condText(t,c)}`).join(q.join==="AND"?" І ":" АБО ") : "";
+  const sym = q.order ? (q.order.dir==="ASC" ? "<" : ">") : "";
+  const lines=[{key:"R0",text:"результат ← порожня таблиця"},
+    {key:"W",text:`для кожного рядка r таблиці «${t.name}»:`,cm:"// WHERE"},
+    {key:"C",text: q.conds.length ? `    якщо ${condPseudo}:` : "    якщо умови немає — беремо всі рядки:"},
+    {key:"A",text:"        додати r до результату"},
+    {key:"SK",text:"    інакше: пропустити r"}];
+  if(q.order){ lines.push({key:"O",text:`впорядкувати за полем ${q.order.f} ${q.order.dir==="ASC"?"↑":"↓"}:`,cm:"// ORDER BY"},
+    {key:"OI",text:"    для i від 1 до m − 1:"},{key:"OK",text:"        k ← i",cm:"// кандидат на місце i"},
+    {key:"OJ",text:"        для j від i + 1 до m:"},{key:"OC",text:`            якщо r[j].${q.order.f} ${sym} r[k].${q.order.f}: k ← j`},
+    {key:"OS",text:"        обміняти рядки i та k"}); }
+  else lines.push({key:"O0",text:"// ORDER BY не задано — порядок як у таблиці"});
+  lines.push({key:"S",text:`залишити поля: ${q.sel.length?q.sel.join(", "):"усі"}`,cm:"// SELECT"},{key:"E",text:"показати результат"});
+
+  const ev=[]; const status=Array(n).fill("wait"); let result=[], checks=0, comps=0, swaps=0, sort=null, phase="where", projected=false, cur=null;
+  const push=o=>ev.push(Object.assign({ctx:[],tag:null,boundary:null,qid:null},o,{status:status.slice(),result:result.slice(),checks,comps,swaps,sort:sort?{...sort}:null,phase,projected,cur}));
+  // predicted results for questions
+  const finalPass=t.rows.map(r=>evalRow(t,q,r).ok);
+  const m=finalPass.filter(Boolean).length;
+  push({key:"R0",boundary:"stage",qid:q.conds.length?"count":null,note:`СУБД створює порожню таблицю для результату. Далі вона перегляне всі ${rowsW(n)} таблиці «${t.name}».`});
+  const qRows=new Set([0,1,2,3]); while(qRows.size<6&&qRows.size<n) qRows.add(Math.floor(Math.random()*n));
+  for(let r=0;r<n;r++){
+    const row=t.rows[r], e=evalRow(t,q,row); checks++; cur=r; status[r]="cur";
+    let expl;
+    if(!q.conds.length) expl="Умови немає, тому рядок береться.";
+    else { expl=e.parts.map(p=>`${p.c.f} = ${fv(t,p.c.f,p.val)}, ${p.c.op} ${fv(t,p.c.f,p.c.v)}? ${p.ok?"так":"ні"}`).join("; ");
+      if(e.parts.length>1) expl+=`. ${q.join==="AND"?"І":"АБО"} → ${e.ok?"так":"ні"}`; expl+="."; }
+    push({key:"C",ctx:["W"],tag:e.ok?"так":"ні",boundary:"sub",qid:(q.conds.length&&qRows.has(r))?"row"+r:null,row:r,
+      note:`Рядок ${r+1}: ${nameOf(r)}. ${expl}`});
+    if(e.ok){ status[r]="pass"; result.push(r); push({key:"A",ctx:["W","C"],note:`${nameOf(r)} додано до результату. Там уже ${rowsW(result.length)}.`}); }
+    else { status[r]="fail"; push({key:"SK",ctx:["W"],note:`${nameOf(r)} не підходить — СУБД його пропускає.`}); }
+  }
+  cur=null;
+  if(q.order){
+    phase="order"; const f=q.order.f, ci=colIdx(t,f), type=colType(t,f), dirW=q.order.dir==="ASC"?"менше":"більше";
+    const better=(a,b)=>{ const c=cmpVals(t.rows[a][ci],t.rows[b][ci],type); return q.order.dir==="ASC"?c<0:c>0; };
+    const word = type==="num" ? dirW : (q.order.dir==="ASC"?"раніше за абеткою":"пізніше за абеткою");
+    sort={i:null,j:null,k:null,done:0};
+    push({key:"O",boundary:"stage",note:`Сортування вибором за полем «${f}» ${q.order.dir==="ASC"?"за зростанням":"за спаданням"}: на кожне місце i шукаємо найкращий рядок серед ще не впорядкованих. Рядків m = ${result.length}.`});
+    const M=result.length;
+    for(let i=0;i<M-1;i++){
+      sort={i,j:null,k:null,done:i};
+      push({key:"OI",ctx:["O"],tag:`i = ${i+1}`,boundary:"sub",qid:(i<2&&M>=3)?"pass"+i:null,passI:i,note:`Заповнюємо місце ${i+1}. Рядки вище вже стоять на своїх місцях.`});
+      let k=i; sort.k=k;
+      push({key:"OK",ctx:["O","OI"],tag:`k = ${k+1}`,note:`Поки що найкращий кандидат — ${nameOf(result[k])} (рядок ${k+1}).`});
+      for(let j=i+1;j<M;j++){
+        comps++; const b=better(result[j],result[k]); sort.j=j;
+        const vj=fv(t,f,t.rows[result[j]][ci]), vk=fv(t,f,t.rows[result[k]][ci]);
+        push({key:"OC",ctx:["O","OI","OJ"],tag:b?`так → k = ${j+1}`:"ні",note:`Порівнюємо ${f}: ${vj} (рядок ${j+1}) і ${vk} (рядок ${k+1}). ${vj} ${word}? ${b?`Так — новий кандидат ${nameOf(result[j])}.`:"Ні — кандидат той самий."}`});
+        if(b){ k=j; sort.k=k; }
+      }
+      sort.j=null;
+      if(k!==i){ const a=result[i]; result[i]=result[k]; result[k]=a; swaps++; sort.k=i; sort.done=i+1;
+        push({key:"OS",ctx:["O","OI"],note:`Міняємо місцями рядки ${i+1} і ${k+1}: на місце ${i+1} стає ${nameOf(result[i])}.`}); }
+      else { sort.done=i+1; push({key:"OS",ctx:["O","OI"],tag:"не потрібно",note:`${nameOf(result[i])} уже на своєму місці — обмін не потрібен.`}); }
+    }
+    sort={i:null,j:null,k:null,done:M};
+  }
+  phase="select"; projected=true;
+  push({key:"S",boundary:"stage",note: q.sel.length ? `Залишаємо тільки поля ${q.sel.join(", ")}. Інші стовпці до результату не потрапляють.` : "Поля для показу не обрано — показуємо всі (SELECT *)."});
+  phase="done";
+  push({key:"E",boundary:"end",note:`Готово! Запит повернув ${rowsW(result.length)}. Перевірено рядків: ${checks}, порівнянь під час сортування: ${comps}.`});
+  return {lines,ev,m,finalPass};
+}
+
+/* ---------- builder UI ---------- */
+function setTable(k){ st.table=k; const d=TABLES[k].def; st.q=JSON.parse(JSON.stringify(d)); renderBuilder(); resetRun(); }
+function renderBuilder(){
+  const t=T(), q=st.q;
+  $("tblSeg").innerHTML=`<span class="seg">${Object.keys(TABLES).map(k=>`<button type="button" data-v="${k}" aria-pressed="${st.table===k}">${TABLES[k].label}</button>`).join("")}</span>`;
+  const fieldOpts=(sel)=>t.cols.map(c=>`<option${c[0]===sel?" selected":""}>${esc(c[0])}</option>`).join("");
+  let h=q.conds.map((c,i)=>{
+    const ops=colType(t,c.f)==="num"?OPS_NUM:OPS_TXT;
+    const vals=[...new Set(t.rows.map(r=>r[colIdx(t,c.f)]))];
+    const input = colType(t,c.f)==="num" ? `<input type="number" data-ci="${i}" data-k="v" value="${esc(c.v)}" aria-label="Значення">`
+      : `<input type="text" list="dl${i}" data-ci="${i}" data-k="v" value="${esc(c.v)}" aria-label="Значення"><datalist id="dl${i}">${vals.map(v=>`<option value="${esc(v)}">`).join("")}</datalist>`;
+    return (i>0?`<div class="ctl"><span class="seg" id="joinSeg"><button type="button" data-j="AND" aria-pressed="${q.join==="AND"}">І (AND)</button><button type="button" data-j="OR" aria-pressed="${q.join==="OR"}">АБО (OR)</button></span></div>`:"")+
+      `<div class="ctl"><select data-ci="${i}" data-k="f" aria-label="Поле">${fieldOpts(c.f)}</select><select data-ci="${i}" data-k="op" aria-label="Операція">${ops.map(o=>`<option${o===c.op?" selected":""}>${o}</option>`).join("")}</select>${input}<button type="button" class="xbtn" data-rm="${i}" aria-label="Прибрати умову">×</button></div>`;
+  }).join("");
+  if(q.conds.length<2) h+=`<div class="ctl"><button type="button" class="addbtn" id="addCond">+ умова</button>${q.conds.length?"":`<span style="color:var(--muted);font-weight:600">без умови — усі рядки</span>`}</div>`;
+  $("conds").innerHTML=h;
+  $("orderCtl").innerHTML=`<select id="ordF" aria-label="Поле сортування"><option value="">— без сортування —</option>${t.cols.map(c=>`<option${q.order&&q.order.f===c[0]?" selected":""}>${esc(c[0])}</option>`).join("")}</select>`+
+    (q.order?`<span class="seg" id="dirSeg"><button type="button" data-d="ASC" aria-pressed="${q.order.dir==="ASC"}">за зростанням ↑</button><button type="button" data-d="DESC" aria-pressed="${q.order.dir==="DESC"}">за спаданням ↓</button></span>`:"");
+  $("selCtl").innerHTML=t.cols.map(c=>`<label class="chip"><input type="checkbox" data-sel="${esc(c[0])}"${q.sel.includes(c[0])?" checked":""}>${esc(c[0])}</label>`).join("");
+  $("sql").innerHTML=sqlOf(t,q);
+}
+function onBuilderChange(){ renderBuilder(); resetRun(); }
+
+/* ---------- render query ---------- */
+function curEv(){ return P.ev[st.pos]; }
+function renderPipe(){
+  const t=T(), q=st.q, e=curEv(), phase=e?e.phase:null, last=P.ev[P.ev.length-1];
+  const stages=[
+    {id:"from",k:"FROM",v:t.name,c:rowsW(t.rows.length)},
+    {id:"where",k:"WHERE",v:q.conds.length?q.conds.map(c=>condText(t,c)).join(q.join==="AND"?" і ":" або "):"без умови",c:e?`відібрано: ${e.result.length}`:"…"},
+    {id:"order",k:"ORDER BY",v:q.order?`${q.order.f} ${q.order.dir==="ASC"?"↑":"↓"}`:"не задано",c:e&&q.order?`порівнянь: ${e.comps}`:"",skip:!q.order},
+    {id:"select",k:"SELECT",v:q.sel.length?q.sel.join(", "):"усі поля",c:`${q.sel.length||t.cols.length} ${plural(q.sel.length||t.cols.length,"поле","поля","полів")}`},
+    {id:"done",k:"РЕЗУЛЬТАТ",v:e&&e.phase==="done"?rowsW(e.result.length):"?",c:""}
+  ];
+  const order=["from","where","order","select","done"], pi=phase?order.indexOf(phase):-1;
+  $("pipe").innerHTML=stages.map((s,i)=>{ let cls=""; if(s.skip) cls="skip"; else if(i===pi||(phase==="done"&&s.id==="done")) cls="on"; else if(i<pi||(pi>=1&&i===0)) cls="done";
+    return `<div class="stagebox ${cls}"><div class="k">${s.k}</div><div class="v">${esc(s.v)}</div><div class="c">${esc(s.c)}</div></div>`; }).join("");
+  document.querySelectorAll("#sql [data-part]").forEach(el=>el.classList.toggle("active", (phase==="where"&&el.dataset.part==="where")||(phase==="order"&&el.dataset.part==="order")||(phase==="select"&&el.dataset.part==="select")));
+}
+function renderTables(){
+  const t=T(), q=st.q, e=curEv();
+  $("srcTitle").innerHTML=`Таблиця «${esc(t.name)}» <small>${rowsW(t.rows.length)}</small>`;
+  const condF=new Set(q.conds.map(c=>c.f));
+  let h=`<table class="db"><thead><tr><th scope="col" aria-label="Стан"></th>${t.cols.map(c=>`<th scope="col" class="${condF.has(c[0])?"cond":""}">${esc(c[0])}${c[0]===t.key?'<span class="pk">ключ</span>':""}</th>`).join("")}</tr></thead><tbody>`;
+  t.rows.forEach((row,r)=>{ const s=e?e.status[r]:"wait", isCur=e&&e.cur===r&&e.phase==="where";
+    const mark=isCur?"▶":s==="pass"?"✓":s==="fail"?"✗":"";
+    h+=`<tr class="${isCur?"cur":s}"><td class="st">${mark}</td>${row.map(v=>`<td>${esc(v)}</td>`).join("")}</tr>`; });
+  $("src").innerHTML=h+"</tbody></table>";
+  const res=e?e.result:[];
+  const cols = e&&e.projected&&q.sel.length ? q.sel : t.cols.map(c=>c[0]);
+  const sf=q.order?q.order.f:null, sort=e?e.sort:null, inSort=e&&e.phase==="order";
+  $("resInfo").textContent=e?rowsW(res.length):"";
+  if(!res.length){ $("res").innerHTML=`<p class="empty">${e&&e.phase!=="where"?"Жоден рядок не відповідає умові.":"Поки порожньо. Рядки з’являтимуться тут, коли пройдуть умову відбору."}</p>`; return; }
+  let r2=`<table class="db"><thead><tr>${inSort?'<th scope="col">місце</th>':'<th scope="col">№</th>'}${cols.map(c=>`<th scope="col" class="${inSort&&c===sf?"hl":""}">${esc(c)}</th>`).join("")}</tr></thead><tbody>`;
+  res.forEach((r,pos)=>{ let cls="", mk="";
+    if(inSort&&sort){ if(pos<sort.done) cls="sorted"; if(sort.j===pos) cls="jj"; if(sort.k===pos&&sort.i!==null) cls="kk";
+      if(sort.i===pos) mk+='<span class="mk i">i</span>'; if(sort.k===pos&&sort.i!==null) mk+='<span class="mk k">k</span>'; if(sort.j===pos) mk+='<span class="mk j">j</span>'; }
+    r2+=`<tr class="${cls}"><td>${mk||pos+1}</td>${cols.map(c=>`<td class="${inSort&&c===sf?"hlc":""}">${esc(t.rows[r][colIdx(t,c)])}</td>`).join("")}</tr>`; });
+  $("res").innerHTML=r2+"</tbody></table>";
+}
+function renderAlgo(){
+  const e=curEv();
+  $("code").innerHTML=P.lines.map((l,i)=>{ const cur=e&&e.key===l.key, ctx=e&&!cur&&e.ctx.includes(l.key);
+    const tag=cur&&e.tag?`<span class="tag">${esc(e.tag)}</span>`:"";
+    return `<div class="ln${cur?" cur":ctx?" ctx":""}"${cur?' aria-current="step"':""}><span class="num">${i+1}</span><span>${esc(l.text)}${l.cm?`  <span class="cm">${esc(l.cm)}</span>`:""}${tag}</span></div>`; }).join("");
+  const c=(k,v)=>`<div class="counter"><span>${k}</span><b>${v}</b></div>`;
+  $("counters").innerHTML=c("перевірено рядків",e?e.checks:0)+c("порівнянь (сорт.)",e?e.comps:0)+c("обмінів",e?e.swaps:0);
+}
+function renderControls(){
+  const done=st.pos>=P.ev.length-1;
+  $("stepBtn").disabled=done||!!st.pending; $("autoBtn").disabled=done||!!st.pending;
+  $("autoBtn").textContent=st.auto?"Пауза":"Авто";
+  $("granSeg").innerHTML=Object.keys(GRANS).map(k=>`<button type="button" data-v="${k}" aria-pressed="${st.gran===k}">${GRANS[k]}</button>`).join("");
+  const e=curEv(); $("note").textContent=e?e.note:"Натисніть «Крок», щоб СУБД почала виконувати запит.";
+}
+function renderTabs(){
+  document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-pressed",String(t.dataset.mode===st.mode)));
+  $("queryView").classList.toggle("hidden",st.mode==="search"); $("searchView").classList.toggle("hidden",st.mode!=="search");
+  $("scPredict").textContent=`${st.scores.ok} / ${st.scores.total}`;
+}
+function renderQuery(){ renderPipe(); renderTables(); renderAlgo(); renderControls(); renderTabs(); }
+
+/* ---------- stepping (query) ---------- */
+function resetRun(){ stopAuto(); P=build(); st.pos=-1; st.answered=new Set(); st.pending=null; st.feedbackShown=false; $("quiz").hidden=true; $("quiz").innerHTML=""; renderQuery(); }
+function advance(){
+  if(st.pos>=P.ev.length-1) return "done";
+  const nx=P.ev[st.pos+1];
+  if(st.mode==="predict"&&nx.qid&&!st.answered.has(nx.qid)){ ask(nx); return "question"; }
+  st.pos++; return "ok";
+}
+function stepGroup(){
+  if(st.pending) return "question";
+  if(st.feedbackShown){ $("quiz").hidden=true; st.feedbackShown=false; }
+  let res=advance();
+  if(res==="ok"&&st.gran!=="step"){
+    while(st.pos<P.ev.length-1){ const b=P.ev[st.pos+1].boundary; if(b&&(st.gran==="sub"||b!=="sub")) break; res=advance(); if(res!=="ok") break; }
+  }
+  renderQuery(); return res;
+}
+function startAuto(){ st.auto=true; renderControls(); tick(); }
+function stopAuto(){ st.auto=false; clearTimeout(st.timer); st.timer=null; }
+function tick(){ clearTimeout(st.timer); if(!st.auto) return;
+  const res=stepGroup();
+  if(res==="done"||st.pos>=P.ev.length-1){ stopAuto(); renderControls(); return; }
+  if(res==="question") return;
+  st.timer=setTimeout(tick,SPEEDS[+$("speed").value-1]); }
+
+/* ---------- predict (query) ---------- */
+function shuffle(a){ for(let k=a.length-1;k>0;k--){ const j=Math.floor(Math.random()*(k+1)); [a[k],a[j]]=[a[j],a[k]]; } return a; }
+function ask(e){
+  const wasAuto=st.auto; stopAuto(); const t=T(), q=st.q, ti=colIdx(t,t.title); let html="", opts;
+  if(e.qid==="count"){
+    const n=t.rows.length, m=P.m, cand=[];
+    // a common mistake: strict vs non-strict comparison
+    const alt=q.conds.map(c=>({...c,op:{">":"≥","<":"≤","≥":">","≤":"<","=":"≠","≠":"=","містить":"="}[c.op]||c.op}));
+    const mAlt=t.rows.filter(r=>evalRow(t,{...q,conds:alt},r).ok).length;
+    [mAlt,n,m+1,m-1,m+2,m-2].forEach(v=>{ if(v>=0&&v<=n&&v!==m&&!cand.includes(v)&&cand.length<2) cand.push(v); });
+    opts=shuffle([{v:m,ok:true},...cand.map(v=>({v,ok:false}))]);
+    html=`<h3>Скільки рядків поверне цей запит?</h3><p class="hint">Подивіться на умову WHERE і на таблицю.</p><div class="opts">${opts.map((o,k)=>`<button type="button" class="opt num" data-k="${k}">${o.v}</button>`).join("")}</div>`;
+  } else if(e.qid.startsWith("row")){
+    const r=e.row, ok=P.finalPass[r];
+    opts=[{v:"Так, потрапить у результат",ok:ok},{v:"Ні, буде відкинутий",ok:!ok}];
+    html=`<h3>Чи пройде рядок ${r+1} «${esc(t.rows[r][ti])}» через фільтр?</h3><p class="hint">Умова: ${esc(q.conds.map(c=>condText(t,c)).join(q.join==="AND"?" І ":" АБО "))}</p><div class="opts">${opts.map((o,k)=>`<button type="button" class="opt" data-k="${k}">${o.v}</button>`).join("")}</div>`;
+  } else {
+    const i=e.passI, after=P.ev.find(x=>x.key==="OS"&&x.result&&x.sort&&x.sort.done===i+1);
+    const right=after.result[i], curRow=e.result[i], rest=e.result.slice(i+1).filter(x=>x!==right&&x!==curRow);
+    const third = rest.length ? rest[rest.length-1] : null;
+    const ids=[right]; if(curRow!==right) ids.push(curRow); if(third!==null&&ids.length<3) ids.push(third);
+    if(ids.length<3){ const extra=e.result.find(x=>!ids.includes(x)); if(extra!==undefined) ids.push(extra); }
+    opts=shuffle(ids.map(x=>({v:t.rows[x][ti],ok:x===right})));
+    html=`<h3>Хто стане на місце ${i+1} після цього проходу сортування?</h3><p class="hint">Сортуємо за полем «${esc(q.order.f)}» ${q.order.dir==="ASC"?"за зростанням":"за спаданням"}.</p><div class="opts">${opts.map((o,k)=>`<button type="button" class="opt" data-k="${k}">${esc(o.v)}</button>`).join("")}</div>`;
+  }
+  const quiz=$("quiz"); quiz.innerHTML=html+`<p class="feedback" id="fb"></p>`; quiz.hidden=false;
+  st.pending={e,opts,wasAuto};
+  quiz.querySelectorAll(".opt").forEach(b=>b.addEventListener("click",()=>answer(+b.dataset.k)));
+  renderControls(); quiz.scrollIntoView({block:"nearest"});
+}
+function answer(k){
+  const q=st.pending; if(!q) return; const t=T(), e=q.e;
+  const right=q.opts[k].ok, rk=q.opts.findIndex(o=>o.ok);
+  st.scores.total++; if(right) st.scores.ok++; saveJSON("zapyty-scores",st.scores);
+  $("quiz").querySelectorAll(".opt").forEach((b,j)=>{ b.disabled=true; if(j===rk) b.classList.add("right"); else if(j===k) b.classList.add("wrong"); });
+  let why;
+  if(e.qid==="count") why=`Умову виконують ${rowsW(P.m)} з ${t.rows.length}. Простежте за фільтруванням крок за кроком.`;
+  else if(e.qid.startsWith("row")){ const ev=evalRow(t,st.q,t.rows[e.row]); why=ev.parts.map(p=>`${p.c.f} = ${fv(t,p.c.f,p.val)}: ${p.c.op} ${fv(t,p.c.f,p.c.v)} — ${p.ok?"так":"ні"}`).join("; ")+"."; }
+  else why=`Серед рядків від ${e.passI+1}-го до останнього найкращий за полем «${st.q.order.f}» — саме він.`;
+  const fb=$("fb"); fb.className="feedback "+(right?"good":"badc");
+  fb.textContent=(right?"Правильно! ":`Ні, правильно: ${q.opts[rk].v}. `)+why+" Натисніть «Крок».";
+  st.answered.add(e.qid); st.pending=null; st.feedbackShown=true; renderControls(); renderTabs();
+  if(q.wasAuto){ st.auto=true; renderControls(); st.timer=setTimeout(tick,2600); }
+}
+
+/* ---------- search ---------- */
+function buildSearch(){
+  const t=TABLES[st.s.table], ti=colIdx(t,t.title);
+  const keys=t.rows.map(r=>({k:r[0],name:r[ti]})).sort((a,b)=>a.k-b.k), x=st.s.target, n=keys.length;
+  const lin=[]; let c=0;
+  for(let i=0;i<n;i++){ c++; const eq=keys[i].k===x;
+    lin.push({line:1,i,comps:c,seen:i,found:eq?i:null,note:`Перебір: ключ[${i+1}] = ${keys[i].k} ${eq?"=":"≠"} ${x}.`,done:eq});
+    if(eq) break; }
+  if(!lin.length||lin[lin.length-1].found===null) lin.push({line:2,i:null,comps:c,seen:n-1,found:null,done:true,notfound:true,note:`Перебір: переглянуто всі ${n} ключів — запису ${x} немає.`});
+  const bin=[]; let L=0,R=n-1; c=0;
+  bin.push({line:0,L,R,mid:null,comps:0,note:`Половинний поділ: шукаємо між позиціями 1 і ${n}.`});
+  while(true){
+    bin.push({line:1,L,R,mid:null,comps:c,note: L<=R?`Половинний поділ: ліво = ${L+1} ≤ право = ${R+1} — продовжуємо.`:`Половинний поділ: ліво > право — шукати більше ніде.`});
+    if(L>R) break;
+    const mid=Math.floor((L+R)/2);
+    bin.push({line:2,L,R,mid,comps:c,note:`Половинний поділ: середина ⌊(${L+1} + ${R+1}) / 2⌋ = ${mid+1}, ключ[сер] = ${keys[mid].k}.`});
+    c++; const eq=keys[mid].k===x;
+    bin.push({line:3,L,R,mid,comps:c,q:true,found:eq?mid:null,done:eq,note:`Половинний поділ: ${keys[mid].k} ${eq?"=":"≠"} ${x}.${eq?" Знайдено!":""}`});
+    if(eq) return {keys,lin,bin};
+    if(keys[mid].k<x){ L=mid+1; bin.push({line:4,L,R,mid,comps:c,note:`${keys[mid].k} < ${x}, тож шуканий правіше: ліво ← ${mid+2}. Ліву половину відкидаємо.`}); }
+    else { R=mid-1; bin.push({line:5,L,R,mid,comps:c,note:`${keys[mid].k} > ${x}, тож шуканий лівіше: право ← ${mid}. Праву половину відкидаємо.`}); }
+  }
+  bin.push({line:6,L,R,mid:null,comps:c,done:true,notfound:true,note:`Половинний поділ: запису ${x} немає. Знадобилось лише ${c} ${plural(c,"порівняння","порівняння","порівнянь")}.`});
+  return {keys,lin,bin};
+}
+const LIN_CODE=["для i від 1 до n:","    якщо ключ[i] = шуканий: знайдено, стоп","не знайдено"];
+const BIN_CODE=["ліво ← 1; право ← n","поки ліво ≤ право:","    сер ← ⌊(ліво + право) / 2⌋","    якщо ключ[сер] = шуканий: знайдено, стоп","    якщо ключ[сер] < шуканий: ліво ← сер + 1","    інакше: право ← сер − 1","не знайдено"];
+function renderSearchSetup(){
+  $("sTable").innerHTML=Object.keys(TABLES).map(k=>`<option value="${k}"${st.s.table===k?" selected":""}>${TABLES[k].label}</option>`).join("");
+  const t=TABLES[st.s.table], keys=t.rows.map(r=>r[0]).sort((a,b)=>a-b);
+  if(st.s.target===null||(!keys.includes(st.s.target)&&!t.missing.includes(st.s.target))) st.s.target=keys[8];
+  $("sTarget").innerHTML=keys.map(k=>`<option${k===st.s.target?" selected":""}>${k}</option>`).join("")+t.missing.map(k=>`<option value="${k}"${k===st.s.target?" selected":""}>${k} (немає в таблиці)</option>`).join("");
+}
+function codeHTML(lines,cur){ return lines.map((l,i)=>`<div class="ln${i===cur?" cur":""}"><span class="num">${i+1}</span><span>${esc(l)}</span></div>`).join(""); }
+function renderSearch(){
+  const [a,b]=st.s.pos, le=a>=0?S.lin[a]:null, be=b>=0?S.bin[b]:null;
+  $("linKeys").innerHTML=S.keys.map((k,i)=>{ let cls=""; if(le){ if(le.found===i) cls="found"; else if(le.i===i) cls="cur"; else if(i<=le.seen&&(le.i===null||i<le.i)) cls="seen"; }
+    return `<div class="key ${cls}">${k.k}<small>${esc(k.name.length>9?k.name.slice(0,8)+"…":k.name)}</small></div>`; }).join("");
+  $("binKeys").innerHTML=S.keys.map((k,i)=>{ let cls="", tag="";
+    if(be){ if(be.found===i) cls="found"; else if(be.mid===i&&be.line<=3) cls="cur"; else if(i>=be.L&&i<=be.R) cls="range"; else cls="out";
+      if(i===be.L&&be.L<=be.R) tag="ліво"; if(i===be.R&&be.L<=be.R) tag=tag?"л/п":"право"; if(be.mid===i&&be.line<=3) tag="сер"; }
+    return `<div class="key ${cls}">${tag?`<span class="tagm">${tag}</span>`:""}${k.k}<small>${esc(k.name.length>9?k.name.slice(0,8)+"…":k.name)}</small></div>`; }).join("");
+  $("linCode").innerHTML=codeHTML(LIN_CODE,le?(le.line===1?1:2):-1);
+  $("binCode").innerHTML=codeHTML(BIN_CODE,be?be.line:-1);
+  const fin=(e,which)=> e ? `${which}: ${e.comps} ${plural(e.comps,"порівняння","порівняння","порівнянь")}${e.done?(e.notfound?" — не знайдено.":" — знайдено!"):""}` : `${which}: 0 порівнянь`;
+  $("linRes").textContent=fin(le,"Перебір"); $("binRes").textContent=fin(be,"Половинний поділ");
+  const notes=[le&&le.note,be&&be.note].filter(Boolean);
+  $("sNote").textContent=notes.length?notes.join(" "):"Натисніть «Крок»: обидва алгоритми зроблять по одному кроку.";
+  const done=a>=S.lin.length-1&&b>=S.bin.length-1;
+  $("sStep").disabled=done||!!st.s.pending; $("sAuto").disabled=done||!!st.s.pending; $("sAuto").textContent=st.s.auto?"Пауза":"Авто";
+}
+function resetSearch(){ sStop(); S=buildSearch(); st.s.pos=[-1,-1]; st.s.answered=new Set(); st.s.pending=null; $("sQuiz").hidden=true; renderSearch(); }
+function sStep(){
+  if(st.s.pending) return "question";
+  if(st.s.fb){ $("sQuiz").hidden=true; st.s.fb=false; }
+  const [a,b]=st.s.pos;
+  if(a>=S.lin.length-1&&b>=S.bin.length-1) return "done";
+  const nb=S.bin[b+1];
+  if(st.s.predict&&nb&&nb.q&&!st.s.answered.has(b+1)){ sAsk(b+1); return "question"; }
+  st.s.pos=[Math.min(a+1,S.lin.length-1),Math.min(b+1,S.bin.length-1)]; renderSearch(); return "ok";
+}
+function sAsk(idx){
+  const wasAuto=st.s.auto; sStop(); const e=S.bin[idx], k=S.keys[e.mid].k, x=st.s.target;
+  const right = k===x?0 : k<x?1:2;
+  const opts=[{v:"Знайдено — стоп",c:0},{v:"Шукати праворуч (ліво ← сер + 1)",c:1},{v:"Шукати ліворуч (право ← сер − 1)",c:2}];
+  const qz=$("sQuiz"); qz.innerHTML=`<h3>ключ[сер] = ${k}, шукаємо ${x}. Що зробить алгоритм?</h3><div class="opts">${opts.map((o,j)=>`<button type="button" class="opt" data-k="${j}">${o.v}</button>`).join("")}</div><p class="feedback" id="sfb"></p>`;
+  qz.hidden=false; st.s.pending={idx,right,wasAuto};
+  qz.querySelectorAll(".opt").forEach(b=>b.addEventListener("click",()=>{
+    const j=+b.dataset.k, ok=j===right; st.scores.total++; if(ok) st.scores.ok++; saveJSON("zapyty-scores",st.scores);
+    qz.querySelectorAll(".opt").forEach((bb,i)=>{ bb.disabled=true; if(i===right) bb.classList.add("right"); else if(i===j) bb.classList.add("wrong"); });
+    const fb=$("sfb"); fb.className="feedback "+(ok?"good":"badc");
+    fb.textContent=(ok?"Правильно! ":"Ні. ")+(right===0?`${k} = ${x}.`:right===1?`${k} < ${x}, отже шуканий ключ може бути лише правіше.`:`${k} > ${x}, отже шуканий ключ може бути лише лівіше.`)+" Натисніть «Крок».";
+    st.s.answered.add(idx); st.s.pending=null; st.s.fb=true; renderTabs(); renderSearch();
+    if(wasAuto){ st.s.auto=true; st.s.timer=setTimeout(sTick,2400); renderSearch(); }
+  }));
+  renderSearch();
+}
+function sStop(){ st.s.auto=false; clearTimeout(st.s.timer); }
+function sTick(){ clearTimeout(st.s.timer); if(!st.s.auto) return; const r=sStep(); if(r==="done"){ sStop(); renderSearch(); return; } if(r==="question") return; st.s.timer=setTimeout(sTick,1100); }
+
+/* ---------- events ---------- */
+$("tblSeg").addEventListener("click",ev=>{ const b=ev.target.closest("button"); if(b) setTable(b.dataset.v); });
+$("conds").addEventListener("click",ev=>{
+  const b=ev.target.closest("button"); if(!b) return; const q=st.q, t=T();
+  if(b.id==="addCond"){ const f=t.cols.find(c=>c[1]==="num"&&c[0]!==t.key)||t.cols[1]; q.conds.push({f:f[0],op:f[1]==="num"?">":"=",v:String(t.rows[0][colIdx(t,f[0])])}); onBuilderChange(); }
+  else if(b.dataset.rm!==undefined){ q.conds.splice(+b.dataset.rm,1); onBuilderChange(); }
+  else if(b.dataset.j){ q.join=b.dataset.j; onBuilderChange(); }
+});
+$("conds").addEventListener("change",ev=>{
+  const el=ev.target, i=el.dataset.ci; if(i===undefined) return; const c=st.q.conds[+i], t=T();
+  if(el.dataset.k==="f"){ c.f=el.value; const type=colType(t,c.f); c.op=type==="num"?">":"="; c.v=String(t.rows[0][colIdx(t,c.f)]); }
+  else if(el.dataset.k==="op") c.op=el.value;
+  else c.v=el.value.trim();
+  onBuilderChange();
+});
+$("orderCtl").addEventListener("change",ev=>{ if(ev.target.id!=="ordF") return; const v=ev.target.value; st.q.order=v?{f:v,dir:st.q.order?st.q.order.dir:"ASC"}:null; onBuilderChange(); });
+$("orderCtl").addEventListener("click",ev=>{ const b=ev.target.closest("button"); if(b&&b.dataset.d){ st.q.order.dir=b.dataset.d; onBuilderChange(); } });
+$("selCtl").addEventListener("change",ev=>{ const f=ev.target.dataset.sel; if(!f) return; const t=T();
+  if(ev.target.checked) st.q.sel.push(f); else st.q.sel=st.q.sel.filter(x=>x!==f);
+  st.q.sel=t.cols.map(c=>c[0]).filter(c=>st.q.sel.includes(c)); onBuilderChange(); });
+$("granSeg").addEventListener("click",ev=>{ const b=ev.target.closest("button"); if(b){ st.gran=b.dataset.v; renderControls(); } });
+$("stepBtn").addEventListener("click",()=>{ stopAuto(); stepGroup(); renderControls(); });
+$("autoBtn").addEventListener("click",()=>{ if(st.auto){ stopAuto(); renderControls(); } else startAuto(); });
+$("resetBtn").addEventListener("click",resetRun);
+$("resetScores").addEventListener("click",()=>{ st.scores={ok:0,total:0}; saveJSON("zapyty-scores",st.scores); renderTabs(); });
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ st.mode=t.dataset.mode; stopAuto(); sStop();
+  if(st.mode==="search"){ renderTabs(); renderSearchSetup(); resetSearch(); } else resetRun(); }));
+$("sTable").addEventListener("change",ev=>{ st.s.table=ev.target.value; st.s.target=null; renderSearchSetup(); resetSearch(); });
+$("sTarget").addEventListener("change",ev=>{ st.s.target=+ev.target.value; resetSearch(); });
+$("sPredict").addEventListener("change",ev=>{ st.s.predict=ev.target.checked; resetSearch(); });
+$("sStep").addEventListener("click",()=>{ sStop(); sStep(); renderSearch(); });
+$("sAuto").addEventListener("click",()=>{ if(st.s.auto){ sStop(); renderSearch(); } else { st.s.auto=true; renderSearch(); sTick(); } });
+$("sReset").addEventListener("click",resetSearch);
+document.addEventListener("keydown",ev=>{ const tag=(ev.target.tagName||"").toLowerCase(); if(tag==="input"||tag==="select") return;
+  if(ev.key==="ArrowRight"||ev.key==="PageDown"){ ev.preventDefault();
+    if(st.mode==="search"){ sStop(); sStep(); renderSearch(); } else { stopAuto(); stepGroup(); renderControls(); } } });
+
+setTable("books");
+})();
+</script>
+</body>
+</html>
