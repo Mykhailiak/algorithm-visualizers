@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Фрагментація і дефрагментація диска — 10 клас, тема 7.2</title>
+<!--
+  Симулятор «Фрагментація і дефрагментація диска»
+  10 клас, Розділ 7. Операційні системи та їх обслуговування,
+  тема 7.2 «Операційна система Windows» (файлова система, дефрагментація).
+
+  Файл повністю самодостатній: HTML + CSS + JavaScript, без бібліотек та інтернету.
+  Відкривається подвійним клацанням у будь-якому сучасному браузері.
+
+  Що показує засіб:
+   1) диск як сітку кластерів 16×16; учень створює і видаляє файли;
+   2) новий файл займає вільні «дірки» і тому розбивається на фрагменти;
+   3) спрощену таблицю розміщення файлів (FAT) — ланцюжок кластерів кожного файлу;
+   4) покрокове читання файлу з підрахунком переміщень головки;
+   5) покроковий алгоритм дефрагментації та порівняння показників «до / після».
+
+  Як змінити під себе:
+   - розмір диска — константи COLS і ROWS (розділ 2 скрипта);
+   - розмір кластера в кілобайтах — CLUSTER_KB;
+   - готові сценарії — масив PRESETS;
+   - кольори файлів — масив FILE_COLORS;
+   - кольори інтерфейсу — CSS-змінні в блоці :root.
+-->
+<style>
+/* ======================= 1. Оформлення ======================= */
+:root{
+  --bg:#eef2f7; --panel:#fff; --ink:#13202f; --muted:#5b6b7c; --line:#c7d3e0;
+  --accent:#1f5fbf; --accent-soft:#dce8fb;
+  --ok:#17804a; --ok-soft:#d8f0e2;
+  --warn:#b9690a; --warn-soft:#fdeccf;
+  --bad:#b32020; --bad-soft:#fbdcdc;
+  --free:#eaeff5;      /* вільний кластер */
+  --fs:17px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg); color:var(--ink); font-family:"Segoe UI",Tahoma,Verdana,sans-serif;
+     font-size:var(--fs); line-height:1.45}
+header.top{background:#13202f; color:#fff; padding:14px 20px}
+header.top h1{margin:0 0 4px; font-size:1.45em}
+header.top .sub{color:#b9c9db; font-size:.92em}
+main{padding:16px 20px 28px; max-width:1500px; margin:0 auto}
+.grid{display:grid; grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr); gap:16px}
+@media (max-width:1150px){ .grid{grid-template-columns:1fr} }
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:12px;
+       padding:14px 16px; margin-bottom:14px}
+.panel h2{margin:0 0 10px; font-size:1.1em}
+.panel h3{margin:14px 0 6px; font-size:1em; color:var(--muted)}
+.row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+label.fld{display:flex; flex-direction:column; gap:4px; font-size:.9em; color:var(--muted)}
+input[type=text],input[type=number],select{font:inherit; padding:8px 10px; border:1px solid var(--line);
+  border-radius:8px; background:#fff; color:var(--ink)}
+input[type=number]{width:90px}
+select{min-width:150px}
+button.btn{font:inherit; font-weight:600; cursor:pointer; border:1px solid var(--accent);
+  background:var(--accent); color:#fff; padding:9px 16px; border-radius:9px}
+button.btn.ghost{background:#fff; color:var(--accent)}
+button.btn.quiet{background:#fff; color:var(--muted); border-color:var(--line)}
+button.btn.go{background:var(--ok); border-color:var(--ok)}
+button.btn:disabled{opacity:.45; cursor:not-allowed}
+.controls{display:flex; gap:10px; flex-wrap:wrap; align-items:center; background:var(--accent-soft);
+  border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin-bottom:12px}
+.controls .spacer{flex:1}
+.controls input[type=range]{width:160px}
+.note{background:#fff; border:1px solid var(--line); border-left:6px solid var(--accent);
+  border-radius:10px; padding:12px 14px; min-height:62px; font-size:1.02em}
+.note.ok{border-left-color:var(--ok)}
+.note.warn{border-left-color:var(--warn)}
+.note.bad{border-left-color:var(--bad)}
+.note b{color:var(--accent)}
+.err{color:var(--bad); font-weight:600; min-height:1.3em; font-size:.92em}
+.hint{color:var(--muted); font-size:.88em}
+.mono{font-family:Consolas,"Courier New",monospace}
+table{border-collapse:collapse; width:100%; font-size:.94em}
+th,td{border:1px solid var(--line); padding:5px 7px; text-align:center}
+th{background:#f1f5fa; color:var(--muted); font-weight:600}
+td.name{text-align:left; font-weight:600}
+.kv{display:flex; justify-content:space-between; gap:10px; border-bottom:1px dashed var(--line); padding:5px 0}
+.kv:last-child{border-bottom:none}
+.kv b{font-variant-numeric:tabular-nums}
+footer.bottom{text-align:center; color:var(--muted); font-size:.9em; padding:14px;
+  border-top:1px solid var(--line); background:#fff}
+
+/* ---- сітка кластерів ---- */
+.disk-wrap{background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px}
+.disk-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:10px; flex-wrap:wrap}
+.disk{display:grid; gap:3px}
+.disk .hdr{font-size:.72em; color:var(--muted); text-align:center; align-self:center}
+.cl{
+  position:relative; aspect-ratio:1/1; border-radius:5px; background:var(--free);
+  border:2px solid transparent; display:flex; align-items:center; justify-content:center;
+  font-size:.62em; font-weight:700; color:#fff; overflow:hidden;
+}
+.cl.free{color:#aab6c4; background:var(--free)}
+.cl.head{border-color:#13202f; box-shadow:0 0 0 3px rgba(19,32,47,.18)}
+.cl.src{border-color:var(--bad); box-shadow:0 0 0 3px var(--bad-soft)}
+.cl.dst{border-color:var(--ok); box-shadow:0 0 0 3px var(--ok-soft)}
+.cl.read{border-color:var(--accent)}
+.legend{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+.lg{display:flex; align-items:center; gap:6px; font-size:.86em; border:1px solid var(--line);
+    border-radius:20px; padding:3px 10px; background:#fff; cursor:pointer}
+.lg .sw{width:14px; height:14px; border-radius:4px}
+.lg.off{opacity:.45}
+.chain{font-family:Consolas,"Courier New",monospace; font-size:.86em; word-break:break-word}
+.frag{display:inline-block; border:1px solid var(--line); border-radius:6px; padding:0 5px; margin:1px 2px; background:#f6f9fd}
+.badge{display:inline-block; padding:1px 8px; border-radius:20px; font-size:.84em; font-weight:600;
+  border:1px solid var(--line); background:#f4f7fb}
+.badge.ok{background:var(--ok-soft); color:var(--ok); border-color:var(--ok)}
+.badge.bad{background:var(--bad-soft); color:var(--bad); border-color:var(--bad)}
+ul.plain{margin:6px 0 0; padding-left:20px}
+ul.plain li{margin-bottom:4px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Симулятор «Фрагментація і дефрагментація диска»</h1>
+  <div class="sub">10 клас · Розділ 7. Операційні системи та їх обслуговування · Тема 7.2 «Операційна система Windows»</div>
+</header>
+
+<main>
+<div class="grid">
+
+  <!-- ---------- Ліва колонка: диск ---------- -->
+  <div>
+    <div class="panel">
+      <h2>Операції з файлами</h2>
+      <div class="row">
+        <label class="fld">Готовий сценарій
+          <select id="preset" onchange="usePreset()"></select>
+        </label>
+        <label class="fld">Ім'я файлу
+          <input type="text" id="f-name" value="реферат.docx" spellcheck="false">
+        </label>
+        <label class="fld">Розмір, кластерів
+          <input type="number" id="f-size" min="1" max="60" value="9">
+        </label>
+        <button class="btn" onclick="opCreate()">Записати файл</button>
+        <label class="fld">Видалити файл
+          <select id="f-del"></select>
+        </label>
+        <button class="btn quiet" onclick="opDelete()">Видалити</button>
+        <button class="btn quiet" onclick="clearDisk()">Очистити диск</button>
+      </div>
+      <div class="err" id="op-err"></div>
+      <div class="hint">Один кластер — найменша частина диска, яку ОС виділяє файлу. Тут 1 кластер = <span id="ckb"></span> КБ.</div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="btn-step" onclick="player.next()">Крок ▶</button>
+      <button class="btn ghost" id="btn-play" onclick="player.toggle()">Старт</button>
+      <button class="btn quiet" id="btn-end" onclick="player.toEnd()">До кінця ⏭</button>
+      <button class="btn quiet" onclick="stopScenario()">Скинути</button>
+      <div class="spacer"></div>
+      <label class="fld">Швидкість
+        <input type="range" id="speed" min="60" max="1200" step="20" value="320">
+      </label>
+    </div>
+
+    <div class="disk-wrap">
+      <div class="disk-head">
+        <div><b>Диск:</b> <span id="d-total"></span> кластерів, зайнято <span id="d-used">0</span>, вільно <span id="d-free">0</span></div>
+        <div><b>Головка читання:</b> <span class="mono" id="d-headpos">—</span></div>
+      </div>
+      <div class="disk" id="disk"></div>
+      <div class="legend" id="legend"></div>
+      <div class="hint" style="margin-top:8px">Номер кластера = номер рядка (ліва колонка) + номер стовпця (верхній рядок). Натисніть на файл у легенді, щоб підсвітити його кластери.</div>
+    </div>
+
+    <div class="note" id="note" style="margin-top:12px">
+      Виберіть сценарій або запишіть кілька файлів, видаліть один-два з них і запишіть новий — побачите, як виникає фрагментація.
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <h2>Дії для демонстрації</h2>
+      <div class="row">
+        <label class="fld">Файл для читання
+          <select id="f-read"></select>
+        </label>
+        <button class="btn ghost" onclick="startRead()">Прочитати файл ▶</button>
+        <button class="btn go" onclick="startDefrag()">Дефрагментувати диск ▶</button>
+      </div>
+      <div class="hint">Читання показує, скільки разів головка «перестрибує» між фрагментами. Дефрагментація переставляє кластери так, щоб кожен файл став суцільним.</div>
+    </div>
+  </div>
+
+  <!-- ---------- Права колонка: FAT і показники ---------- -->
+  <div>
+    <div class="panel">
+      <h2>Таблиця розміщення файлів (спрощена FAT)</h2>
+      <div id="fat"></div>
+      <div class="hint" style="margin-top:8px">Для кожного файлу ОС зберігає ланцюжок кластерів. Кожна рамка — один суцільний фрагмент.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Показники читання</h2>
+      <div class="kv"><span>Файл</span><b id="r-file">—</b></div>
+      <div class="kv"><span>Фрагментів</span><b id="r-frags">—</b></div>
+      <div class="kv"><span>Прочитано кластерів</span><b id="r-read">0</b></div>
+      <div class="kv"><span>Переміщень головки (кластерів)</span><b id="r-move">0</b></div>
+      <div class="kv"><span>Стрибків між фрагментами</span><b id="r-jumps">0</b></div>
+    </div>
+
+    <div class="panel">
+      <h2>Дефрагментація: до і після</h2>
+      <table id="cmp"><tbody></tbody></table>
+      <div class="hint" style="margin-top:8px">Переміщення головки — сумарна відстань у кластерах, яку головка проходить під час читання всього файлу.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Що показує засіб</h2>
+      <ul class="plain">
+        <li>файл зберігається не обов'язково в суцільній ділянці диска;</li>
+        <li>після видалення файлів утворюються «дірки» потрібного і непотрібного розміру;</li>
+        <li>новий файл заповнює дірки і стає фрагментованим;</li>
+        <li>читання фрагментованого файлу вимагає більше переміщень головки, тобто більше часу;</li>
+        <li>дефрагментація перебудовує розміщення, але сама є тривалою операцією.</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+</main>
+
+<footer class="bottom">Розроблено автором</footer>
+
+<script>
+"use strict";
+
+/* ======================= 2. Налаштування ======================= */
+const COLS = 16, ROWS = 16;          // розмір сітки кластерів
+const TOTAL = COLS * ROWS;           // усього кластерів
+const CLUSTER_KB = 4;                // розмір одного кластера в КБ
+
+const FILE_COLORS = ["#2f6fd0","#cf5b2a","#2e8b57","#8b5cb8","#c9972b","#2b9aa8","#b2365f","#5c7a2a"];
+
+/* Готові сценарії: ["new", ім'я, розмір] або ["del", ім'я] */
+const PRESETS = [
+  { name:"1. Чистий диск: файли записано один за одним",
+    ops:[ ["new","документ.txt",10], ["new","фото.jpg",14], ["new","музика.mp3",20] ] },
+
+  { name:"2. Робочий диск: кілька файлів видалено",
+    ops:[ ["new","документ.txt",10], ["new","фото.jpg",14], ["new","музика.mp3",20],
+          ["new","таблиця.xlsx",8], ["new","архів.zip",12],
+          ["del","фото.jpg"], ["del","таблиця.xlsx"],
+          ["new","презентація.pptx",18], ["new","звіт.docx",11] ] },
+
+  { name:"3. Сильно фрагментований диск",
+    ops:[ ["new","документ.txt",8],  ["new","фото.jpg",6],    ["new","музика.mp3",10],
+          ["new","таблиця.xlsx",5],  ["new","архів.zip",9],   ["new","програма.exe",7],
+          ["del","фото.jpg"], ["del","таблиця.xlsx"], ["del","програма.exe"],
+          ["new","відео.mp4",16], ["del","музика.mp3"], ["new","резервна_копія.zip",14] ] }
+];
+
+/* ======================= 3. Стан диска =======================
+   disk[i] — вміст кластера i: -1 вільний, інакше код блоку,
+   де код = індекс файлу * 1000 + номер блоку у файлі. */
+let disk = new Array(TOTAL).fill(-1);
+let files = [];          // { name, color, size, deleted }
+let highlightFile = -1;  // підсвічений у легенді файл
+let view = {};           // що підсвітити на цьому кроці
+let cmpBefore = null;    // показники до дефрагментації
+
+function enc(fileIdx, blockIdx){ return fileIdx * 1000 + blockIdx; }
+function codeFile(code){ return Math.floor(code / 1000); }
+function codeBlock(code){ return code % 1000; }
+
+function liveFiles(){
+  return files.map(function(f,i){ return { f:f, i:i }; })
+              .filter(function(x){ return !x.f.deleted; });
+}
+function fileByName(name){
+  for(let i=0;i<files.length;i++) if(!files[i].deleted && files[i].name === name) return i;
+  return -1;
+}
+function usedCount(){ return disk.filter(function(c){ return c !== -1; }).length; }
+
+/* Ланцюжок кластерів файлу, упорядкований за номером блоку */
+function chainOf(fileIdx, d){
+  d = d || disk;
+  const arr = [];
+  for(let c=0;c<TOTAL;c++) if(d[c] !== -1 && codeFile(d[c]) === fileIdx) arr.push({ cl:c, b:codeBlock(d[c]) });
+  arr.sort(function(a,b){ return a.b - b.b; });
+  return arr.map(function(x){ return x.cl; });
+}
+
+/* Розбиття ланцюжка на суцільні фрагменти */
+function fragmentsOf(chain){
+  const res = [];
+  let cur = [];
+  for(let i=0;i<chain.length;i++){
+    if(i === 0 || chain[i] === chain[i-1] + 1) cur.push(chain[i]);
+    else { res.push(cur); cur = [chain[i]]; }
+  }
+  if(cur.length) res.push(cur);
+  return res;
+}
+
+/* Сумарна відстань переміщення головки під час читання файлу */
+function headMoves(chain){
+  let s = 0;
+  for(let i=1;i<chain.length;i++) s += Math.abs(chain[i] - chain[i-1]);
+  return s;
+}
+
+/* ======================= 4. Покроковий плеєр ======================= */
+function StepPlayer(opts){
+  this.apply = opts.apply; this.speedEl = opts.speedEl;
+  this.btnStep = opts.btnStep; this.btnPlay = opts.btnPlay; this.btnEnd = opts.btnEnd;
+  this.steps = []; this.index = -1; this.timer = null; this.playing = false;
+}
+StepPlayer.prototype.load = function(steps){
+  this.stop(); this.steps = steps || []; this.index = -1;
+  if(this.steps.length) this.next();
+  this.refresh();
+};
+StepPlayer.prototype.clear = function(){ this.stop(); this.steps = []; this.index = -1; this.refresh(); };
+StepPlayer.prototype.next = function(){
+  if(this.index >= this.steps.length - 1){ this.stop(); return false; }
+  this.index++; this.apply(this.steps[this.index], this.index); this.refresh(); return true;
+};
+StepPlayer.prototype.toEnd = function(){
+  this.stop();
+  while(this.index < this.steps.length - 1){ this.index++; this.apply(this.steps[this.index], this.index); }
+  this.refresh();
+};
+StepPlayer.prototype.toggle = function(){ if(this.playing) this.stop(); else this.play(); };
+StepPlayer.prototype.play = function(){
+  if(this.index >= this.steps.length - 1) return;
+  this.playing = true; this.refresh();
+  const self = this;
+  const tick = function(){
+    if(!self.playing) return;
+    if(!self.next()){ self.stop(); return; }
+    self.timer = setTimeout(tick, Number(self.speedEl.value));
+  };
+  this.timer = setTimeout(tick, Number(this.speedEl.value));
+};
+StepPlayer.prototype.stop = function(){
+  this.playing = false;
+  if(this.timer){ clearTimeout(this.timer); this.timer = null; }
+  this.refresh();
+};
+StepPlayer.prototype.refresh = function(){
+  const atEnd = this.index >= this.steps.length - 1;
+  this.btnStep.disabled = atEnd; this.btnPlay.disabled = atEnd; this.btnEnd.disabled = atEnd;
+  this.btnPlay.textContent = this.playing ? "Пауза" : "Старт";
+};
+
+const player = new StepPlayer({
+  apply: applyStep,
+  speedEl: document.getElementById("speed"),
+  btnStep: document.getElementById("btn-step"),
+  btnPlay: document.getElementById("btn-play"),
+  btnEnd:  document.getElementById("btn-end")
+});
+
+/* ======================= 5. Малювання ======================= */
+const cellEls = [];
+
+function buildGrid(){
+  const box = document.getElementById("disk");
+  box.style.gridTemplateColumns = "26px repeat(" + COLS + ", 1fr)";
+  box.innerHTML = "";
+  // верхній рядок із номерами стовпців
+  box.appendChild(Object.assign(document.createElement("div"), { className:"hdr", textContent:"" }));
+  for(let c=0;c<COLS;c++){
+    box.appendChild(Object.assign(document.createElement("div"), { className:"hdr", textContent:String(c) }));
+  }
+  for(let r=0;r<ROWS;r++){
+    box.appendChild(Object.assign(document.createElement("div"), { className:"hdr", textContent:String(r*COLS) }));
+    for(let c=0;c<COLS;c++){
+      const idx = r*COLS + c;
+      const d = document.createElement("div");
+      d.className = "cl free";
+      d.id = "cl" + idx;
+      box.appendChild(d);
+      cellEls[idx] = d;
+    }
+  }
+  document.getElementById("d-total").textContent = String(TOTAL);
+  document.getElementById("ckb").textContent = String(CLUSTER_KB);
+}
+
+function render(){
+  for(let i=0;i<TOTAL;i++){
+    const el = cellEls[i], code = disk[i];
+    let cls = "cl", bg = "", label = "", title = "Кластер " + i + " — вільний";
+    if(code === -1){ cls += " free"; }
+    else{
+      const fi = codeFile(code), f = files[fi];
+      bg = f.color;
+      label = f.tag;
+      title = "Кластер " + i + " — файл «" + f.name + "», блок " + (codeBlock(code)+1) + " з " + f.size;
+    }
+    if(view.head === i) cls += " head";
+    if(view.src === i) cls += " src";
+    if(view.dst === i) cls += " dst";
+    if(view.readSet && view.readSet[i]) cls += " read";
+    el.className = cls;
+    el.style.background = bg || "";
+    el.style.opacity = (highlightFile >= 0 && code !== -1 && codeFile(code) !== highlightFile) ? "0.25" : "1";
+    el.textContent = label;
+    el.title = title;
+  }
+  const used = usedCount();
+  document.getElementById("d-used").textContent = String(used);
+  document.getElementById("d-free").textContent = String(TOTAL - used);
+  document.getElementById("d-headpos").textContent = (view.head === undefined ? "—" : String(view.head));
+  renderLegend();
+  renderFat();
+  refreshSelects();
+}
+
+function renderLegend(){
+  const box = document.getElementById("legend");
+  const lf = liveFiles();
+  if(!lf.length){ box.innerHTML = '<span class="hint">на диску немає файлів</span>'; return; }
+  box.innerHTML = "";
+  lf.forEach(function(x){
+    const d = document.createElement("div");
+    d.className = "lg" + (highlightFile >= 0 && highlightFile !== x.i ? " off" : "");
+    d.innerHTML = '<span class="sw" style="background:'+x.f.color+'"></span>'
+      + '<b>'+x.f.tag+'</b> '+x.f.name+' <span class="hint">('+x.f.size+" кл. · "+(x.f.size*CLUSTER_KB)+" КБ)</span>";
+    d.onclick = function(){ highlightFile = (highlightFile === x.i ? -1 : x.i); render(); };
+    box.appendChild(d);
+  });
+}
+
+function renderFat(){
+  const box = document.getElementById("fat");
+  const lf = liveFiles();
+  if(!lf.length){ box.innerHTML = '<span class="hint">таблиця порожня</span>'; return; }
+  let html = "<table><tbody><tr><th>Файл</th><th>Ланцюжок кластерів</th><th>Фрагм.</th></tr>";
+  lf.forEach(function(x){
+    const chain = chainOf(x.i);
+    const frs = fragmentsOf(chain);
+    const chainHtml = frs.map(function(fr){
+      const txt = fr.length > 2 ? (fr[0] + "…" + fr[fr.length-1]) : fr.join(", ");
+      return '<span class="frag">'+txt+'</span>';
+    }).join("→");
+    const badge = frs.length === 1 ? '<span class="badge ok">1</span>' : '<span class="badge bad">'+frs.length+'</span>';
+    html += "<tr><td class='name'><span style='color:"+x.f.color+"'>■</span> "+x.f.name+"</td>"
+          + "<td class='chain' style='text-align:left'>"+chainHtml+"</td><td>"+badge+"</td></tr>";
+  });
+  html += "</tbody></table>";
+  box.innerHTML = html;
+}
+
+function refreshSelects(){
+  const lf = liveFiles();
+  [["f-del", "— вибрати файл —"], ["f-read", "— вибрати файл —"]].forEach(function(pair){
+    const sel = document.getElementById(pair[0]);
+    const old = sel.value;
+    sel.innerHTML = "";
+    sel.appendChild(new Option(pair[1], ""));
+    lf.forEach(function(x){ sel.appendChild(new Option(x.f.name, x.f.name)); });
+    if(lf.some(function(x){ return x.f.name === old; })) sel.value = old;
+  });
+}
+
+function setNote(text, cls){
+  const n = document.getElementById("note");
+  n.className = "note" + (cls ? " " + cls : "");
+  n.innerHTML = text;
+}
+
+/* ======================= 6. Операції з файлами ======================= */
+function nextTag(){
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const usedTags = liveFiles().map(function(x){ return x.f.tag; });
+  for(let i=0;i<letters.length;i++) if(usedTags.indexOf(letters[i]) < 0) return letters[i];
+  return "?";
+}
+
+function createFile(name, size, quiet){
+  const err = document.getElementById("op-err");
+  if(!name){ if(!quiet) err.textContent = "Введіть ім'я файлу."; return false; }
+  if(fileByName(name) >= 0){ if(!quiet) err.textContent = "Файл з таким іменем уже є на диску."; return false; }
+  size = Math.floor(Number(size));
+  if(!(size >= 1 && size <= 60)){ if(!quiet) err.textContent = "Розмір має бути цілим числом від 1 до 60 кластерів."; return false; }
+  const freeCl = [];
+  for(let c=0;c<TOTAL && freeCl.length < size;c++) if(disk[c] === -1) freeCl.push(c);
+  if(freeCl.length < size){
+    if(!quiet) err.textContent = "Недостатньо вільних кластерів: потрібно " + size + ", вільно " + (TOTAL - usedCount()) + ".";
+    return false;
+  }
+  const fi = files.length;
+  files.push({ name:name, size:size, color:FILE_COLORS[fi % FILE_COLORS.length], tag:nextTag(), deleted:false });
+  freeCl.forEach(function(c, b){ disk[c] = enc(fi, b); });
+  if(!quiet) err.textContent = "";
+  const frs = fragmentsOf(chainOf(fi)).length;
+  return { fi:fi, frags:frs };
+}
+
+function opCreate(){
+  stopScenario(true);
+  const name = document.getElementById("f-name").value.trim();
+  const size = document.getElementById("f-size").value;
+  const res = createFile(name, size, false);
+  if(!res) { render(); return; }
+  render();
+  const f = files[res.fi];
+  setNote(res.frags === 1
+    ? "Файл «<b>"+f.name+"</b>» записано в <b>один суцільний фрагмент</b>: на диску була достатньо велика вільна ділянка."
+    : "Файл «<b>"+f.name+"</b>» розбито на <b>"+res.frags+" фрагменти</b>: суцільної вільної ділянки на "+f.size+" кластерів не знайшлося, тому ОС заповнила кілька «дірок». Так виникає <b>фрагментація</b>.",
+    res.frags === 1 ? "ok" : "warn");
+}
+
+function opDelete(){
+  stopScenario(true);
+  const name = document.getElementById("f-del").value;
+  const err = document.getElementById("op-err");
+  if(!name){ err.textContent = "Виберіть файл для видалення."; return; }
+  err.textContent = "";
+  deleteFile(name);
+  render();
+  setNote("Файл «<b>"+name+"</b>» видалено. Його кластери стали вільними, але вони розкидані по диску — утворилися «дірки». Самі дані ОС не стирає, вона лише позначає кластери як вільні.", "warn");
+}
+
+function deleteFile(name){
+  const fi = fileByName(name);
+  if(fi < 0) return;
+  for(let c=0;c<TOTAL;c++) if(disk[c] !== -1 && codeFile(disk[c]) === fi) disk[c] = -1;
+  files[fi].deleted = true;
+  if(highlightFile === fi) highlightFile = -1;
+}
+
+function clearDisk(){
+  stopScenario(true);
+  disk = new Array(TOTAL).fill(-1);
+  files = []; highlightFile = -1; cmpBefore = null;
+  document.getElementById("op-err").textContent = "";
+  resetReadStats();
+  renderCmp(null, null);
+  render();
+  setNote("Диск очищено. Запишіть кілька файлів, потім видаліть один-два з них і запишіть новий.");
+}
+
+function usePreset(){
+  const sel = document.getElementById("preset");
+  if(sel.value === "") return;
+  const p = PRESETS[Number(sel.value)];
+  clearDisk();
+  p.ops.forEach(function(op){
+    if(op[0] === "new") createFile(op[1], op[2], true);
+    else deleteFile(op[1]);
+  });
+  render();
+  const fragged = liveFiles().filter(function(x){ return fragmentsOf(chainOf(x.i)).length > 1; });
+  setNote("Сценарій «"+p.name+"» застосовано. На диску <b>"+liveFiles().length+"</b> файлів, із них фрагментованих — <b>"+fragged.length+"</b>."
+    + (fragged.length ? " Перегляньте таблицю розміщення файлів: ланцюжки цих файлів складаються з кількох фрагментів." : " Усі файли лежать суцільно."),
+    fragged.length ? "warn" : "ok");
+}
+
+(function initPresets(){
+  const sel = document.getElementById("preset");
+  sel.appendChild(new Option("— вибрати сценарій —",""));
+  PRESETS.forEach(function(p,i){ sel.appendChild(new Option(p.name, String(i))); });
+})();
+
+/* ======================= 7. Читання файлу ======================= */
+function resetReadStats(){
+  document.getElementById("r-file").textContent = "—";
+  document.getElementById("r-frags").textContent = "—";
+  document.getElementById("r-read").textContent = "0";
+  document.getElementById("r-move").textContent = "0";
+  document.getElementById("r-jumps").textContent = "0";
+}
+
+function startRead(){
+  const name = document.getElementById("f-read").value;
+  const err = document.getElementById("op-err");
+  if(!name){ err.textContent = "Виберіть файл для читання."; return; }
+  err.textContent = "";
+  const fi = fileByName(name);
+  const chain = chainOf(fi);
+  const frs = fragmentsOf(chain);
+  highlightFile = fi;
+  resetReadStats();
+  document.getElementById("r-file").textContent = name;
+  document.getElementById("r-frags").textContent = String(frs.length);
+
+  const steps = [];
+  const readSet = {};
+  let moves = 0, jumps = 0;
+  steps.push({
+    kind:"read", head:chain[0], readSet:Object.assign({}, readSet),
+    stats:{ read:0, move:0, jumps:0 },
+    note:"Читання файлу «<b>"+name+"</b>». ОС дивиться в таблицю розміщення: перший блок лежить у кластері <b>"+chain[0]+"</b>. Головка переміщується до нього."
+  });
+  for(let i=0;i<chain.length;i++){
+    readSet[chain[i]] = true;
+    let note;
+    if(i === 0){
+      note = "Прочитано блок 1 з кластера <b>"+chain[0]+"</b>.";
+    } else {
+      const d = Math.abs(chain[i] - chain[i-1]);
+      moves += d;
+      if(chain[i] !== chain[i-1] + 1){
+        jumps++;
+        note = "Наступний блок лежить не поряд: кластер <b>"+chain[i]+"</b> замість "+(chain[i-1]+1)+
+               ". Головка <b>перестрибує на "+d+" кластерів</b> — це новий фрагмент (стрибків: "+jumps+").";
+      } else {
+        note = "Наступний блок лежить у сусідньому кластері <b>"+chain[i]+"</b>. Головка зсувається на 1 кластер — читання йде швидко.";
+      }
+    }
+    steps.push({
+      kind:"read", head:chain[i], readSet:Object.assign({}, readSet),
+      stats:{ read:i+1, move:moves, jumps:jumps }, note:note
+    });
+  }
+  steps.push({
+    kind:"read", head:chain[chain.length-1], readSet:Object.assign({}, readSet),
+    stats:{ read:chain.length, move:moves, jumps:jumps }, done:true,
+    note:"Файл прочитано. Фрагментів — <b>"+frs.length+"</b>, стрибків головки — <b>"+jumps+"</b>, сумарне переміщення — <b>"+moves+" кластерів</b>."
+      + (frs.length > 1
+          ? " Якби файл лежав суцільно, переміщення становило б лише <b>"+(chain.length-1)+"</b> кластерів."
+          : " Це найкращий можливий результат: файл лежить суцільно.")
+  });
+  player.load(steps);
+}
+
+/* ======================= 8. Дефрагментація ======================= */
+/* Алгоритм: файли впорядковуються за першим кластером; далі кожен блок
+   по черзі переноситься на своє місце з початку диска. Якщо потрібне
+   місце зайняте «чужим» блоком, той блок спочатку відсувається у вільний
+   кластер. Так само працюють прості дефрагментатори. */
+function startDefrag(){
+  const lf = liveFiles();
+  if(!lf.length){ document.getElementById("op-err").textContent = "На диску немає файлів."; return; }
+  document.getElementById("op-err").textContent = "";
+  highlightFile = -1;
+
+  cmpBefore = measureAll();
+
+  const d = disk.slice();
+  const order = lf.slice().sort(function(a,b){
+    return chainOf(a.i, d)[0] - chainOf(b.i, d)[0];
+  });
+  const target = [];   // послідовність блоків, якою має стати початок диска
+  order.forEach(function(x){
+    chainOf(x.i, d).forEach(function(cl, b){ target.push(enc(x.i, codeBlock(d[cl]))); });
+  });
+
+  const steps = [];
+  steps.push({
+    kind:"defrag", disk:d.slice(),
+    note:"<b>Початок дефрагментації.</b> Мета — розмістити файли один за одним від початку диска так, щоб кожен файл займав суцільну ділянку. Усього блоків для впорядкування: <b>"+target.length+"</b>."
+  });
+
+  const findCode = function(arr, code){
+    for(let i=0;i<arr.length;i++) if(arr[i] === code) return i;
+    return -1;
+  };
+  const findFree = function(arr, fromIdx){
+    for(let i=fromIdx;i<TOTAL;i++) if(arr[i] === -1) return i;
+    for(let i=0;i<TOTAL;i++) if(arr[i] === -1) return i;
+    return -1;
+  };
+
+  let moves = 0;
+  for(let pos=0; pos<target.length; pos++){
+    const want = target[pos];
+    if(d[pos] === want) continue;                 // блок уже на своєму місці
+    const f = files[codeFile(want)];
+    const bNum = codeBlock(want) + 1;
+
+    if(d[pos] !== -1){
+      // місце зайняте чужим блоком — відсуваємо його у вільний кластер
+      const other = d[pos];
+      const of = files[codeFile(other)];
+      const free = findFree(d, target.length);
+      if(free < 0) break;
+      d[free] = other; d[pos] = -1; moves++;
+      steps.push({
+        kind:"defrag", disk:d.slice(), src:pos, dst:free,
+        note:"Кластер <b>"+pos+"</b> має дістатися файлу «"+f.name+"», але там лежить блок "+(codeBlock(other)+1)+
+             " файлу «"+of.name+"». Цей блок <b>тимчасово переносимо</b> у вільний кластер <b>"+free+"</b>. (Перенесень: "+moves+")"
+      });
+    }
+    const from = findCode(d, want);
+    if(from < 0) continue;
+    d[pos] = want; d[from] = -1; moves++;
+    steps.push({
+      kind:"defrag", disk:d.slice(), src:from, dst:pos,
+      note:"Переносимо блок <b>"+bNum+"</b> файлу «<b>"+f.name+"</b>» з кластера <b>"+from+"</b> у кластер <b>"+pos+"</b>. Тепер цей блок стоїть одразу за попереднім. (Перенесень: "+moves+")"
+    });
+  }
+
+  steps.push({
+    kind:"defrag", disk:d.slice(), done:true, moves:moves,
+    note:"<b>Дефрагментацію завершено.</b> Виконано перенесень кластерів: <b>"+moves+"</b>. Тепер кожен файл займає суцільну ділянку, тому головці не потрібно перестрибувати між фрагментами. Порівняйте показники в таблиці «до і після»."
+  });
+  player.load(steps);
+}
+
+function measureAll(){
+  const rows = liveFiles().map(function(x){
+    const chain = chainOf(x.i);
+    return { name:x.f.name, frags:fragmentsOf(chain).length, moves:headMoves(chain), size:x.f.size };
+  });
+  return rows;
+}
+
+function renderCmp(before, after){
+  const tb = document.querySelector("#cmp tbody");
+  if(!before){
+    tb.innerHTML = "<tr><th>Файл</th><th>Фрагментів</th><th>Переміщень головки</th></tr>"
+                 + '<tr><td colspan="3" class="hint">дефрагментацію ще не виконано</td></tr>';
+    return;
+  }
+  let html = "<tr><th rowspan='2'>Файл</th><th colspan='2'>Фрагментів</th><th colspan='2'>Переміщень головки</th></tr>"
+           + "<tr><th>до</th><th>після</th><th>до</th><th>після</th></tr>";
+  let bf = 0, af = 0, bm = 0, am = 0;
+  before.forEach(function(r){
+    const a = after ? after.filter(function(y){ return y.name === r.name; })[0] : null;
+    bf += r.frags; bm += r.moves;
+    if(a){ af += a.frags; am += a.moves; }
+    html += "<tr><td class='name'>"+r.name+"</td>"
+          + "<td>"+r.frags+"</td><td>"+(a ? a.frags : "—")+"</td>"
+          + "<td>"+r.moves+"</td><td>"+(a ? a.moves : "—")+"</td></tr>";
+  });
+  html += "<tr><td class='name'>Разом</td><td><b>"+bf+"</b></td><td><b>"+(after?af:"—")+"</b></td>"
+        + "<td><b>"+bm+"</b></td><td><b>"+(after?am:"—")+"</b></td></tr>";
+  if(after && bm > 0){
+    const pct = Math.round((bm - am) / bm * 100);
+    html += "<tr><td class='name'>Виграш</td><td colspan='4'><b>"+pct+" %</b> менше переміщень головки</td></tr>";
+  }
+  tb.innerHTML = html;
+}
+
+/* ======================= 9. Застосування кроку ======================= */
+function applyStep(step){
+  view = {};
+  if(step.kind === "read"){
+    view.head = step.head;
+    view.readSet = step.readSet;
+    document.getElementById("r-read").textContent = String(step.stats.read);
+    document.getElementById("r-move").textContent = String(step.stats.move);
+    document.getElementById("r-jumps").textContent = String(step.stats.jumps);
+  }
+  if(step.kind === "defrag"){
+    disk = step.disk.slice();
+    if(step.src !== undefined) view.src = step.src;
+    if(step.dst !== undefined) view.dst = step.dst;
+    if(step.done){
+      renderCmp(cmpBefore, measureAll());
+      resetReadStats();
+    }
+  }
+  render();
+  setNote(step.note, step.done ? "ok" : (step.kind === "defrag" && step.src !== undefined ? "warn" : ""));
+}
+
+function stopScenario(silent){
+  player.clear();
+  view = {};
+  if(!silent){
+    render();
+    setNote("Показ скинуто. Можна записати або видалити файли, прочитати файл чи виконати дефрагментацію.");
+  }
+}
+
+/* ======================= 10. Початковий стан ======================= */
+buildGrid();
+document.getElementById("preset").value = "1";
+usePreset();
+renderCmp(null, null);
+resetReadStats();
+</script>
+</body>
+</html>

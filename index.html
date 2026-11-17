@@ -9,19 +9,19 @@
 :root{
   --bg:#eef2f7; --panel:#fff; --ink:#111827; --muted:#475569; --line:#cbd5e1;
   --accent:#1d4ed8; --accent-soft:#dbeafe; --head:#0f172a; --chip:#1e3a8a;
-  --c1:#7c3aed; --c4:#0f766e;
+  --c1:#7c3aed; --c4:#0f766e; --c7:#b45309;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --bg:#0b1220; --panel:#131c2e; --ink:#e5e9f2; --muted:#a3b0c5; --line:#2a3750;
     --accent:#6ea0ff; --accent-soft:#1c2a4a; --head:#050a14; --chip:#23407f;
-    --c1:#b794f6; --c4:#4fd1c5;
+    --c1:#b794f6; --c4:#4fd1c5; --c7:#f6ad55;
   }
 }
 :root[data-theme="dark"]{
   --bg:#0b1220; --panel:#131c2e; --ink:#e5e9f2; --muted:#a3b0c5; --line:#2a3750;
   --accent:#6ea0ff; --accent-soft:#1c2a4a; --head:#050a14; --chip:#23407f;
-  --c1:#b794f6; --c4:#4fd1c5;
+  --c1:#b794f6; --c4:#4fd1c5; --c7:#f6ad55;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
@@ -59,7 +59,7 @@ h2{font-size:28px;margin:0 0 6px}
 
 .group{margin-bottom:26px}
 .group h3{font-size:21px;margin:0 0 12px;padding-left:12px;border-left:6px solid var(--g)}
-.g1{--g:var(--c1)} .g4{--g:var(--c4)}
+.g1{--g:var(--c1)} .g4{--g:var(--c4)} .g7{--g:var(--c7)}
 .cards{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
 .card{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-top:6px solid var(--g);border-radius:14px;padding:16px 18px;text-decoration:none;color:var(--ink);transition:transform .15s,box-shadow .15s}
 .card:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(15,23,42,.18)}
@@ -196,10 +196,51 @@ footer{text-align:center;color:var(--muted);padding:20px 16px;border-top:1px sol
           <ul><li>власний масив</li><li>крок назад</li></ul>
           <span class="go">Відкрити →</span>
         </a>
+        <a class="card g4" href="11_poshuk_i_riadky.html">
+          <span class="tag">Тема 4.8</span>
+          <h4>Пошук у масиві та обробка рядків</h4>
+          <p>Лінійний і бінарний пошук поруч, посимвольна обробка рядків і максимум у рядках та стовпцях двовимірного масиву.</p>
+          <ul><li>паліндром, підрахунок, обернення</li><li>крок назад</li></ul>
+          <span class="go">Відкрити →</span>
+        </a>
+        <a class="card g4" href="12_pidprohramy.html">
+          <span class="tag">Тема 4.9</span>
+          <h4>Стек викликів і область видимості</h4>
+          <p>Виконання програми мовою Python: кадри стеку, передача параметрів, локальні й глобальні змінні, «тінь» і global.</p>
+          <ul><li>власна програма в редакторі</li><li>анімація передачі значень</li></ul>
+          <span class="go">Відкрити →</span>
+        </a>
+        <a class="card g4" href="13_rekursiia.html">
+          <span class="tag">Тема 4.10</span>
+          <h4>Дерево рекурсивних викликів</h4>
+          <p>Спуск і повернення рекурсії на дереві викликів зі стеком. Показує повторні обчислення у Фібоначчі та Ханойські вежі.</p>
+          <ul><li>факторіал, степінь, сума цифр</li><li>лічильники викликів і глибини</li></ul>
+          <span class="go">Відкрити →</span>
+        </a>
         <div class="card g4 soon" aria-label="Нові засоби з'являться згодом">
           <strong>Невдовзі</strong>
           <span>Нові засоби з'являтимуться тут</span>
         </div>
+      </div>
+    </div>
+
+    <div class="group g7">
+      <h3>Розділ 7. Операційні системи та їх обслуговування</h3>
+      <div class="grid cards">
+        <a class="card g7" href="15_defrahmentatsiia.html">
+          <span class="tag">Тема 7.2</span>
+          <h4>Фрагментація і дефрагментація диска</h4>
+          <p>Диск як сітка кластерів: запис і видалення файлів, таблиця розміщення, читання з підрахунком переміщень головки.</p>
+          <ul><li>покрокова дефрагментація</li><li>показники «до і після»</li></ul>
+          <span class="go">Відкрити →</span>
+        </a>
+        <a class="card g7" href="16_stysnennia.html">
+          <span class="tag">Тема 7.3</span>
+          <h4>Як архіватор стискає дані: RLE і Хаффман</h4>
+          <p>Пакування й розпакування RLE (текст і піксельна картинка), покрокова побудова дерева Хаффмана та декодування.</p>
+          <ul><li>коефіцієнт стиснення</li><li>стиснення без втрат</li></ul>
+          <span class="go">Відкрити →</span>
+        </a>
       </div>
     </div>
   </section>

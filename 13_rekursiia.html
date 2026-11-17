@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Дерево рекурсивних викликів — 10 клас, тема 4.10</title>
+<!--
+  Засіб візуалізації № 13 комплекту.
+  Один самодостатній файл: HTML + CSS + JS (SVG), без бібліотек та інтернету.
+
+  Як це працює:
+  1) Обрана рекурсивна функція виконується заздалегідь. Під час виконання
+     записуються вузли дерева викликів і події: «виклик» (спуск), «повернення»
+     (підйом) і для Ханойських веж — «перенесення диска».
+  2) Для кожної події зберігається стан: які вузли вже видно, які ще в стеку,
+     які повернули значення, положення дисків.
+  3) Програвач (клас Player) показує події по черзі.
+-->
+<style>
+  :root{
+    --bg:#f3f5fa; --panel:#fff; --ink:#1a2233; --muted:#4f5a72; --line:#cfd6e4;
+    --accent:#1f5fd1; --accent-dark:#14306b;
+    --active:#1f5fd1; --active-bg:#e8f0ff;  /* виклик у стеку (ще не повернувся) */
+    --cur:#d19a00;    --cur-bg:#ffe27a;     /* поточний виклик */
+    --done:#1b8a4a;   --done-bg:#e4f6eb;    /* виклик повернув значення */
+    --base:#0f7a3c;                         /* базовий випадок */
+    --dup:#8a2be2;                          /* повторне обчислення */
+  }
+  *{box-sizing:border-box}
+  html{font-size:18px}
+  body{margin:0;font-family:"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.4}
+  header{background:var(--accent-dark);color:#fff;padding:.5rem 1.2rem;display:flex;flex-wrap:wrap;gap:.3rem 1.5rem;align-items:baseline;justify-content:space-between}
+  header h1{font-size:1.45rem;margin:0}
+  header .meta{font-size:1rem;opacity:.92}
+  main{max-width:1600px;margin:0 auto;padding:.6rem 1rem}
+  footer{text-align:center;color:var(--muted);padding:.8rem 1rem 1.2rem;font-size:.95rem}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:.6rem .9rem;margin-bottom:.6rem}
+  .panel h2{font-size:1.05rem;margin:0 0 .35rem}
+  .row{display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:center}
+  label{font-weight:600}
+  input[type=number],select{font:inherit;font-size:1rem;padding:.35rem .5rem;border:2px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+  input[type=number]{width:6.5em}
+  .btn{font:inherit;font-size:1rem;font-weight:600;padding:.45rem .9rem;border-radius:9px;border:2px solid var(--accent);background:#fff;color:var(--accent);cursor:pointer}
+  .btn:hover{background:#eaf1ff}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.on{background:#ffecb3;border-color:#c98b00;color:#5a3d00}
+  .btn:disabled{opacity:.4;cursor:default}
+  .preset{border-style:dashed}
+  .sub{color:var(--muted);font-size:.95rem}
+  .msg{margin-top:.5rem;padding:.45rem .7rem;border-radius:8px;font-weight:600;display:none}
+  .msg.err{display:block;background:#fde8e8;color:#9b1c1c;border:2px solid #d64545}
+
+  .controls{display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:center;margin:.2rem 0 .6rem}
+  .controls .speed{display:flex;align-items:center;gap:.4rem;font-weight:600}
+  .controls input[type=range]{width:150px;accent-color:var(--accent)}
+  .controls .counter{font-weight:700;color:var(--muted)}
+
+  .explain{font-size:1.12rem;background:#eef4ff;border-left:7px solid var(--accent);padding:.55rem .9rem;border-radius:8px;min-height:3.2em;margin-bottom:.6rem}
+  .explain.call{background:#fff4dc;border-left-color:#d48a00}
+  .explain.ret{background:var(--done-bg);border-left-color:var(--done)}
+  .explain.move{background:#f3e9ff;border-left-color:var(--dup)}
+  .phase{display:inline-block;font-weight:800;font-size:.9rem;padding:.05rem .5rem;border-radius:20px;margin-right:.5rem;color:#fff;vertical-align:1px}
+  .phase.call{background:#d48a00} .phase.ret{background:var(--done)} .phase.move{background:var(--dup)} .phase.info{background:var(--accent)}
+
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:.8rem;align-items:start}
+  @media (max-width:1000px){.layout{grid-template-columns:1fr}}
+
+  /* ===== Дерево (SVG) ===== */
+  #tree{width:100%;height:max(320px, calc(100vh - 430px));display:block;background:#fbfcfe;border:1px solid var(--line);border-radius:8px}
+  #tree text{font-family:Consolas,"Courier New",monospace}
+  .depthline{stroke:#dfe4ee;stroke-dasharray:6 6}
+  .depthlabel{fill:#8a93a6;font-size:15px;font-family:"Segoe UI",Arial,sans-serif !important}
+  .edge{stroke-width:3;fill:none}
+  .edge.active{stroke:var(--active)}
+  .edge.done{stroke:var(--done)}
+  .edgelabel{font-size:19px;font-weight:700;fill:var(--done)}
+  .node rect.box{stroke-width:3;rx:10}
+  .node.active rect.box{fill:var(--active-bg);stroke:var(--active)}
+  .node.done rect.box{fill:var(--done-bg);stroke:var(--done)}
+  .node.cur rect.box{fill:var(--cur-bg);stroke:var(--cur);stroke-width:5}
+  .node.dup rect.box{stroke:var(--dup);stroke-dasharray:7 4}
+  .node.orig rect.box{stroke:var(--dup);stroke-width:7}
+  .node .lbl{font-size:17px;font-weight:700;fill:#1a2233}
+  .node .val{font-size:16px;font-weight:700;fill:var(--done)}
+  .tag{font-size:12px;font-weight:800;fill:#fff;font-family:"Segoe UI",Arial,sans-serif !important}
+  .node.appear{animation:appear .4s ease-out}
+  @keyframes appear{from{opacity:0}to{opacity:1}}
+
+  /* ===== Права колонка ===== */
+  .code{font-family:Consolas,"Courier New",monospace;font-size:.9rem;background:#fbfcfe;border:1px solid var(--line);border-radius:8px;padding:.3rem 0;white-space:pre;overflow-x:auto}
+  .code .ln{padding:.04rem .5rem .04rem .2rem;border-left:5px solid transparent}
+  .code .no{display:inline-block;width:1.4em;color:#97a0b3;text-align:right;margin-right:.6em;user-select:none}
+  .code .ln.hl{background:#fff1b8;border-left-color:#e0a800;font-weight:700}
+  .stats{display:grid;grid-template-columns:1fr auto;gap:.15rem .6rem;font-size:1rem}
+  .stats b{font-size:1.1rem;text-align:right}
+  .stack{display:flex;flex-direction:column;gap:4px;font-family:Consolas,monospace;font-weight:700;font-size:1rem}
+  .stack div{border:2px solid var(--active);background:var(--active-bg);border-radius:7px;padding:.12rem .5rem;display:flex;justify-content:space-between}
+  .stack div:first-child{border-color:var(--cur);background:var(--cur-bg)}
+  .stack small{color:var(--muted);font-family:"Segoe UI",Arial,sans-serif}
+  .stack .bottom{border:2px dashed var(--line);background:#f4f6fa;color:var(--muted)}
+
+  /* ===== Ханойські вежі ===== */
+  #hanoi-wrap{display:none}
+  #hanoi{width:100%;height:170px;display:block}
+  .disk{transition:transform .55s ease-in-out}
+  .disk rect{stroke:#0005;stroke-width:2}
+  .disk.moving rect{stroke:#1a2233;stroke-width:4}
+  .peglbl{font-size:20px;font-weight:800;fill:#4f5a72;font-family:"Segoe UI",Arial,sans-serif}
+
+  .legend{display:flex;flex-wrap:wrap;gap:.3rem 1rem;font-size:.9rem;color:var(--muted);margin-top:.4rem}
+  .legend span::before{content:"";display:inline-block;width:14px;height:14px;border-radius:3px;margin-right:5px;vertical-align:-2px;background:var(--c);border:2px solid var(--b,#0003)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Візуалізатор «Дерево рекурсивних викликів»</h1>
+  <div class="meta">10 клас · Тема 4.10. Рекурсія</div>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="row">
+      <label for="fn">Функція:</label>
+      <select id="fn"></select>
+      <span id="inputs" class="row"></span>
+      <button class="btn primary" id="apply">Побудувати</button>
+      <span class="sub" id="limits"></span>
+    </div>
+    <div class="row" style="margin-top:.5rem">
+      <span class="sub">Готові приклади:</span>
+      <button class="btn preset" data-p="0">Факторіал 5!</button>
+      <button class="btn preset" data-p="1">Фібоначчі fib(5) — повтори</button>
+      <button class="btn preset" data-p="2">Сума цифр 2026</button>
+      <button class="btn preset" data-p="3">Ханойські вежі, 3 диски</button>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div id="controls"></div>
+  <div class="explain" id="explain"></div>
+
+  <div class="layout">
+    <div>
+      <div class="panel">
+        <h2 id="tree-title">Дерево викликів</h2>
+        <svg id="tree" preserveAspectRatio="xMidYMin meet"></svg>
+        <div class="legend">
+          <span style="--c:var(--active-bg);--b:var(--active)">виклик чекає результату (у стеку)</span>
+          <span style="--c:var(--cur-bg);--b:var(--cur)">поточний виклик</span>
+          <span style="--c:var(--done-bg);--b:var(--done)">повернув значення</span>
+          <span style="--c:#0f7a3c;--b:#0f7a3c">базовий випадок</span>
+          <span style="--c:#fff;--b:var(--dup)" id="leg-dup">повторне обчислення</span>
+        </div>
+      </div>
+      <div class="panel" id="hanoi-wrap">
+        <h2>Стрижні A, B, C <span class="sub" id="hanoi-info"></span></h2>
+        <svg id="hanoi" viewBox="0 0 900 200" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>Код функції</h2>
+        <div class="code" id="code"></div>
+      </div>
+      <div class="panel">
+        <h2>Лічильники</h2>
+        <div class="stats" id="stats"></div>
+      </div>
+      <div class="panel">
+        <h2>Стек викликів</h2>
+        <div class="stack" id="stack"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>Розроблено автором · Клавіші: <b>→</b> крок, <b>←</b> назад, <b>Пробіл</b> старт/пауза</footer>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* =====================================================================
+   1. ОПИС РЕКУРСИВНИХ ФУНКЦІЙ
+   Кожна функція має: назву, поля введення з обмеженнями, код,
+   і метод run(args, api), який виконує рекурсію та записує події через api.
+   ===================================================================== */
+const FUNCS = {
+  fact: {
+    title:'Факторіал n! = n · (n − 1)!',
+    inputs:[{id:'n', label:'n =', min:1, max:8, def:5}],
+    code:[
+      'def fact(n):',
+      '    if n <= 1:      # база',
+      '        return 1',
+      '    return n * fact(n - 1)'],
+    run({n}, api){
+      const rec = (n, parent) => {
+        const id = api.node(`fact(${n})`, parent);
+        if (n <= 1){
+          api.base(id);
+          api.call(id, [1,2,3], `Виклик <b>fact(${n})</b>: умова n ≤ 1 істинна — це <b>базовий випадок</b>. Рекурсія далі не йде.`);
+          api.ret(id, 1, [3], `fact(${n}) повертає <b>1</b> ${api.to(id)}.`);
+          return 1;
+        }
+        api.call(id, [1,2,4], `Виклик <b>fact(${n})</b>: n > 1, тому fact(${n}) = ${n} · fact(${n-1}). Щоб помножити, спершу треба знати fact(${n-1}) — спускаємося глибше.`);
+        const r = rec(n - 1, id), v = n * r;
+        api.ret(id, v, [4], `fact(${n}) отримала fact(${n-1}) = ${r} і повертає <b>${n} · ${r} = ${v}</b> ${api.to(id)}.`);
+        return v;
+      };
+      return rec(n, null);
+    }
+  },
+  fib: {
+    title:'Числа Фібоначчі: fib(n) = fib(n − 1) + fib(n − 2)',
+    inputs:[{id:'n', label:'n =', min:0, max:6, def:5}],
+    code:[
+      'def fib(n):',
+      '    if n < 2:       # база',
+      '        return n',
+      '    return fib(n - 1) + fib(n - 2)'],
+    run({n}, api){
+      const rec = (n, parent) => {
+        const id = api.node(`fib(${n})`, parent, `fib(${n})`);
+        const dup = api.dupNote(id);
+        if (n < 2){
+          api.base(id);
+          api.call(id, [1,2,3], `Виклик <b>fib(${n})</b>: n < 2 — <b>базовий випадок</b>, відповідь відома одразу.` + dup);
+          api.ret(id, n, [3], `fib(${n}) повертає <b>${n}</b> ${api.to(id)}.`);
+          return n;
+        }
+        api.call(id, [1,2,4], `Виклик <b>fib(${n})</b>: потрібні fib(${n-1}) і fib(${n-2}). Спочатку викликаємо fib(${n-1}).` + dup);
+        const a = rec(n - 1, id);
+        const b = rec(n - 2, id);
+        api.ret(id, a + b, [4], `fib(${n}) отримала fib(${n-1}) = ${a} і fib(${n-2}) = ${b} та повертає <b>${a} + ${b} = ${a+b}</b> ${api.to(id)}.`);
+        return a + b;
+      };
+      return rec(n, null);
+    }
+  },
+  power: {
+    title:'Степінь aⁿ = a · aⁿ⁻¹',
+    inputs:[{id:'a', label:'a =', min:-9, max:9, def:2}, {id:'n', label:'n =', min:0, max:8, def:5}],
+    code:[
+      'def power(a, n):',
+      '    if n == 0:      # база',
+      '        return 1',
+      '    return a * power(a, n - 1)'],
+    run({a, n}, api){
+      const rec = (n, parent) => {
+        const id = api.node(`power(${a}, ${n})`, parent);
+        if (n === 0){
+          api.base(id);
+          api.call(id, [1,2,3], `Виклик <b>power(${a}, 0)</b>: n = 0 — <b>базовий випадок</b>, будь-яке число в нульовому степені дорівнює 1.`);
+          api.ret(id, 1, [3], `power(${a}, 0) повертає <b>1</b> ${api.to(id)}.`);
+          return 1;
+        }
+        api.call(id, [1,2,4], `Виклик <b>power(${a}, ${n})</b>: ${a}<sup>${n}</sup> = ${a} · ${a}<sup>${n-1}</sup>, тож спершу треба обчислити power(${a}, ${n-1}).`);
+        const r = rec(n - 1, id), v = a * r;
+        api.ret(id, v, [4], `power(${a}, ${n}) повертає <b>${a} · ${r} = ${v}</b> ${api.to(id)}.`);
+        return v;
+      };
+      return rec(n, null);
+    }
+  },
+  digits: {
+    title:'Сума цифр числа: S(n) = остання цифра + S(n без останньої цифри)',
+    inputs:[{id:'n', label:'n =', min:0, max:999999999, def:2026}],
+    code:[
+      'def S(n):',
+      '    if n < 10:      # база',
+      '        return n',
+      '    return n % 10 + S(n // 10)'],
+    run({n}, api){
+      const rec = (n, parent) => {
+        const id = api.node(`S(${n})`, parent);
+        if (n < 10){
+          api.base(id);
+          api.call(id, [1,2,3], `Виклик <b>S(${n})</b>: число однозначне — <b>базовий випадок</b>, сума цифр дорівнює самому числу.`);
+          api.ret(id, n, [3], `S(${n}) повертає <b>${n}</b> ${api.to(id)}.`);
+          return n;
+        }
+        const last = n % 10, rest = Math.floor(n / 10);
+        api.call(id, [1,2,4], `Виклик <b>S(${n})</b>: остання цифра ${n} % 10 = ${last}, решта числа ${n} // 10 = ${rest}. Викликаємо S(${rest}).`);
+        const r = rec(rest, id), v = last + r;
+        api.ret(id, v, [4], `S(${n}) повертає <b>${last} + ${r} = ${v}</b> ${api.to(id)}.`);
+        return v;
+      };
+      return rec(n, null);
+    }
+  },
+  hanoi: {
+    title:'Ханойські вежі: перенести n дисків з A на C через B',
+    inputs:[{id:'n', label:'дисків n =', min:1, max:4, def:3}],
+    code:[
+      'def hanoi(n, a, c, b):',
+      '    if n == 1:          # база',
+      '        move(a, c)',
+      '        return',
+      '    hanoi(n - 1, a, b, c)',
+      '    move(a, c)',
+      '    hanoi(n - 1, b, c, a)'],
+    run({n}, api){
+      const rec = (n, a, c, b, parent) => {
+        const id = api.node(`h(${n}, ${a}→${c})`, parent);
+        if (n === 1){
+          api.base(id);
+          api.call(id, [1,2], `Виклик <b>hanoi(1, ${a}, ${c}, ${b})</b>: лише один диск — <b>базовий випадок</b>, переносимо його напряму.`);
+          api.move(id, 1, a, c, [3]);
+          api.ret(id, null, [4], `hanoi(1, ${a}→${c}) завершено, повертаємося ${api.to(id)}.`);
+          return;
+        }
+        api.call(id, [1,2,5], `Виклик <b>hanoi(${n}, ${a}, ${c}, ${b})</b>: щоб перенести ${n} диск. з ${a} на ${c}, спершу переносимо верхні ${n-1} з ${a} на допоміжний ${b}.`);
+        rec(n - 1, a, b, c, id);
+        api.move(id, n, a, c, [6]);
+        rec(n - 1, b, c, a, id);
+        api.ret(id, null, [7], `hanoi(${n}, ${a}→${c}) завершено: ${n} диск. тепер на стрижні ${c}. Повертаємося ${api.to(id)}.`);
+      };
+      rec(n, 'A', 'C', 'B', null);
+    }
+  }
+};
+
+const PRESETS = [
+  {fn:'fact', args:{n:5}},
+  {fn:'fib', args:{n:5}},
+  {fn:'digits', args:{n:2026}},
+  {fn:'hanoi', args:{n:3}}
+];
+
+/* =====================================================================
+   2. ВИКОНАННЯ ФУНКЦІЇ ТА ЗАПИС ПОДІЙ
+   ===================================================================== */
+function buildTrace(fnKey, args){
+  const nodes = [];         // вузли дерева: {id, label, parent, children, depth, base, dupOf}
+  const events = [];        // події: {type, node, hl, text, ...}
+  const firstDone = new Map();   // ключ виклику → id першого вузла, що вже повернув результат
+  const isHanoi = fnKey === 'hanoi';
+
+  const api = {
+    node(label, parent, key){
+      const n = {id:nodes.length, label, parent, children:[], depth: parent === null ? 1 : nodes[parent].depth + 1,
+                 base:false, dupOf: key && firstDone.has(key) ? firstDone.get(key) : null, key};
+      nodes.push(n);
+      if (parent !== null) nodes[parent].children.push(n.id);
+      return n.id;
+    },
+    base(id){ nodes[id].base = true; },
+    dupNote(id){
+      const d = nodes[id].dupOf;
+      return d === null ? '' : ` <b style="color:var(--dup)">Увага: ${nodes[id].label} вже обчислювали раніше — це повторна робота!</b>`;
+    },
+    to(id){ const p = nodes[id].parent; return p === null ? 'в основну програму' : `у виклик ${nodes[p].label}`; },
+    call(id, hl, text){ events.push({type:'call', node:id, hl, text}); },
+    ret(id, value, hl, text){
+      nodes[id].value = value;
+      if (nodes[id].key && !firstDone.has(nodes[id].key)) firstDone.set(nodes[id].key, id);
+      events.push({type:'ret', node:id, value, hl, text});
+    },
+    move(id, disk, from, to, hl){ events.push({type:'move', node:id, disk, from, to, hl}); }
+  };
+  const result = FUNCS[fnKey].run(args, api);
+
+  /* Знімки стану для кожного кроку (крок 0 — початковий стан) */
+  const pegs = {A:[], B:[], C:[]};
+  if (isHanoi) for (let d = args.n; d >= 1; d--) pegs.A.push(d);
+  const status = new Array(nodes.length).fill('hidden');  // hidden / active / done
+  const values = new Array(nodes.length).fill(undefined);
+  const stack = [];
+  let maxDepth = 0, calls = 0, dups = 0, moves = 0;
+  const totalMoves = isHanoi ? 2 ** args.n - 1 : 0;
+
+  const steps = [{type:'start', node:null, hl:[], status:[...status], values:[...values], stack:[], pegs:clone(pegs),
+                  calls, maxDepth, dups, moves, totalMoves, text:''}];
+  for (const e of events){
+    if (e.type === 'call'){ status[e.node] = 'active'; stack.push(e.node); calls++; if (nodes[e.node].dupOf !== null) dups++; }
+    if (e.type === 'ret'){ status[e.node] = 'done'; values[e.node] = e.value; stack.pop(); }
+    if (e.type === 'move'){
+      const d = pegs[e.from].pop(); pegs[e.to].push(d); moves++;
+      e.text = `<b>Хід ${moves}:</b> переносимо диск ${e.disk} зі стрижня ${e.from} на стрижень ${e.to}` +
+               (nodes[e.node].base ? ' (базовий випадок).' : ` — це найбільший диск підзадачі hanoi(${e.disk}).`);
+    }
+    maxDepth = Math.max(maxDepth, stack.length);
+    steps.push(Object.assign({}, e, {status:[...status], values:[...values], stack:[...stack], pegs:clone(pegs),
+                                     calls, maxDepth, dups, moves, totalMoves}));
+  }
+  steps.push(Object.assign({}, steps[steps.length - 1], {type:'end', node:null, hl:[],
+    text: isHanoi ? `Готово! Усі ${args.n} диск. перенесено на стрижень C за <b>${moves}</b> ходів (2<sup>${args.n}</sup> − 1 = ${totalMoves}).`
+                  : `Готово! Результат: <b>${nodes[0].label} = ${result}</b>. Усього викликів: ${calls}, максимальна глибина рекурсії: ${maxDepth}.` +
+                    (fnKey === 'fib' ? ` З них повторних викликів: <b>${dups}</b> — тому така рекурсія для fib неефективна.` : '')}));
+  steps[0].text = `Натисніть «Крок», щоб викликати <b>${nodes[0].label}</b>. Спершу рекурсія <b>спускатиметься</b> до базового випадку, потім значення <b>повертатимуться</b> вгору.`;
+  return {nodes, steps, isHanoi, fnKey, args};
+}
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+/* =====================================================================
+   3. РОЗМІЩЕННЯ ДЕРЕВА: листки — по черзі зліва направо,
+      батьківський вузол — посередині над дітьми
+   ===================================================================== */
+function layout(nodes){
+  let leaf = 0;
+  const place = id => {
+    const n = nodes[id];
+    if (!n.children.length){ n.x = leaf++; return; }
+    n.children.forEach(place);
+    n.x = (nodes[n.children[0]].x + nodes[n.children[n.children.length - 1]].x) / 2;
+  };
+  place(0);
+  return leaf;   // кількість листків = ширина дерева
+}
+
+/* =====================================================================
+   4. МАЛЮВАННЯ
+   ===================================================================== */
+let T = null;            // поточна траса: {nodes, steps, ...}
+let G = null;            // геометрія дерева
+let lastShown = -1;
+
+function prepareGeometry(){
+  const leaves = layout(T.nodes);
+  const maxLabel = Math.max(...T.nodes.map(n => n.label.length));
+  const nodeW = Math.max(90, maxLabel * 10.5 + 26), nodeH = 52;
+  const gapX = nodeW + 16, maxD = Math.max(...T.nodes.map(n => n.depth));
+  const gapY = maxD > 6 ? 72 : 88, left = 110, top = 34;
+  const width = Math.max(760, left + leaves * gapX + 20);
+  const xOff = left + (width - left - 20 - leaves * gapX) / 2;   // вирівнювання по центру
+  T.nodes.forEach(n => { n.cx = xOff + n.x * gapX + gapX / 2; n.cy = top + (n.depth - 1) * gapY + nodeH / 2; });
+  G = {nodeW, nodeH, width, height: top + maxD * gapY + 10, maxD, gapY, top};
+  $('tree').setAttribute('viewBox', `0 0 ${G.width} ${G.height}`);
+  fitTreeHeight();
+}
+/** Висота області дерева: широке дерево — щоб усе вміщалося на екрані проєктора,
+    глибоке (ланцюжок викликів) — вища область, щоб написи лишалися читабельними */
+function fitTreeHeight(){
+  if (!G) return;
+  const avail = Math.max(320, innerHeight - 430);
+  const want = T.isHanoi ? Math.max(220, innerHeight * 0.34)
+             : G.maxD > 5 ? Math.max(avail, innerHeight * 0.75) : avail;
+  $('tree').style.height = Math.min(G.height * 1.1, want) + 'px';
+}
+window.addEventListener('resize', fitTreeHeight);
+
+function renderTree(st, i){
+  const N = T.nodes, s = st.status, cur = st.node;
+  const forward = i === lastShown + 1;
+  let h = '';
+  // горизонтальні лінії рівнів глибини
+  for (let d = 1; d <= G.maxD; d++){
+    const y = G.top + (d - 1) * G.gapY + G.nodeH / 2;
+    h += `<line class="depthline" x1="10" x2="${G.width - 10}" y1="${y}" y2="${y}"/>` +
+         `<text class="depthlabel" x="12" y="${y + 5}">глибина ${d}</text>`;
+  }
+  // ребра
+  for (const n of N){
+    if (n.parent === null || s[n.id] === 'hidden') continue;
+    const p = N[n.parent];
+    const x1 = p.cx, y1 = p.cy + G.nodeH / 2, x2 = n.cx, y2 = n.cy - G.nodeH / 2;
+    h += `<path class="edge ${s[n.id] === 'done' ? 'done' : 'active'}" d="M${x1},${y1} C${x1},${(y1 + y2) / 2} ${x2},${(y1 + y2) / 2} ${x2},${y2}"/>`;
+    if (s[n.id] === 'done' && !T.isHanoi){
+      const mx = (x1 + x2) / 2 + (x2 >= x1 ? 8 : -8), my = (y1 + y2) / 2 + 5;
+      h += `<text class="edgelabel" x="${mx}" y="${my}" text-anchor="${x2 >= x1 ? 'start' : 'end'}">↑${st.values[n.id]}</text>`;
+    }
+  }
+  // вузли
+  const origOf = cur !== null && st.type === 'call' ? N[cur].dupOf : null;
+  for (const n of N){
+    if (s[n.id] === 'hidden') continue;
+    const cls = ['node', s[n.id]];
+    if (n.id === cur && st.type !== 'end') cls.push('cur');
+    if (n.dupOf !== null) cls.push('dup');
+    if (n.id === origOf) cls.push('orig');
+    if (forward && n.id === cur && st.type === 'call') cls.push('appear');
+    const x = n.cx - G.nodeW / 2, y = n.cy - G.nodeH / 2;
+    const done = s[n.id] === 'done';
+    h += `<g class="${cls.join(' ')}"><rect class="box" x="${x}" y="${y}" width="${G.nodeW}" height="${G.nodeH}"/>`;
+    h += `<text class="lbl" x="${n.cx}" y="${done && !T.isHanoi ? n.cy - 4 : n.cy + 6}" text-anchor="middle">${esc(n.label)}</text>`;
+    if (done) h += T.isHanoi
+      ? `<text class="val" x="${x + G.nodeW - 8}" y="${y + 18}" text-anchor="end">✓</text>`
+      : `<text class="val" x="${n.cx}" y="${n.cy + 18}" text-anchor="middle">= ${st.values[n.id]}</text>`;
+    // мітки «база» і «повтор»
+    let tx = x + 4;
+    const tag = (t, color) => { const w = t.length * 7.4 + 10; h += `<rect x="${tx}" y="${y - 11}" width="${w}" height="17" rx="8" fill="${color}"/><text class="tag" x="${tx + w / 2}" y="${y + 2}" text-anchor="middle">${t}</text>`; tx += w + 4; };
+    if (n.base) tag('база', 'var(--base)');
+    if (n.dupOf !== null) tag('повтор', 'var(--dup)');
+    h += '</g>';
+  }
+  $('tree').innerHTML = h;
+}
+
+/* --- Ханойські вежі: диски — постійні SVG-елементи, рухаються через CSS transform --- */
+const DISK_COLORS = ['#e74c3c', '#f39c12', '#27ae60', '#2980b9', '#8e44ad'];
+const PEG_X = {A:150, B:450, C:750}, BASE_Y = 180, DISK_H = 26;
+function prepareHanoi(n){
+  let h = `<rect x="20" y="${BASE_Y}" width="860" height="10" rx="4" fill="#7a869e"/>`;
+  for (const p of ['A','B','C']){
+    h += `<rect x="${PEG_X[p] - 5}" y="${BASE_Y - (n + 1) * DISK_H - 6}" width="10" height="${(n + 1) * DISK_H + 6}" rx="4" fill="#9aa3b5"/>` +
+         `<text class="peglbl" x="${PEG_X[p] + 16}" y="${BASE_Y - (n + 1) * DISK_H + 10}">${p}</text>`;
+  }
+  for (let d = 1; d <= n; d++){
+    const w = 50 + d * 48;
+    h += `<g class="disk" id="disk-${d}"><rect x="${-w / 2}" y="0" width="${w}" height="${DISK_H - 3}" rx="9" fill="${DISK_COLORS[d - 1]}"/>` +
+         `<text x="0" y="${DISK_H - 9}" text-anchor="middle" font-size="16" font-weight="800" fill="#fff">${d}</text></g>`;
+  }
+  $('hanoi').setAttribute('viewBox', `0 0 900 ${BASE_Y + 14}`);
+  $('hanoi').innerHTML = h;
+}
+function renderHanoi(st){
+  for (const p of ['A','B','C']){
+    st.pegs[p].forEach((d, level) => {
+      const g = $('disk-' + d);
+      g.style.transform = `translate(${PEG_X[p]}px, ${BASE_Y - (level + 1) * DISK_H}px)`;
+      g.classList.toggle('moving', st.type === 'move' && st.disk === d);
+    });
+  }
+  $('hanoi-info').textContent = `· ходів: ${st.moves} з ${st.totalMoves}`;
+}
+
+function render(st, i){
+  renderTree(st, i);
+  if (T.isHanoi) renderHanoi(st);
+  // код
+  $('code').innerHTML = FUNCS[T.fnKey].code.map((t, k) =>
+    `<div class="ln${st.hl.includes(k + 1) ? ' hl' : ''}"><span class="no">${k + 1}</span>${esc(t)}</div>`).join('');
+  // лічильники
+  const total = T.nodes.length;
+  let stats = `<span>Викликів зроблено</span><b>${st.calls} з ${total}</b>
+               <span>Поточна глибина</span><b>${st.stack.length}</b>
+               <span>Максимальна глибина</span><b>${st.maxDepth}</b>`;
+  if (T.fnKey === 'fib') stats += `<span style="color:var(--dup)">Повторних викликів</span><b style="color:var(--dup)">${st.dups}</b>`;
+  if (T.isHanoi) stats += `<span>Ходів дисками</span><b>${st.moves} з ${st.totalMoves}</b>`;
+  $('stats').innerHTML = stats;
+  // стек: верхній виклик — зверху
+  $('stack').innerHTML = [...st.stack].reverse().map((id, k) =>
+      `<div><span>${esc(T.nodes[id].label)}</span><small>${k === 0 ? 'виконується' : 'чекає'}</small></div>`).join('') +
+    `<div class="bottom"><span>основна програма</span><small>дно стеку</small></div>`;
+  // пояснення з міткою етапу
+  const ph = {call:['call','↓ спуск'], ret:['ret','↑ повернення'], move:['move','перенесення'], start:['info','початок'], end:['ret','результат']}[st.type];
+  $('explain').className = 'explain ' + (st.type === 'start' ? '' : ph[0] === 'info' ? '' : ph[0]);
+  $('explain').innerHTML = `<span class="phase ${ph[0]}">${ph[1]}</span>${st.text}`;
+  lastShown = i;
+}
+
+/* =====================================================================
+   5. ПРОГРАВАЧ КРОКІВ
+   ===================================================================== */
+class Player {
+  constructor(root, render){
+    this.render = render; this.steps = []; this.i = 0; this.timer = null;
+    root.classList.add('controls');
+    root.innerHTML = `
+      <button class="btn" data-act="prev" title="Попередній крок (←)">◀ Назад</button>
+      <button class="btn primary" data-act="next" title="Наступний крок (→)">Крок ▶</button>
+      <button class="btn" data-act="toggle" title="Старт / Пауза (Пробіл)">▶ Старт</button>
+      <button class="btn" data-act="reset" title="Повернутися до початку">⟲ Скинути</button>
+      <label class="speed">Швидкість <input type="range" min="1" max="10" value="5"></label>
+      <span class="counter"></span>`;
+    this.bPrev = root.querySelector('[data-act=prev]');
+    this.bNext = root.querySelector('[data-act=next]');
+    this.bPlay = root.querySelector('[data-act=toggle]');
+    this.speed = root.querySelector('input[type=range]');
+    this.counter = root.querySelector('.counter');
+    root.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b) this[b.dataset.act](); });
+  }
+  get delay(){ return Math.round(2400 / Number(this.speed.value)); }
+  load(steps){ this.pause(); this.steps = steps; this.i = 0; lastShown = -1; this.show(); }
+  show(){
+    if (!this.steps.length) return;
+    this.render(this.steps[this.i], this.i);
+    this.counter.textContent = `Крок ${this.i} з ${this.steps.length - 1}`;
+    this.bPrev.disabled = this.i === 0;
+    this.bNext.disabled = this.i >= this.steps.length - 1;
+  }
+  next(){ if (this.i < this.steps.length - 1){ this.i++; this.show(); } if (this.i >= this.steps.length - 1) this.pause(); }
+  prev(){ this.pause(); if (this.i > 0){ this.i--; this.show(); } }
+  toggle(){
+    if (this.timer){ this.pause(); return; }
+    if (this.i >= this.steps.length - 1){ this.i = 0; this.show(); }
+    this.bPlay.textContent = '⏸ Пауза'; this.bPlay.classList.add('on');
+    const tick = () => { this.next(); if (this.timer) this.timer = setTimeout(tick, this.delay); };
+    this.timer = setTimeout(tick, this.delay);
+  }
+  pause(){ clearTimeout(this.timer); this.timer = null; this.bPlay.textContent = '▶ Старт'; this.bPlay.classList.remove('on'); }
+  reset(){ this.pause(); this.i = 0; lastShown = -1; this.show(); }
+}
+const player = new Player($('controls'), render);
+
+/* =====================================================================
+   6. ВВЕДЕННЯ ДАНИХ І ЗАПУСК
+   ===================================================================== */
+const FN_NAMES = {fact:'Факторіал fact(n)', fib:'Фібоначчі fib(n)', power:'Степінь power(a, n)', digits:'Сума цифр S(n)', hanoi:'Ханойські вежі hanoi(n)'};
+Object.entries(FN_NAMES).forEach(([k, v]) => $('fn').add(new Option(v, k)));
+
+/** Перебудовує поля введення для обраної функції */
+function buildInputs(values){
+  const f = FUNCS[$('fn').value];
+  $('inputs').innerHTML = f.inputs.map(inp =>
+    `<label for="in-${inp.id}">${inp.label}</label>
+     <input type="number" id="in-${inp.id}" min="${inp.min}" max="${inp.max}" step="1" value="${values && values[inp.id] !== undefined ? values[inp.id] : inp.def}">`).join('');
+  $('limits').textContent = 'допустимо: ' + f.inputs.map(i => `${i.label.replace(' =', '')} від ${i.min} до ${i.max}`).join(', ');
+  $('limits').title = 'Обмеження потрібні, щоб дерево вмістилося на екрані';
+  $('inputs').querySelectorAll('input').forEach(x => x.addEventListener('keydown', e => { if (e.key === 'Enter') apply(); }));
+}
+
+/** Перевіряє введення і будує дерево */
+function apply(){
+  $('msg').className = 'msg';
+  const key = $('fn').value, f = FUNCS[key], args = {};
+  for (const inp of f.inputs){
+    const raw = $('in-' + inp.id).value.trim();
+    if (!/^-?\d+$/.test(raw)){ return err(`Значення «${inp.label.replace(' =', '')}» має бути цілим числом.`); }
+    const v = Number(raw);
+    if (v < inp.min || v > inp.max) return err(`Значення «${inp.label.replace(' =', '')}» має бути від ${inp.min} до ${inp.max}` +
+      (key === 'fib' && v > inp.max ? ` (fib(${v}) мав би ${fibCalls(v)} викликів — дерево не вміститься на екрані).` : '.'));
+    args[inp.id] = v;
+  }
+  T = buildTrace(key, args);
+  $('tree-title').textContent = 'Дерево викликів — ' + f.title;
+  $('hanoi-wrap').style.display = T.isHanoi ? 'block' : 'none';
+  $('leg-dup').style.display = key === 'fib' ? '' : 'none';
+  prepareGeometry();
+  if (T.isHanoi) prepareHanoi(args.n);
+  player.load(T.steps);
+  function err(m){ $('msg').textContent = m; $('msg').className = 'msg err'; }
+}
+function fibCalls(n){ return n < 2 ? 1 : 1 + fibCalls(n - 1) + fibCalls(n - 2); }
+
+$('fn').onchange = () => buildInputs();
+$('apply').onclick = apply;
+document.querySelectorAll('[data-p]').forEach(b => b.onclick = () => {
+  const p = PRESETS[b.dataset.p];
+  $('fn').value = p.fn; buildInputs(p.args); apply();
+});
+document.addEventListener('keydown', e => {
+  if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  if (e.key === 'ArrowRight'){ player.next(); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft'){ player.prev(); e.preventDefault(); }
+  else if (e.key === ' '){ player.toggle(); e.preventDefault(); }
+});
+
+document.querySelector('[data-p="1"]').click();
+</script>
+</body>
+</html>

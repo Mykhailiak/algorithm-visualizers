@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Як архіватор стискає дані: RLE і Хаффман — 10 клас, тема 7.3</title>
+<!--
+  Візуалізатор «Як архіватор стискає дані: RLE і Хаффман»
+  10 клас, Розділ 7. Операційні системи та їх обслуговування,
+  тема 7.3 «Програми для архівування інформації».
+
+  Файл повністю самодостатній: HTML + CSS + JavaScript, без бібліотек та інтернету.
+
+  Дві вкладки:
+   1) «RLE» — кодування послідовностей однакових символів (режим «Текст»)
+      та однакових пікселів (режим «Зображення», сітка 12×12 і 4 кольори).
+      Є покрокове пакування і покрокове розпакування, щоб показати,
+      що стиснення без втрат є оборотним.
+   2) «Код Хаффмана» — підрахунок частот символів, покрокова побудова дерева
+      (об'єднання двох найменших вузлів), таблиця кодів, кодування тексту
+      в біти і покрокове декодування бітового рядка деревом.
+
+  Обидві вкладки показують розмір «до / після» і коефіцієнт стиснення.
+
+  Як змінити під себе:
+   - готові тексти та картинки — масиви RLE_TEXTS, PICTURES, HUF_TEXTS (розділ 2 скрипта);
+   - палітра режиму «Зображення» — масив PALETTE;
+   - розмір сітки — константи PW і PH;
+   - кольори інтерфейсу — CSS-змінні в блоці :root.
+-->
+<style>
+/* ======================= 1. Оформлення ======================= */
+:root{
+  --bg:#eef2f7; --panel:#fff; --ink:#13202f; --muted:#5b6b7c; --line:#c7d3e0;
+  --accent:#1f5fbf; --accent-soft:#dce8fb;
+  --ok:#17804a; --ok-soft:#d8f0e2;
+  --warn:#b9690a; --warn-soft:#fdeccf;
+  --bad:#b32020; --bad-soft:#fbdcdc;
+  --fs:17px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg); color:var(--ink); font-family:"Segoe UI",Tahoma,Verdana,sans-serif;
+     font-size:var(--fs); line-height:1.45}
+header.top{background:#13202f; color:#fff; padding:14px 20px}
+header.top h1{margin:0 0 4px; font-size:1.45em}
+header.top .sub{color:#b9c9db; font-size:.92em}
+nav.tabs{display:flex; gap:8px; flex-wrap:wrap; padding:10px 20px 0; background:#13202f}
+nav.tabs button{font:inherit; font-weight:600; cursor:pointer; background:#24364a; color:#cfdceb;
+  border:none; padding:10px 18px; border-radius:10px 10px 0 0}
+nav.tabs button.active{background:var(--bg); color:var(--ink)}
+main{padding:16px 20px 28px; max-width:1500px; margin:0 auto}
+section.tab{display:none}
+section.tab.active{display:block}
+.grid{display:grid; grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr); gap:16px}
+@media (max-width:1150px){ .grid{grid-template-columns:1fr} }
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:14px}
+.panel h2{margin:0 0 10px; font-size:1.1em}
+.panel h3{margin:14px 0 6px; font-size:1em; color:var(--muted)}
+.row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+label.fld{display:flex; flex-direction:column; gap:4px; font-size:.9em; color:var(--muted)}
+input[type=text],select{font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:8px;
+  background:#fff; color:var(--ink); min-width:220px}
+button.btn{font:inherit; font-weight:600; cursor:pointer; border:1px solid var(--accent);
+  background:var(--accent); color:#fff; padding:9px 16px; border-radius:9px}
+button.btn.ghost{background:#fff; color:var(--accent)}
+button.btn.quiet{background:#fff; color:var(--muted); border-color:var(--line)}
+button.btn.go{background:var(--ok); border-color:var(--ok)}
+button.btn.sel{background:#13202f; border-color:#13202f}
+button.btn:disabled{opacity:.45; cursor:not-allowed}
+.controls{display:flex; gap:10px; flex-wrap:wrap; align-items:center; background:var(--accent-soft);
+  border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin-bottom:12px}
+.controls .spacer{flex:1}
+.controls input[type=range]{width:160px}
+.note{background:#fff; border:1px solid var(--line); border-left:6px solid var(--accent);
+  border-radius:10px; padding:12px 14px; min-height:62px; font-size:1.02em}
+.note.ok{border-left-color:var(--ok)}
+.note.warn{border-left-color:var(--warn)}
+.note.bad{border-left-color:var(--bad)}
+.note b{color:var(--accent)}
+.err{color:var(--bad); font-weight:600; min-height:1.3em; font-size:.92em}
+.hint{color:var(--muted); font-size:.88em}
+.mono{font-family:Consolas,"Courier New",monospace}
+.stage{background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px}
+table{border-collapse:collapse; width:100%; font-size:.94em}
+th,td{border:1px solid var(--line); padding:5px 7px; text-align:center}
+th{background:#f1f5fa; color:var(--muted); font-weight:600}
+td.name{text-align:left; font-weight:600}
+tr.hl td{background:var(--accent-soft)}
+.kv{display:flex; justify-content:space-between; gap:10px; border-bottom:1px dashed var(--line); padding:5px 0}
+.kv:last-child{border-bottom:none}
+.kv b{font-variant-numeric:tabular-nums}
+footer.bottom{text-align:center; color:var(--muted); font-size:.9em; padding:14px;
+  border-top:1px solid var(--line); background:#fff}
+ul.plain{margin:6px 0 0; padding-left:20px}
+ul.plain li{margin-bottom:4px}
+
+/* ---- символи тексту ---- */
+.chars{display:flex; flex-wrap:wrap; gap:4px}
+.ch{width:34px; height:40px; border:2px solid var(--line); border-radius:7px; background:#fff;
+  display:flex; align-items:center; justify-content:center; font-family:Consolas,"Courier New",monospace;
+  font-size:1.05em; font-weight:700; position:relative}
+.ch.cur{border-color:var(--accent); background:var(--accent-soft)}
+.ch.done{border-color:#dfe6ee; color:#9fb0c0}
+.ch .idx{position:absolute; top:-15px; left:0; right:0; text-align:center; font-size:.52em;
+  font-weight:600; color:var(--muted)}
+.pairs{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px}
+.pair{border:2px solid var(--ok); background:var(--ok-soft); border-radius:8px; padding:3px 9px;
+  font-family:Consolas,"Courier New",monospace; font-weight:700}
+.pair.cur{border-color:var(--accent); background:var(--accent-soft)}
+.pair.wasteful{border-color:var(--bad); background:var(--bad-soft)}
+
+/* ---- піксельна сітка ---- */
+.pix{display:grid; gap:2px; max-width:430px}
+.px{aspect-ratio:1/1; border:2px solid #e6ecf3; border-radius:3px; cursor:pointer}
+.px.cur{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft)}
+.px.rowmark{border-bottom-color:var(--warn)}
+.swatches{display:flex; gap:6px; flex-wrap:wrap}
+.sw{width:36px; height:36px; border-radius:8px; border:3px solid var(--line); cursor:pointer}
+.sw.on{border-color:#13202f}
+
+/* ---- бітовий рядок ---- */
+.bits{font-family:Consolas,"Courier New",monospace; font-size:1.05em; word-break:break-all;
+  background:#f1f5fa; border:1px solid var(--line); border-radius:8px; padding:8px 10px; min-height:2.4em}
+.bits .b{padding:1px 1px}
+.bits .b.cur{background:var(--accent); color:#fff; border-radius:3px}
+.bits .b.used{color:#9fb0c0}
+.code{font-family:Consolas,"Courier New",monospace; font-weight:700}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Візуалізатор «Як архіватор стискає дані: RLE і Хаффман»</h1>
+  <div class="sub">10 клас · Розділ 7. Операційні системи та їх обслуговування · Тема 7.3 «Програми для архівування інформації»</div>
+</header>
+
+<nav class="tabs">
+  <button id="tabbtn-rle" class="active" onclick="showTab('rle')">Алгоритм RLE</button>
+  <button id="tabbtn-huf" onclick="showTab('huf')">Код Хаффмана</button>
+</nav>
+
+<main>
+
+<!-- ======================= Вкладка RLE ======================= -->
+<section id="tab-rle" class="tab active">
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h2>Що стискаємо</h2>
+        <div class="row" style="margin-bottom:10px">
+          <button class="btn sel" id="mode-text" onclick="rleSetMode('text')">Текст</button>
+          <button class="btn ghost" id="mode-pic" onclick="rleSetMode('pic')">Зображення</button>
+        </div>
+
+        <div id="rle-text-ctl">
+          <div class="row">
+            <label class="fld">Готові приклади
+              <select id="rle-preset" onchange="rleUsePreset()"></select>
+            </label>
+            <label class="fld">Дані
+              <input type="text" id="rle-input" value="ААААААББВВВВВВГД" spellcheck="false">
+            </label>
+            <button class="btn" onclick="rleStartPack()">Запакувати ▶</button>
+            <button class="btn go" onclick="rleStartUnpack()">Розпакувати ▶</button>
+          </div>
+          <div class="err" id="rle-err"></div>
+          <div class="hint">Умова: 1 символ = 1 байт; пара «кількість + символ» = 2 байти.</div>
+        </div>
+
+        <div id="rle-pic-ctl" style="display:none">
+          <div class="row">
+            <label class="fld">Готові картинки
+              <select id="pic-preset" onchange="picUsePreset()"></select>
+            </label>
+            <div class="swatches" id="swatches"></div>
+            <button class="btn quiet" onclick="picClear()">Очистити</button>
+            <button class="btn" onclick="rleStartPack()">Запакувати ▶</button>
+            <button class="btn go" onclick="rleStartUnpack()">Розпакувати ▶</button>
+          </div>
+          <div class="hint">Малюйте, натискаючи на клітинки (можна з протягуванням). Кожен рядок кодується окремо. Умова: 1 піксель = 1 байт, пара = 2 байти.</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="btn" id="rle-step" onclick="rlePlayer.next()">Крок ▶</button>
+        <button class="btn ghost" id="rle-play" onclick="rlePlayer.toggle()">Старт</button>
+        <button class="btn quiet" id="rle-end" onclick="rlePlayer.toEnd()">До кінця ⏭</button>
+        <button class="btn quiet" onclick="rleReset()">Скинути</button>
+        <div class="spacer"></div>
+        <label class="fld">Швидкість
+          <input type="range" id="rle-speed" min="150" max="2000" step="50" value="700">
+        </label>
+      </div>
+
+      <div class="stage">
+        <div id="rle-src-wrap">
+          <h3 style="margin:0 0 14px; color:var(--muted); font-size:1em">Вхідні дані</h3>
+          <div class="chars" id="rle-chars"></div>
+          <div class="pix" id="rle-pix" style="display:none"></div>
+        </div>
+        <h3 style="color:var(--muted); font-size:1em">Результат кодування</h3>
+        <div class="pairs" id="rle-pairs"><span class="hint">ще немає</span></div>
+      </div>
+
+      <div class="note" id="rle-note" style="margin-top:12px">
+        Виберіть приклад і натисніть «Запакувати». Алгоритм RLE замінює послідовність однакових символів парою «кількість + символ».
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>Розмір даних</h2>
+        <div class="kv"><span>До стиснення</span><b id="rle-size-before">—</b></div>
+        <div class="kv"><span>Після стиснення</span><b id="rle-size-after">—</b></div>
+        <div class="kv"><span>Коефіцієнт стиснення</span><b id="rle-ratio">—</b></div>
+        <div class="kv"><span>Економія</span><b id="rle-save">—</b></div>
+        <div class="kv"><span>Серій (пар)</span><b id="rle-runs">0</b></div>
+        <div class="hint" style="margin-top:8px">Коефіцієнт стиснення — це відношення початкового розміру до стисненого. Значення менше за 1 означає, що файл <b>збільшився</b>.</div>
+      </div>
+      <div class="panel">
+        <h2>Висновки про RLE</h2>
+        <ul class="plain">
+          <li>вигідний там, де є довгі серії однакових значень: однотонні зображення, карти, факси;</li>
+          <li>на різнорідних даних збільшує розмір, бо кожен одиночний символ стає парою;</li>
+          <li>стиснення <b>без втрат</b>: розпакування повертає точно ті самі дані;</li>
+          <li>саме тому архіватори не покладаються лише на RLE, а поєднують кілька алгоритмів.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= Вкладка Хаффмана ======================= -->
+<section id="tab-huf" class="tab">
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h2>Текст для кодування</h2>
+        <div class="row">
+          <label class="fld">Готові приклади
+            <select id="huf-preset" onchange="hufUsePreset()"></select>
+          </label>
+          <label class="fld">Текст (до 32 символів)
+            <input type="text" id="huf-input" value="АБРАКАДАБРА" spellcheck="false">
+          </label>
+          <button class="btn" onclick="hufStart()">Побудувати код ▶</button>
+          <button class="btn go" id="huf-dec-btn" onclick="hufStartDecode()" disabled>Розкодувати ▶</button>
+        </div>
+        <div class="err" id="huf-err"></div>
+        <div class="hint">Умова: до стиснення кожен символ займає 8 бітів (1 байт).</div>
+      </div>
+
+      <div class="controls">
+        <button class="btn" id="huf-step" onclick="hufPlayer.next()">Крок ▶</button>
+        <button class="btn ghost" id="huf-play" onclick="hufPlayer.toggle()">Старт</button>
+        <button class="btn quiet" id="huf-end" onclick="hufPlayer.toEnd()">До кінця ⏭</button>
+        <button class="btn quiet" onclick="hufReset()">Скинути</button>
+        <div class="spacer"></div>
+        <label class="fld">Швидкість
+          <input type="range" id="huf-speed" min="200" max="2200" step="100" value="900">
+        </label>
+      </div>
+
+      <div class="stage">
+        <h3 style="margin:0 0 6px; color:var(--muted); font-size:1em">Текст</h3>
+        <div class="chars" id="huf-chars"></div>
+        <h3 style="color:var(--muted); font-size:1em">Дерево Хаффмана</h3>
+        <svg id="huf-svg" viewBox="0 0 900 360" role="img" aria-label="Дерево Хаффмана"></svg>
+        <h3 style="color:var(--muted); font-size:1em">Бітовий рядок</h3>
+        <div class="bits" id="huf-bits"></div>
+        <div class="hint" id="huf-dec-out" style="margin-top:6px"></div>
+      </div>
+
+      <div class="note" id="huf-note" style="margin-top:12px">
+        Натисніть «Побудувати код». Спочатку алгоритм підрахує частоти символів, потім крок за кроком об'єднає два найменші вузли в дерево.
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>Частоти та коди символів</h2>
+        <table id="huf-table"><tbody></tbody></table>
+        <div class="hint" style="margin-top:8px">Чим частіший символ, тим коротший його код. Жоден код не є початком іншого, тому розділювачі не потрібні.</div>
+      </div>
+      <div class="panel">
+        <h2>Розмір даних</h2>
+        <div class="kv"><span>До стиснення</span><b id="huf-before">—</b></div>
+        <div class="kv"><span>Після стиснення</span><b id="huf-after">—</b></div>
+        <div class="kv"><span>Коефіцієнт стиснення</span><b id="huf-ratio">—</b></div>
+        <div class="kv"><span>Середня довжина коду</span><b id="huf-avg">—</b></div>
+        <div class="hint" style="margin-top:8px">Разом зі стисненим текстом архіватор зберігає й таблицю кодів, тому для коротких текстів виграш малий.</div>
+      </div>
+      <div class="panel">
+        <h2>Висновки про код Хаффмана</h2>
+        <ul class="plain">
+          <li>коди різної довжини: часті символи — короткі, рідкісні — довгі;</li>
+          <li>дерево будується «знизу вгору» об'єднанням двох найменших частот;</li>
+          <li>декодування однозначне: біти ведуть від кореня до листа;</li>
+          <li>це також стиснення <b>без втрат</b> — основа форматів ZIP, PNG, JPEG.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="bottom">Розроблено автором</footer>
+
+<script>
+"use strict";
+
+/* ======================= 2. Готові приклади ======================= */
+
+const RLE_TEXTS = [
+  { t:"ААААААББВВВВВВГД",  title:"довгі серії — стиснення вигідне" },
+  { t:"WWWWWWWWWWWWBWWWWWWWWWWWWBBB", title:"класичний приклад з підручника" },
+  { t:"АБВГДЕЖЗИКЛМ",      title:"різні символи — розмір збільшиться" },
+  { t:"ТТТТТТТТТТТТТТТТ",  title:"один символ на весь рядок" }
+];
+
+const HUF_TEXTS = [
+  { t:"АБРАКАДАБРА",      title:"класичний приклад" },
+  { t:"ІНФОРМАТИКА",      title:"усі символи різні, крім А та І" },
+  { t:"МАМА МИЛА РАМУ",   title:"текст із пробілами" },
+  { t:"ААААААБББВВГ",     title:"дуже різні частоти" }
+];
+
+/* Палітра режиму «Зображення»: індекс → колір і назва */
+const PALETTE = [
+  { c:"#ffffff", n:"білий" },
+  { c:"#2f6fd0", n:"синій" },
+  { c:"#cf3a3a", n:"червоний" },
+  { c:"#e8c230", n:"жовтий" }
+];
+
+const PW = 12, PH = 12;     // розмір сітки зображення
+
+/* Готові картинки: 12 рядків по 12 цифр (індекси палітри) */
+const PICTURES = [
+  { name:"Прапор (2 кольори)", rows:[
+    "111111111111","111111111111","111111111111","111111111111","111111111111","111111111111",
+    "333333333333","333333333333","333333333333","333333333333","333333333333","333333333333"] },
+  { name:"Смужки", rows:[
+    "111111111111","000000000000","222222222222","000000000000","333333333333","000000000000",
+    "111111111111","000000000000","222222222222","000000000000","333333333333","000000000000"] },
+  { name:"Серце", rows:[
+    "000000000000","002200022000","022220222200","022222222200","022222222200","022222222200",
+    "002222222000","000222220000","000022200000","000002000000","000000000000","000000000000"] },
+  { name:"Шум (стиснення не допоможе)", rows:(function(){
+      const r = [];
+      for(let y=0;y<PH;y++){
+        let s = "";
+        for(let x=0;x<PW;x++) s += String((x*7 + y*5 + x*y) % 4);
+        r.push(s);
+      }
+      return r;
+    })() }
+];
+
+/* ======================= 3. Покроковий плеєр ======================= */
+function StepPlayer(opts){
+  this.apply = opts.apply; this.speedEl = opts.speedEl;
+  this.btnStep = opts.btnStep; this.btnPlay = opts.btnPlay; this.btnEnd = opts.btnEnd;
+  this.steps = []; this.index = -1; this.timer = null; this.playing = false;
+}
+StepPlayer.prototype.load = function(steps){
+  this.stop(); this.steps = steps || []; this.index = -1;
+  if(this.steps.length) this.next();
+  this.refresh();
+};
+StepPlayer.prototype.clear = function(){ this.stop(); this.steps = []; this.index = -1; this.refresh(); };
+StepPlayer.prototype.next = function(){
+  if(this.index >= this.steps.length - 1){ this.stop(); return false; }
+  this.index++; this.apply(this.steps[this.index], this.index); this.refresh(); return true;
+};
+StepPlayer.prototype.toEnd = function(){
+  this.stop();
+  while(this.index < this.steps.length - 1){ this.index++; this.apply(this.steps[this.index], this.index); }
+  this.refresh();
+};
+StepPlayer.prototype.toggle = function(){ if(this.playing) this.stop(); else this.play(); };
+StepPlayer.prototype.play = function(){
+  if(this.index >= this.steps.length - 1) return;
+  this.playing = true; this.refresh();
+  const self = this;
+  const tick = function(){
+    if(!self.playing) return;
+    if(!self.next()){ self.stop(); return; }
+    self.timer = setTimeout(tick, Number(self.speedEl.value));
+  };
+  this.timer = setTimeout(tick, Number(this.speedEl.value));
+};
+StepPlayer.prototype.stop = function(){
+  this.playing = false;
+  if(this.timer){ clearTimeout(this.timer); this.timer = null; }
+  this.refresh();
+};
+StepPlayer.prototype.refresh = function(){
+  const atEnd = this.index >= this.steps.length - 1;
+  this.btnStep.disabled = atEnd; this.btnPlay.disabled = atEnd; this.btnEnd.disabled = atEnd;
+  this.btnPlay.textContent = this.playing ? "Пауза" : "Старт";
+};
+
+function showTab(name){
+  rlePlayer.stop(); hufPlayer.stop();
+  ["rle","huf"].forEach(function(n){
+    document.getElementById("tab-"+n).classList.toggle("active", n===name);
+    document.getElementById("tabbtn-"+n).classList.toggle("active", n===name);
+  });
+}
+
+function svgEl(tag, attrs, text){
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for(const k in attrs) el.setAttribute(k, attrs[k]);
+  if(text !== undefined) el.textContent = text;
+  return el;
+}
+
+/* ======================= 4. Вкладка RLE ======================= */
+
+let rleMode = "text";                 // "text" або "pic"
+let pixels = new Array(PW*PH).fill(0);
+let penColor = 1;
+let painting = false;
+
+const rlePlayer = new StepPlayer({
+  apply: rleApplyStep,
+  speedEl: document.getElementById("rle-speed"),
+  btnStep: document.getElementById("rle-step"),
+  btnPlay: document.getElementById("rle-play"),
+  btnEnd:  document.getElementById("rle-end")
+});
+
+(function initRlePresets(){
+  const s = document.getElementById("rle-preset");
+  s.appendChild(new Option("— вибрати приклад —",""));
+  RLE_TEXTS.forEach(function(p,i){ s.appendChild(new Option(p.t.slice(0,18)+"  ("+p.title+")", String(i))); });
+  const p = document.getElementById("pic-preset");
+  p.appendChild(new Option("— вибрати картинку —",""));
+  PICTURES.forEach(function(x,i){ p.appendChild(new Option(x.name, String(i))); });
+})();
+
+function rleUsePreset(){
+  const s = document.getElementById("rle-preset");
+  if(s.value === "") return;
+  document.getElementById("rle-input").value = RLE_TEXTS[Number(s.value)].t;
+  document.getElementById("rle-err").textContent = "";
+  rleReset();
+}
+
+function picUsePreset(){
+  const s = document.getElementById("pic-preset");
+  if(s.value === "") return;
+  const rows = PICTURES[Number(s.value)].rows;
+  pixels = new Array(PW*PH).fill(0);
+  for(let y=0;y<PH;y++) for(let x=0;x<PW;x++){
+    const ch = rows[y] && rows[y][x];
+    pixels[y*PW+x] = ch === undefined ? 0 : Math.min(PALETTE.length-1, Number(ch));
+  }
+  rleReset();
+}
+
+function picClear(){ pixels = new Array(PW*PH).fill(0); rleReset(); }
+
+function rleSetMode(m){
+  rleMode = m;
+  document.getElementById("mode-text").className = "btn " + (m==="text" ? "sel" : "ghost");
+  document.getElementById("mode-pic").className  = "btn " + (m==="pic"  ? "sel" : "ghost");
+  document.getElementById("rle-text-ctl").style.display = m==="text" ? "" : "none";
+  document.getElementById("rle-pic-ctl").style.display  = m==="pic"  ? "" : "none";
+  document.getElementById("rle-chars").style.display = m==="text" ? "" : "none";
+  document.getElementById("rle-pix").style.display   = m==="pic"  ? "grid" : "none";
+  rleReset();
+}
+
+/* ---- побудова сітки пікселів і палітри ---- */
+function buildPixelGrid(){
+  const box = document.getElementById("rle-pix");
+  box.style.gridTemplateColumns = "repeat("+PW+", 1fr)";
+  box.innerHTML = "";
+  for(let i=0;i<PW*PH;i++){
+    const d = document.createElement("div");
+    d.className = "px"; d.id = "px"+i;
+    d.onmousedown = function(e){ e.preventDefault(); painting = true; paintPixel(i); };
+    d.onmouseenter = function(){ if(painting) paintPixel(i); };
+    d.onclick = function(){ paintPixel(i); };
+    box.appendChild(d);
+  }
+  document.addEventListener("mouseup", function(){ painting = false; });
+
+  const sw = document.getElementById("swatches");
+  sw.innerHTML = "";
+  PALETTE.forEach(function(p, i){
+    const d = document.createElement("div");
+    d.className = "sw" + (i===penColor ? " on" : "");
+    d.style.background = p.c;
+    d.title = "Колір: "+p.n;
+    d.onclick = function(){ penColor = i; buildSwatches(); };
+    sw.appendChild(d);
+  });
+}
+function buildSwatches(){
+  const sw = document.getElementById("swatches");
+  Array.prototype.forEach.call(sw.children, function(el, i){
+    el.className = "sw" + (i===penColor ? " on" : "");
+  });
+}
+function paintPixel(i){
+  pixels[i] = penColor;
+  rleReset();
+}
+
+/* ---- вхідні дані у вигляді масиву «символів» ---- */
+function rleData(){
+  if(rleMode === "text") return document.getElementById("rle-input").value.split("");
+  return pixels.slice();
+}
+function symLabel(v){
+  return rleMode === "text" ? v : PALETTE[v].n;
+}
+
+/* Правильна форма слова «раз» після числа */
+function timesWord(n){
+  const n100 = n % 100, n10 = n % 10;
+  if(n10 === 1 && n100 !== 11) return "раз";
+  if(n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return "рази";
+  return "разів";
+}
+
+/* Правильна форма: «один символ», «3 однакові символи», «6 однакових символів» */
+function countWord(n, kind){
+  const one = kind === "px" ? "один піксель" : "один символ";
+  const few = kind === "px" ? " однакові пікселі" : " однакові символи";
+  const many = kind === "px" ? " однакових пікселів" : " однакових символів";
+  const n100 = n % 100, n10 = n % 10;
+  if(n10 === 1 && n100 !== 11) return n === 1 ? one : n + (kind === "px" ? " однаковий піксель" : " однаковий символ");
+  if(n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return n + few;
+  return n + many;
+}
+
+/* ---- серії однакових значень ---- */
+function rleRuns(data){
+  const runs = [];
+  if(rleMode === "text"){
+    let i = 0;
+    while(i < data.length){
+      let j = i;
+      while(j+1 < data.length && data[j+1] === data[i]) j++;
+      runs.push({ val:data[i], from:i, to:j, len:j-i+1, row:-1 });
+      i = j+1;
+    }
+  } else {
+    // кожен рядок зображення кодується окремо
+    for(let y=0;y<PH;y++){
+      let x = 0;
+      while(x < PW){
+        let k = x;
+        while(k+1 < PW && data[y*PW+k+1] === data[y*PW+x]) k++;
+        runs.push({ val:data[y*PW+x], from:y*PW+x, to:y*PW+k, len:k-x+1, row:y });
+        x = k+1;
+      }
+    }
+  }
+  return runs;
+}
+
+/* ---- малювання вхідних даних і результату ---- */
+function rleRenderSource(view){
+  view = view || {};
+  if(rleMode === "text"){
+    const data = rleData();
+    const box = document.getElementById("rle-chars");
+    box.innerHTML = "";
+    data.forEach(function(ch, i){
+      const d = document.createElement("div");
+      let cls = "ch";
+      if(view.from !== undefined && i >= view.from && i <= view.to) cls += " cur";
+      else if(view.processedTo !== undefined && i <= view.processedTo) cls += " done";
+      d.className = cls;
+      d.innerHTML = '<span class="idx">'+i+'</span>' + (ch === " " ? "␣" : ch);
+      box.appendChild(d);
+    });
+  } else {
+    for(let i=0;i<PW*PH;i++){
+      const el = document.getElementById("px"+i);
+      if(!el) continue;
+      el.style.background = PALETTE[pixels[i]].c;
+      el.className = "px" + (view.from !== undefined && i >= view.from && i <= view.to ? " cur" : "");
+      const x = i % PW, y = Math.floor(i / PW);
+      el.title = "Рядок "+y+", стовпець "+x+": "+PALETTE[pixels[i]].n;
+    }
+  }
+}
+
+function rleRenderPairs(pairs, curIdx){
+  const box = document.getElementById("rle-pairs");
+  if(!pairs || !pairs.length){ box.innerHTML = '<span class="hint">ще немає</span>'; return; }
+  box.innerHTML = pairs.map(function(p, i){
+    const label = rleMode === "text"
+      ? "("+p.len+", "+(p.val === " " ? "␣" : p.val)+")"
+      : "("+p.len+", "+p.val+")";
+    let cls = "pair";
+    if(i === curIdx) cls += " cur";
+    else if(p.len === 1) cls += " wasteful";
+    const title = rleMode === "text" ? "" : ' title="колір: '+PALETTE[p.val].n+'"';
+    return '<span class="'+cls+'"'+title+'>'+label+'</span>';
+  }).join("");
+}
+
+function rleSetSizes(before, after, runs){
+  document.getElementById("rle-size-before").textContent = before + " байт";
+  document.getElementById("rle-size-after").textContent  = after  + " байт";
+  const ratio = after > 0 ? (before/after) : 0;
+  document.getElementById("rle-ratio").textContent = ratio.toFixed(2) + " : 1";
+  const save = Math.round((before - after) / before * 100);
+  const el = document.getElementById("rle-save");
+  el.textContent = (save >= 0 ? save + " %" : "розмір зріс на " + (-save) + " %");
+  el.style.color = save >= 0 ? "var(--ok)" : "var(--bad)";
+  document.getElementById("rle-runs").textContent = String(runs);
+}
+
+function rleSetNote(html, cls){
+  const n = document.getElementById("rle-note");
+  n.className = "note" + (cls ? " "+cls : "");
+  n.innerHTML = html;
+}
+
+function rleReset(){
+  rlePlayer.clear();
+  rleRenderSource({});
+  rleRenderPairs([], -1);
+  const data = rleData();
+  const runs = rleRuns(data);
+  document.getElementById("rle-size-before").textContent = data.length + " байт";
+  document.getElementById("rle-size-after").textContent = "—";
+  document.getElementById("rle-ratio").textContent = "—";
+  document.getElementById("rle-save").textContent = "—";
+  document.getElementById("rle-save").style.color = "";
+  document.getElementById("rle-runs").textContent = "0";
+  rleSetNote(rleMode === "text"
+    ? "Готово до роботи. Натисніть «Запакувати»: алгоритм знайде серії однакових символів і замінить кожну парою «кількість + символ». Серій у цих даних — <b>"+runs.length+"</b>."
+    : "Готово до роботи. Натисніть «Запакувати»: кожен рядок зображення кодується окремо. Серій у цій картинці — <b>"+runs.length+"</b>.");
+}
+
+/* ---- кроки пакування ---- */
+function rleStartPack(){
+  const data = rleData();
+  const err = document.getElementById("rle-err");
+  if(rleMode === "text"){
+    if(!data.length){ err.textContent = "Введіть дані для стиснення."; return; }
+    if(data.length > 40){ err.textContent = "Задовгі дані: не більше 40 символів."; return; }
+    err.textContent = "";
+  }
+  const runs = rleRuns(data);
+  const steps = [];
+  const pairs = [];
+
+  steps.push({
+    note:(rleMode === "text"
+      ? "Алгоритм читає дані <b>зліва направо</b> і шукає серії однакових символів. Початковий розмір — <b>"+data.length+" байтів</b>."
+      : "Алгоритм читає зображення <b>рядок за рядком</b>. Початковий розмір — <b>"+data.length+" байтів</b> (по 1 байту на піксель)."),
+    pairs:[], before:data.length, after:0, runs:0
+  });
+
+  runs.forEach(function(r, i){
+    pairs.push({ len:r.len, val:r.val });
+    const after = pairs.length * 2;
+    let note;
+    const name = rleMode === "text" ? "«"+(r.val === " " ? "пробіл" : r.val)+"»" : "кольору «"+PALETTE[r.val].n+"»";
+    const countTxt = countWord(r.len, rleMode === "pic" ? "px" : "ch");
+    if(rleMode === "pic") note = "Рядок <b>"+r.row+"</b>: "+countTxt+" "+name+" → пара <b>("+r.len+", "+r.val+")</b>. ";
+    else note = "Позиції "+r.from+"–"+r.to+": "+countTxt+" "+name+" → пара <b>("+r.len+", "+r.val+")</b>. ";
+    if(r.len === 1) note += "Серія з одного значення <b>невигідна</b>: замість 1 байта записуємо 2.";
+    else if(r.len === 2) note += "Виграшу немає: 2 байти стають 2 байтами.";
+    else note += "Замість "+r.len+" байтів — лише 2.";
+    steps.push({
+      note:note, from:r.from, to:r.to, processedTo:r.to,
+      pairs:pairs.slice(), curPair:pairs.length-1,
+      before:data.length, after:after, runs:pairs.length,
+      cls:(r.len === 1 ? "warn" : "")
+    });
+  });
+
+  const after = runs.length * 2;
+  const grew = after > data.length;
+  steps.push({
+    note:"Кодування завершено. Серій — <b>"+runs.length+"</b>, тому стиснені дані займають "+runs.length+" × 2 = <b>"+after+" байтів</b> замість "+data.length+". "
+      + (grew
+          ? "Розмір <b>збільшився</b>: у цих даних надто мало довгих серій. Саме тому RLE застосовують лише до однорідних даних."
+          : "Коефіцієнт стиснення — <b>"+(data.length/after).toFixed(2)+" : 1</b>. Дані однорідні, тому RLE працює добре."),
+    pairs:pairs.slice(), processedTo:data.length-1,
+    before:data.length, after:after, runs:runs.length,
+    cls:(grew ? "bad" : "ok")
+  });
+  rlePlayer.load(steps);
+}
+
+/* ---- кроки розпакування ---- */
+function rleStartUnpack(){
+  const data = rleData();
+  if(!data.length){ document.getElementById("rle-err").textContent = "Введіть дані."; return; }
+  const runs = rleRuns(data);
+  const pairs = runs.map(function(r){ return { len:r.len, val:r.val }; });
+  const steps = [];
+  steps.push({
+    note:"<b>Розпакування.</b> Архіватор читає пари «кількість + символ» і відтворює дані. Пар — <b>"+pairs.length+"</b>.",
+    pairs:pairs.slice(), before:data.length, after:pairs.length*2, runs:pairs.length
+  });
+  let pos = 0;
+  runs.forEach(function(r, i){
+    const name = rleMode === "text" ? "«"+(r.val === " " ? "пробіл" : r.val)+"»" : "кольору «"+PALETTE[r.val].n+"»";
+    steps.push({
+      note:"Пара <b>("+r.len+", "+r.val+")</b> означає: повторити значення "+name+" <b>"+r.len+"</b> "+timesWord(r.len)+". Відновлено "+(r.to+1)+" з "+data.length+" значень.",
+      pairs:pairs.slice(), curPair:i, from:r.from, to:r.to, processedTo:r.to,
+      before:data.length, after:pairs.length*2, runs:pairs.length
+    });
+    pos = r.to + 1;
+  });
+  steps.push({
+    note:"Дані відновлено <b>повністю і без змін</b>. Це означає, що RLE — алгоритм стиснення <b>без втрат</b>: жодного символу не загублено й не змінено.",
+    pairs:pairs.slice(), processedTo:data.length-1,
+    before:data.length, after:pairs.length*2, runs:pairs.length, cls:"ok"
+  });
+  rlePlayer.load(steps);
+}
+
+function rleApplyStep(step){
+  rleRenderSource(step);
+  rleRenderPairs(step.pairs, step.curPair === undefined ? -1 : step.curPair);
+  if(step.after > 0) rleSetSizes(step.before, step.after, step.runs);
+  else { document.getElementById("rle-size-before").textContent = step.before + " байт"; }
+  rleSetNote(step.note, step.cls);
+}
+
+/* ======================= 5. Вкладка «Код Хаффмана» ======================= */
+
+let hufTree = null, hufCodes = null, hufText = "";
+
+const hufPlayer = new StepPlayer({
+  apply: hufApplyStep,
+  speedEl: document.getElementById("huf-speed"),
+  btnStep: document.getElementById("huf-step"),
+  btnPlay: document.getElementById("huf-play"),
+  btnEnd:  document.getElementById("huf-end")
+});
+
+(function initHufPresets(){
+  const s = document.getElementById("huf-preset");
+  s.appendChild(new Option("— вибрати приклад —",""));
+  HUF_TEXTS.forEach(function(p,i){ s.appendChild(new Option(p.t+"  ("+p.title+")", String(i))); });
+})();
+
+function hufUsePreset(){
+  const s = document.getElementById("huf-preset");
+  if(s.value === "") return;
+  document.getElementById("huf-input").value = HUF_TEXTS[Number(s.value)].t;
+  document.getElementById("huf-err").textContent = "";
+  hufReset();
+}
+
+function hufClone(n){
+  if(!n) return null;
+  return { id:n.id, sym:n.sym, freq:n.freq, left:hufClone(n.left), right:hufClone(n.right) };
+}
+
+/* Розкладка дерева: листки отримують послідовні позиції, батько — середину між дітьми */
+function hufLayout(forest){
+  let leafX = 0, maxDepth = 0;
+  const nodes = [], links = [];
+  forest.forEach(function(root, ri){
+    if(ri > 0) leafX += 0.6;          // проміжок між окремими деревами
+    (function walk(n, depth, code){
+      n._depth = depth;
+      if(depth > maxDepth) maxDepth = depth;
+      if(!n.left && !n.right){ n._x = leafX; leafX += 1; }
+      else{
+        walk(n.left, depth+1, code+"0");
+        walk(n.right, depth+1, code+"1");
+        n._x = (n.left._x + n.right._x) / 2;
+        links.push({ a:n, b:n.left, bit:"0" });
+        links.push({ a:n, b:n.right, bit:"1" });
+      }
+      nodes.push(n);
+    })(root, 0, "");
+  });
+  return { nodes:nodes, links:links, leaves:leafX, maxDepth:maxDepth };
+}
+
+function hufRenderTree(forest, hl){
+  hl = hl || {};
+  const svg = document.getElementById("huf-svg");
+  svg.innerHTML = "";
+  if(!forest || !forest.length){ svg.setAttribute("viewBox","0 0 900 120"); return; }
+  const L = hufLayout(forest);
+  const stepX = 62, stepY = 74, pad = 44;
+  const W = Math.max(900, L.leaves * stepX + pad*2);
+  const H = (L.maxDepth + 1) * stepY + pad*2 - 20;
+  svg.setAttribute("viewBox", "0 0 " + Math.round(W) + " " + Math.round(H));
+  const X = function(n){ return pad + n._x * stepX + stepX/2; };
+  const Y = function(n){ return pad + n._depth * stepY; };
+
+  // гілки
+  L.links.forEach(function(lk){
+    const on = hl.path && hl.path.indexOf(lk.b.id) >= 0 && hl.path.indexOf(lk.a.id) >= 0;
+    svg.appendChild(svgEl("line",{
+      x1:X(lk.a), y1:Y(lk.a), x2:X(lk.b), y2:Y(lk.b),
+      stroke: on ? "var(--accent)" : "#c2cedb", "stroke-width": on ? 5 : 3
+    }));
+    const mx = (X(lk.a)+X(lk.b))/2, my = (Y(lk.a)+Y(lk.b))/2;
+    svg.appendChild(svgEl("circle",{ cx:mx, cy:my, r:11, fill:"#fff",
+      stroke: on ? "var(--accent)" : "#c2cedb", "stroke-width":2 }));
+    svg.appendChild(svgEl("text",{ x:mx, y:my+5, "text-anchor":"middle", "font-size":"13",
+      "font-weight":"700", fill: on ? "var(--accent)" : "#5b6b7c" }, lk.bit));
+  });
+
+  // вузли
+  L.nodes.forEach(function(n){
+    const isLeaf = !n.left && !n.right;
+    const isNew = hl.newId === n.id;
+    const inPath = hl.path && hl.path.indexOf(n.id) >= 0;
+    const picked = hl.picked && hl.picked.indexOf(n.id) >= 0;
+    let fill = isLeaf ? "#fff" : "#f1f5fa", stroke = "#9fb0c0", sw = 3;
+    if(picked){ fill = "var(--warn-soft)"; stroke = "var(--warn)"; sw = 4; }
+    if(isNew){ fill = "var(--ok-soft)"; stroke = "var(--ok)"; sw = 4; }
+    if(inPath){ fill = "var(--accent-soft)"; stroke = "var(--accent)"; sw = 4; }
+    const g = svgEl("g",{});
+    g.appendChild(svgEl("circle",{ cx:X(n), cy:Y(n), r:22, fill:fill, stroke:stroke, "stroke-width":sw }));
+    if(isLeaf){
+      g.appendChild(svgEl("text",{ x:X(n), y:Y(n)+1, "text-anchor":"middle", "font-size":"16",
+        "font-weight":"700", fill:"#13202f" }, n.sym === " " ? "␣" : n.sym));
+      g.appendChild(svgEl("text",{ x:X(n), y:Y(n)+15, "text-anchor":"middle", "font-size":"11",
+        fill:"#5b6b7c" }, String(n.freq)));
+    } else {
+      g.appendChild(svgEl("text",{ x:X(n), y:Y(n)+6, "text-anchor":"middle", "font-size":"15",
+        "font-weight":"700", fill:"#5b6b7c" }, String(n.freq)));
+    }
+    svg.appendChild(g);
+  });
+}
+
+function hufRenderChars(view){
+  view = view || {};
+  const box = document.getElementById("huf-chars");
+  box.innerHTML = "";
+  hufText.split("").forEach(function(ch, i){
+    const d = document.createElement("div");
+    let cls = "ch";
+    if(view.charIdx === i) cls += " cur";
+    else if(view.charIdx !== undefined && i < view.charIdx) cls += " done";
+    d.className = cls;
+    d.innerHTML = '<span class="idx">'+(i+1)+'</span>' + (ch === " " ? "␣" : ch);
+    box.appendChild(d);
+  });
+}
+
+function hufRenderTable(freqs, codes, hlSym){
+  const tb = document.querySelector("#huf-table tbody");
+  if(!freqs){ tb.innerHTML = "<tr><th>Символ</th><th>Частота</th><th>Код</th><th>Бітів</th></tr>"
+    + '<tr><td colspan="4" class="hint">код ще не побудовано</td></tr>'; return; }
+  let html = "<tr><th>Символ</th><th>Частота</th><th>Код</th><th>Бітів</th></tr>";
+  freqs.forEach(function(f){
+    const code = codes && codes[f.sym] ? codes[f.sym] : "—";
+    const bits = codes && codes[f.sym] ? codes[f.sym].length * f.freq : "—";
+    html += "<tr"+(hlSym === f.sym ? " class='hl'" : "")+"><td class='name'>"+(f.sym === " " ? "␣ (пробіл)" : f.sym)
+         + "</td><td>"+f.freq+"</td><td class='code'>"+code+"</td><td>"+bits+"</td></tr>";
+  });
+  tb.innerHTML = html;
+}
+
+function hufRenderBits(bits, curIdx, usedTo){
+  const box = document.getElementById("huf-bits");
+  if(!bits){ box.innerHTML = '<span class="hint">бітів ще немає</span>'; return; }
+  box.innerHTML = bits.split("").map(function(b, i){
+    let cls = "b";
+    if(curIdx === i) cls += " cur";
+    else if(usedTo !== undefined && i < usedTo) cls += " used";
+    return '<span class="'+cls+'">'+b+'</span>';
+  }).join("");
+}
+
+function hufSetNote(html, cls){
+  const n = document.getElementById("huf-note");
+  n.className = "note" + (cls ? " "+cls : "");
+  n.innerHTML = html;
+}
+
+function hufReset(){
+  hufPlayer.clear();
+  hufTree = null; hufCodes = null;
+  hufText = document.getElementById("huf-input").value;
+  document.getElementById("huf-dec-btn").disabled = true;
+  hufRenderChars({});
+  hufRenderTree(null);
+  hufRenderTable(null, null);
+  hufRenderBits("");
+  document.getElementById("huf-dec-out").textContent = "";
+  document.getElementById("huf-before").textContent = hufText.length ? (hufText.length*8 + " бітів (" + hufText.length + " байт)") : "—";
+  document.getElementById("huf-after").textContent = "—";
+  document.getElementById("huf-ratio").textContent = "—";
+  document.getElementById("huf-avg").textContent = "—";
+  hufSetNote("Натисніть «Побудувати код». Спочатку алгоритм підрахує частоти символів, потім крок за кроком об'єднає два найменші вузли в дерево.");
+}
+
+/* Частоти символів, за спаданням частоти */
+function hufFreqs(text){
+  const map = {};
+  text.split("").forEach(function(ch){ map[ch] = (map[ch]||0) + 1; });
+  return Object.keys(map).map(function(k){ return { sym:k, freq:map[k] }; })
+    .sort(function(a,b){ return b.freq - a.freq || (a.sym < b.sym ? -1 : 1); });
+}
+
+/* Коди символів: обхід дерева, ліва гілка 0, права 1 */
+function hufCollectCodes(root){
+  const codes = {}, paths = {};
+  if(!root) return { codes:codes, paths:paths };
+  if(!root.left && !root.right){ codes[root.sym] = "0"; paths[root.sym] = [root.id]; return { codes:codes, paths:paths }; }
+  (function walk(n, code, path){
+    const p = path.concat([n.id]);
+    if(!n.left && !n.right){ codes[n.sym] = code; paths[n.sym] = p; return; }
+    walk(n.left,  code+"0", p);
+    walk(n.right, code+"1", p);
+  })(root, "", []);
+  return { codes:codes, paths:paths };
+}
+
+function hufStart(){
+  const text = document.getElementById("huf-input").value;
+  const err = document.getElementById("huf-err");
+  if(!text.length){ err.textContent = "Введіть текст."; return; }
+  if(text.length > 32){ err.textContent = "Задовгий текст: не більше 32 символів."; return; }
+  err.textContent = "";
+  hufText = text;
+  hufRenderChars({});
+
+  const freqs = hufFreqs(text);
+  const steps = [];
+
+  steps.push({
+    kind:"freq", freqs:freqs, forest:[],
+    note:"<b>Крок 1. Частоти.</b> Алгоритм підраховує, скільки разів зустрічається кожен символ. Різних символів — <b>"+freqs.length+"</b>, усього символів — <b>"+text.length+"</b>. Частоти показано в таблиці праворуч."
+  });
+
+  // початковий ліс: по одному вузлу-листку на символ, за зростанням частоти
+  let uid = 0;
+  let nodes = freqs.slice().sort(function(a,b){ return a.freq - b.freq || (a.sym < b.sym ? -1 : 1); })
+    .map(function(f){ return { id:"n"+(uid++), sym:f.sym, freq:f.freq, left:null, right:null }; });
+
+  steps.push({
+    kind:"start", freqs:freqs, forest:nodes.map(hufClone),
+    note:"<b>Крок 2. Окремі вузли.</b> Кожен символ стає окремим вузлом із своєю частотою. Далі ці вузли по два об'єднуються в дерево, починаючи з найменших частот."
+  });
+
+  if(nodes.length === 1){
+    steps.push({
+      kind:"onenode", freqs:freqs, forest:nodes.map(hufClone),
+      note:"У тексті лише один різний символ, тому дерево складається з одного вузла. Такому символу призначають код «0»."
+    });
+  }
+
+  while(nodes.length > 1){
+    nodes.sort(function(a,b){ return a.freq - b.freq || a.id.localeCompare(b.id); });
+    const a = nodes[0], b = nodes[1];
+    steps.push({
+      kind:"pick", freqs:freqs, forest:nodes.map(hufClone), picked:[a.id, b.id],
+      note:"Серед вузлів вибираємо <b>два з найменшими частотами</b>: "+nodeName(a)+" і "+nodeName(b)+"."
+    });
+    const merged = { id:"n"+(uid++), sym:null, freq:a.freq + b.freq, left:a, right:b };
+    nodes = nodes.slice(2).concat([merged]);
+    steps.push({
+      kind:"merge", freqs:freqs, forest:nodes.map(hufClone), newId:merged.id,
+      note:"Об'єднуємо їх у новий вузол із частотою "+a.freq+" + "+b.freq+" = <b>"+merged.freq+"</b>. Лівою гілкою стає менша частота, правою — більша. Вузлів залишилося: <b>"+nodes.length+"</b>."
+    });
+  }
+
+  const root = nodes[0];
+  hufTree = root;
+  const cp = hufCollectCodes(root);
+  hufCodes = cp.codes;
+
+  steps.push({
+    kind:"tree", freqs:freqs, forest:[hufClone(root)],
+    note:"<b>Дерево побудовано.</b> Корінь має частоту <b>"+root.freq+"</b> — це загальна кількість символів у тексті. Тепер визначимо коди: рух лівою гілкою додає <b>0</b>, правою — <b>1</b>."
+  });
+
+  // коди символів — по одному кроку на символ, від найкоротшого коду
+  const bySym = Object.keys(cp.codes).sort(function(x,y){
+    return cp.codes[x].length - cp.codes[y].length || (x < y ? -1 : 1);
+  });
+  const partial = {};
+  bySym.forEach(function(sym){
+    partial[sym] = cp.codes[sym];
+    steps.push({
+      kind:"code", freqs:freqs, forest:[hufClone(root)], codes:Object.assign({}, partial),
+      path:cp.paths[sym], hlSym:sym,
+      note:"Символ <b>"+(sym === " " ? "«пробіл»" : "«"+sym+"»")+"</b>: шлях від кореня до листа дає код <b class='code'>"+cp.codes[sym]+"</b> ("+cp.codes[sym].length+" біт"+(cp.codes[sym].length===1?"":"и")+"). Частота цього символу — "+freqs.filter(function(f){return f.sym===sym;})[0].freq+"."
+    });
+  });
+
+  // кодування тексту
+  let bits = "";
+  for(let i=0;i<text.length;i++){
+    const ch = text[i];
+    bits += cp.codes[ch];
+    steps.push({
+      kind:"encode", freqs:freqs, forest:[hufClone(root)], codes:cp.codes,
+      path:cp.paths[ch], hlSym:ch, charIdx:i, bits:bits,
+      note:"Кодуємо символ <b>"+(ch === " " ? "«пробіл»" : "«"+ch+"»")+"</b> → <b class='code'>"+cp.codes[ch]+"</b>. Довжина бітового рядка: <b>"+bits.length+"</b> бітів."
+    });
+  }
+
+  const before = text.length * 8;
+  const after = bits.length;
+  const avg = (after / text.length).toFixed(2);
+  steps.push({
+    kind:"done", freqs:freqs, forest:[hufClone(root)], codes:cp.codes, bits:bits, charIdx:text.length,
+    sizes:{ before:before, after:after, avg:avg },
+    note:"<b>Текст закодовано.</b> До стиснення: "+text.length+" × 8 = <b>"+before+" бітів</b>. Після: <b>"+after+" бітів</b>. Коефіцієнт стиснення — <b>"+(before/after).toFixed(2)+" : 1</b>, середня довжина коду — <b>"+avg+"</b> біта на символ замість 8. Тепер можна натиснути «Розкодувати».",
+    cls:"ok"
+  });
+
+  hufPlayer.load(steps);
+  document.getElementById("huf-dec-btn").disabled = false;
+}
+
+function nodeName(n){
+  return (!n.left && !n.right)
+    ? "«"+(n.sym === " " ? "пробіл" : n.sym)+"» (частота "+n.freq+")"
+    : "вузол із частотою "+n.freq;
+}
+
+/* ---- покрокове декодування ---- */
+function hufStartDecode(){
+  if(!hufTree || !hufCodes){ document.getElementById("huf-err").textContent = "Спочатку побудуйте код."; return; }
+  document.getElementById("huf-err").textContent = "";
+  const cp = hufCollectCodes(hufTree);
+  let bits = "";
+  hufText.split("").forEach(function(ch){ bits += cp.codes[ch]; });
+
+  const steps = [];
+  const freqs = hufFreqs(hufText);
+  steps.push({
+    kind:"dec", freqs:freqs, forest:[hufClone(hufTree)], codes:cp.codes, bits:bits, usedTo:0,
+    note:"<b>Декодування.</b> Отримувач має дерево (або таблицю кодів) і бітовий рядок. Читаємо біти по одному: 0 — лівою гілкою, 1 — правою. Дійшовши до листа, виписуємо символ і повертаємося до кореня.",
+    out:""
+  });
+
+  // один вузол на все дерево — особливий випадок
+  const single = (!hufTree.left && !hufTree.right);
+  let node = hufTree, out = "", path = [hufTree.id];
+  for(let i=0;i<bits.length;i++){
+    const b = bits[i];
+    if(single){
+      out += hufTree.sym;
+      steps.push({
+        kind:"dec", freqs:freqs, forest:[hufClone(hufTree)], codes:cp.codes, bits:bits,
+        bitIdx:i, usedTo:i, path:[hufTree.id], out:out,
+        note:"Біт <b>"+b+"</b>: у дереві лише один символ, тому одразу виписуємо «"+hufTree.sym+"». Відновлено символів: <b>"+out.length+"</b>."
+      });
+      continue;
+    }
+    node = (b === "0") ? node.left : node.right;
+    path = path.concat([node.id]);
+    const leaf = (!node.left && !node.right);
+    if(leaf) out += node.sym;
+    steps.push({
+      kind:"dec", freqs:freqs, forest:[hufClone(hufTree)], codes:cp.codes, bits:bits,
+      bitIdx:i, usedTo:i, path:path.slice(), out:out, hlSym:leaf ? node.sym : undefined,
+      note: leaf
+        ? "Біт <b>"+b+"</b>: " + (b==="0" ? "лівою" : "правою") + " гілкою. Це <b>лист</b> — символ <b>«"+(node.sym === " " ? "пробіл" : node.sym)+"»</b>. Виписуємо його і повертаємося до кореня. Відновлено символів: <b>"+out.length+"</b>."
+        : "Біт <b>"+b+"</b>: " + (b==="0" ? "лівою" : "правою") + " гілкою. Це ще не лист, тому читаємо наступний біт."
+    });
+    if(leaf){ node = hufTree; path = [hufTree.id]; }
+  }
+  steps.push({
+    kind:"dec", freqs:freqs, forest:[hufClone(hufTree)], codes:cp.codes, bits:bits,
+    usedTo:bits.length, out:out, done:true,
+    note:"Декодування завершено: <b>"+out+"</b>. Текст відновлено точно, символ за символом — отже, код Хаффмана теж є стисненням <b>без втрат</b>.",
+    cls:"ok"
+  });
+  hufPlayer.load(steps);
+}
+
+function hufApplyStep(step){
+  hufRenderTree(step.forest, { picked:step.picked, newId:step.newId, path:step.path });
+  hufRenderTable(step.freqs, step.codes, step.hlSym);
+  hufRenderChars({ charIdx:step.charIdx });
+  hufRenderBits(step.bits || "", step.bitIdx, step.usedTo);
+  if(step.out !== undefined){
+    document.getElementById("huf-dec-out").innerHTML = step.out
+      ? "Відновлений текст: <b class='mono'>"+step.out.replace(/ /g,"␣")+"</b>"
+      : "";
+  }
+  if(step.sizes){
+    document.getElementById("huf-before").textContent = step.sizes.before + " бітів (" + (step.sizes.before/8) + " байт)";
+    document.getElementById("huf-after").textContent  = step.sizes.after + " бітів (" + Math.ceil(step.sizes.after/8) + " байт)";
+    document.getElementById("huf-ratio").textContent  = (step.sizes.before/step.sizes.after).toFixed(2) + " : 1";
+    document.getElementById("huf-avg").textContent    = step.sizes.avg + " біта/символ";
+  }
+  hufSetNote(step.note, step.cls);
+}
+
+/* ======================= 6. Початковий стан ======================= */
+buildPixelGrid();
+document.getElementById("pic-preset").value = "0";
+picUsePreset();
+rleSetMode("text");
+hufReset();
+</script>
+</body>
+</html>

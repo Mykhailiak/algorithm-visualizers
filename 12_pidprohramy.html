@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Стек викликів і область видимості — 10 клас, тема 4.9</title>
+<!--
+  Засіб візуалізації № 12 комплекту.
+  Один самодостатній файл: HTML + CSS + JS, без бібліотек та інтернету.
+
+  Як це працює:
+  1) Текст програми (підмножина мови Python) розбирається власним невеликим
+     інтерпретатором (функції tokenize, parseProgram).
+  2) Програма виконується повністю, а після кожної дії записується «знімок»:
+     поточний рядок, глобальні змінні, кадри стеку викликів, виведення, пояснення.
+  3) Програвач (клас Player) показує знімки по черзі.
+
+  Підтримується: присвоювання (=, +=, -=, *=), def, return, if/elif/else, while,
+  global, pass, print(), вбудовані abs, int, str, round, len, min, max,
+  числа, рядки, True/False/None, операції + - * / // % == != < > <= >= and or not.
+-->
+<style>
+  :root{
+    --bg:#f3f5fa; --panel:#fff; --ink:#1a2233; --muted:#4f5a72; --line:#cfd6e4;
+    --accent:#1f5fd1; --accent-dark:#14306b;
+    --global:#1f5fd1;  --global-bg:#e8f0ff;   /* глобальна область — синя */
+    --param:#c26a00;   --param-bg:#fff1dc;    /* формальні параметри — помаранчеві */
+    --local:#1b8a4a;   --local-bg:#e4f6eb;    /* локальні змінні — зелені */
+    --cur:#ffe27a; --caller:#ffe9d1; --bad:#d64545; --ok:#22a45d;
+  }
+  *{box-sizing:border-box}
+  html{font-size:18px}
+  body{margin:0;font-family:"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.4}
+  header{background:var(--accent-dark);color:#fff;padding:.5rem 1.2rem;display:flex;flex-wrap:wrap;gap:.3rem 1.5rem;align-items:baseline;justify-content:space-between}
+  header h1{font-size:1.45rem;margin:0}
+  header .meta{font-size:1rem;opacity:.92}
+  main{max-width:1500px;margin:0 auto;padding:.6rem 1rem}
+  footer{text-align:center;color:var(--muted);padding:.8rem 1rem 1.2rem;font-size:.95rem}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:.6rem .9rem;margin-bottom:.6rem}
+  .panel h2{font-size:1.05rem;margin:0 0 .4rem;display:flex;justify-content:space-between;align-items:center;gap:.5rem}
+  .row{display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:center}
+  label{font-weight:600}
+  select,textarea{font:inherit;font-size:1rem;padding:.35rem .5rem;border:2px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+  .btn{font:inherit;font-size:1rem;font-weight:600;padding:.45rem .9rem;border-radius:9px;border:2px solid var(--accent);background:#fff;color:var(--accent);cursor:pointer}
+  .btn:hover{background:#eaf1ff}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.on{background:#ffecb3;border-color:#c98b00;color:#5a3d00}
+  .btn:disabled{opacity:.4;cursor:default}
+  .msg{margin-top:.5rem;padding:.45rem .7rem;border-radius:8px;font-weight:600;display:none;white-space:pre-wrap}
+  .msg.err{display:block;background:#fde8e8;color:#9b1c1c;border:2px solid var(--bad)}
+
+  .controls{display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:center;margin:.2rem 0 .6rem}
+  .controls .speed{display:flex;align-items:center;gap:.4rem;font-weight:600}
+  .controls input[type=range]{width:150px;accent-color:var(--accent)}
+  .controls .counter{font-weight:700;color:var(--muted)}
+
+  .explain{font-size:1.12rem;background:#eef4ff;border-left:7px solid var(--accent);padding:.55rem .9rem;border-radius:8px;min-height:3.2em;margin-bottom:.6rem}
+  .explain.call{background:var(--param-bg);border-left-color:var(--param)}
+  .explain.ret{background:var(--local-bg);border-left-color:var(--local)}
+  .explain.err{background:#fdecec;border-left-color:var(--bad)}
+
+  .layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:.8rem;align-items:start}
+  @media (max-width:950px){.layout{grid-template-columns:1fr}}
+
+  /* ===== Код програми ===== */
+  .code{font-family:Consolas,"Courier New",monospace;font-size:1.05rem;background:#fbfcfe;border:1px solid var(--line);border-radius:8px;padding:.3rem 0;white-space:pre;overflow-x:auto;max-height:62vh;overflow-y:auto}
+  .code .ln{padding:.04rem .7rem .04rem .2rem;border-left:6px solid transparent;min-height:1.45em}
+  .code .no{display:inline-block;width:1.8em;color:#97a0b3;text-align:right;margin-right:.8em;user-select:none}
+  .code .ln.caller{background:var(--caller);border-left-color:#e69a3c}
+  .code .ln.hl{background:var(--cur);border-left-color:#d19a00;font-weight:700}
+  .code .ln.err{background:#ffd6d6;border-left-color:var(--bad)}
+  .code .kw{color:#7a2bc2;font-weight:700}
+  .code .str{color:#0a7a3a}
+  .code .com{color:#8a93a6;font-style:italic}
+  textarea#editor{width:100%;min-height:22em;font-family:Consolas,"Courier New",monospace;font-size:1.02rem;tab-size:4}
+
+  /* ===== Області видимості ===== */
+  .scope{border:3px solid var(--global);background:var(--global-bg);border-radius:10px;padding:.4rem .6rem;margin-bottom:.6rem}
+  .scope .title{font-weight:800;color:var(--global);display:flex;justify-content:space-between;gap:.5rem;flex-wrap:wrap}
+  .scope .title small{font-weight:600;color:var(--muted)}
+  .frame{border:3px solid var(--param);background:#fffaf2;border-radius:10px;padding:.4rem .6rem;margin-bottom:.5rem;transition:opacity .3s}
+  .frame .title{color:#8a4b00}
+  .frame.top{box-shadow:0 0 0 4px #ffd08a}
+  .frame.returning{opacity:.75;border-style:dashed}
+  .frame.new{animation:pop .45s ease-out}
+  @keyframes pop{from{transform:translateY(-14px);opacity:0}to{transform:none;opacity:1}}
+  .stack-empty{color:var(--muted);font-style:italic;padding:.3rem 0}
+  table.vars{border-collapse:collapse;width:100%;font-size:1.02rem;margin-top:.2rem}
+  table.vars td{padding:.15rem .4rem;border-top:1px solid #0001;vertical-align:middle}
+  table.vars td.n{font-family:Consolas,monospace;font-weight:700;width:30%}
+  table.vars td.v{font-family:Consolas,monospace;font-weight:700}
+  table.vars tr.changed td{animation:flash 1s ease-out}
+  @keyframes flash{from{background:#ffe27a}to{background:transparent}}
+  .badge{display:inline-block;font-size:.78rem;font-weight:700;padding:.05rem .45rem;border-radius:20px;margin-left:.3rem;white-space:nowrap;vertical-align:middle}
+  .b-param{background:var(--param);color:#fff}
+  .b-local{background:var(--local);color:#fff}
+  .b-shadow{background:#7a2bc2;color:#fff}
+  .b-hidden{background:#8a93a6;color:#fff}
+  .b-func{background:#d9e2f5;color:#2b3d66}
+  .src{color:var(--muted);font-size:.85rem;font-family:"Segoe UI",Arial,sans-serif;font-weight:600}
+  tr.retrow td{background:var(--local-bg);color:var(--local)}
+  .stack-label{font-weight:800;color:#8a4b00;margin:.2rem 0 .3rem;display:flex;justify-content:space-between}
+  .output{font-family:Consolas,monospace;background:#1d2433;color:#e8f0ff;border-radius:8px;padding:.4rem .7rem;min-height:3.2em;font-size:1rem;white-space:pre-wrap}
+  .output .new{color:#ffe27a}
+  .legend{display:flex;flex-wrap:wrap;gap:.3rem 1rem;font-size:.92rem;color:var(--muted);margin-top:.4rem}
+  .legend span::before{content:"";display:inline-block;width:14px;height:14px;border-radius:3px;margin-right:5px;vertical-align:-2px;background:var(--c);border:1px solid #0003}
+
+  /* «Летюча» фішка зі значенням: анімація передачі параметра / повернення результату */
+  .chip{position:fixed;z-index:50;pointer-events:none;font-family:Consolas,monospace;font-weight:800;font-size:1.1rem;
+        padding:.15rem .55rem;border-radius:8px;color:#fff;box-shadow:0 3px 10px #0004}
+  .chip.call{background:var(--param)}
+  .chip.ret{background:var(--local)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Візуалізатор «Стек викликів і область видимості»</h1>
+  <div class="meta">10 клас · Тема 4.9. Підпрограми. Процедури та функції</div>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="row">
+      <label for="preset">Приклад програми:</label>
+      <select id="preset"></select>
+      <button class="btn" id="btn-edit">✎ Редагувати код</button>
+      <button class="btn primary" id="btn-apply" style="display:none">✔ Застосувати</button>
+      <button class="btn" id="btn-cancel" style="display:none">Скасувати</button>
+      <span class="src" id="preset-note"></span>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div id="controls"></div>
+  <div class="explain" id="explain"></div>
+
+  <div class="layout">
+    <!-- Ліва колонка: код програми -->
+    <div>
+      <div class="panel">
+        <h2>Програма (Python)</h2>
+        <div class="code" id="code"></div>
+        <textarea id="editor" spellcheck="false" style="display:none"></textarea>
+      </div>
+    </div>
+
+    <!-- Права колонка: глобальна область, стек викликів, виведення -->
+    <div>
+      <div class="panel">
+        <div class="scope" id="globals"></div>
+        <div class="stack-label"><span>Стек викликів (верхній кадр — активний)</span><span id="depth"></span></div>
+        <div id="stack"></div>
+      </div>
+      <div class="panel">
+        <h2>Виведення на екран</h2>
+        <div class="output" id="output"></div>
+      </div>
+      <div class="legend">
+        <span style="--c:var(--cur)">рядок, що виконується</span>
+        <span style="--c:var(--caller)">місце виклику (куди повернеться результат)</span>
+        <span style="--c:var(--global-bg)">глобальна змінна</span>
+        <span style="--c:var(--param-bg)">формальний параметр</span>
+        <span style="--c:var(--local-bg)">локальна змінна</span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>Розроблено автором · Клавіші: <b>→</b> крок, <b>←</b> назад, <b>Пробіл</b> старт/пауза</footer>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* =====================================================================
+   ГОТОВІ ПРИКЛАДИ ПРОГРАМ
+   ===================================================================== */
+const PRESETS = [
+  { name:'1. Функція max2(a, b)', note:'передача фактичних параметрів і повернення результату',
+    code:
+`def max2(x, y):
+    if x > y:
+        return x
+    else:
+        return y
+
+a = 3
+b = 7
+m = max2(a, b)
+print("Більше число:", m)
+m2 = max2(10, a)
+print("Ще раз:", m2)` },
+  { name:'2. Площа і периметр прямокутника', note:'дві функції, у кожної свої локальні змінні',
+    code:
+`def area(w, h):
+    s = w * h
+    return s
+
+def perimeter(w, h):
+    p = 2 * (w + h)
+    return p
+
+width = 4
+height = 3
+s1 = area(width, height)
+p1 = perimeter(width, height)
+print("S =", s1, "P =", p1)` },
+  { name:'3. Функція викликає функцію', note:'у стеку одночасно кілька кадрів',
+    code:
+`def square(n):
+    return n * n
+
+def sum_squares(a, b):
+    sa = square(a)
+    sb = square(b)
+    return sa + sb
+
+result = sum_squares(2, 3)
+print("2² + 3² =", result)` },
+  { name:'4. «Тінь» глобальної змінної та global', note:'локальна x затіняє глобальну; global змінює глобальну',
+    code:
+`x = 10
+total = 0
+
+def change():
+    x = 5          # нова локальна x
+    print("усередині change: x =", x)
+
+def add(k):
+    global total
+    total = total + k
+
+change()
+print("зовні: x =", x)
+add(3)
+add(4)
+print("total =", total)` }
+];
+
+/* =====================================================================
+   1. ЛЕКСИЧНИЙ АНАЛІЗ: рядок → лексеми (токени)
+   ===================================================================== */
+class SyntaxErr extends Error { constructor(line, msg){ super(`Рядок ${line}: ${msg}`); this.line = line; } }
+class RunError extends Error {}
+
+const KEYWORDS = new Set(['def','return','if','elif','else','while','global','pass','and','or','not','True','False','None']);
+const OPS2 = ['//','==','!=','<=','>=','+=','-=','*='];
+const OPS1 = '+-*/%()<>=:,';
+const ID_START = /[A-Za-z_Ѐ-ӿ]/, ID_CHAR = /[A-Za-z0-9_Ѐ-ӿ]/;
+
+function tokenize(src, line){
+  const toks = []; let i = 0;
+  while (i < src.length){
+    const ch = src[i];
+    if (ch === ' ' || ch === '\t'){ i++; continue; }
+    if (/[0-9]/.test(ch)){
+      const m = /^\d+(\.\d+)?/.exec(src.slice(i));
+      toks.push({t:'num', v:Number(m[0])}); i += m[0].length; continue;
+    }
+    if (ch === '"' || ch === "'"){
+      const end = src.indexOf(ch, i + 1);
+      if (end < 0) throw new SyntaxErr(line, 'рядок не закрито лапками ' + ch);
+      toks.push({t:'str', v:src.slice(i + 1, end)}); i = end + 1; continue;
+    }
+    if (ID_START.test(ch)){
+      let j = i + 1; while (j < src.length && ID_CHAR.test(src[j])) j++;
+      const w = src.slice(i, j);
+      toks.push({t: KEYWORDS.has(w) ? 'kw' : 'name', v:w}); i = j; continue;
+    }
+    const two = src.slice(i, i + 2);
+    if (OPS2.includes(two)){ toks.push({t:'op', v:two}); i += 2; continue; }
+    if (OPS1.includes(ch)){ toks.push({t:'op', v:ch}); i++; continue; }
+    throw new SyntaxErr(line, `незрозумілий символ «${ch}»`);
+  }
+  return toks;
+}
+
+/** Вилучає коментар (#...), не чіпаючи # усередині лапок */
+function stripComment(s){
+  let q = null;
+  for (let i = 0; i < s.length; i++){
+    const c = s[i];
+    if (q){ if (c === q) q = null; }
+    else if (c === '"' || c === "'") q = c;
+    else if (c === '#') return s.slice(0, i);
+  }
+  return s;
+}
+
+/* =====================================================================
+   2. СИНТАКСИЧНИЙ АНАЛІЗ: лексеми → дерево програми
+   ===================================================================== */
+/** Розбір виразу з масиву лексем (метод рекурсивного спуску) */
+function parseExpr(toks, line){
+  let p = 0;
+  const peek = () => toks[p];
+  const isOp = v => toks[p] && toks[p].t === 'op' && toks[p].v === v;
+  const isKw = v => toks[p] && toks[p].t === 'kw' && toks[p].v === v;
+  const fail = m => { throw new SyntaxErr(line, m); };
+
+  function orE(){ let l = andE(); while (isKw('or')){ p++; l = {t:'bin', op:'or', l, r:andE()}; } return l; }
+  function andE(){ let l = notE(); while (isKw('and')){ p++; l = {t:'bin', op:'and', l, r:notE()}; } return l; }
+  function notE(){ if (isKw('not')){ p++; return {t:'un', op:'not', e:notE()}; } return cmpE(); }
+  function cmpE(){
+    let l = addE();
+    while (peek() && peek().t === 'op' && ['==','!=','<','>','<=','>='].includes(peek().v)){
+      const op = toks[p++].v; l = {t:'bin', op, l, r:addE()};
+    }
+    return l;
+  }
+  function addE(){ let l = mulE(); while (isOp('+') || isOp('-')){ const op = toks[p++].v; l = {t:'bin', op, l, r:mulE()}; } return l; }
+  function mulE(){ let l = unE(); while (isOp('*') || isOp('/') || isOp('//') || isOp('%')){ const op = toks[p++].v; l = {t:'bin', op, l, r:unE()}; } return l; }
+  function unE(){ if (isOp('-')){ p++; return {t:'un', op:'-', e:unE()}; } if (isOp('+')){ p++; return unE(); } return primary(); }
+  function primary(){
+    const tk = toks[p++];
+    if (!tk) fail('вираз обривається — чогось бракує');
+    if (tk.t === 'num') return {t:'num', v:tk.v};
+    if (tk.t === 'str') return {t:'str', v:tk.v};
+    if (tk.t === 'kw' && tk.v === 'True') return {t:'const', v:true};
+    if (tk.t === 'kw' && tk.v === 'False') return {t:'const', v:false};
+    if (tk.t === 'kw' && tk.v === 'None') return {t:'const', v:null};
+    if (tk.t === 'name'){
+      if (isOp('(')){          // виклик функції
+        p++; const args = [];
+        if (!isOp(')')){
+          while (true){
+            args.push(orE());
+            if (isOp(',')){ p++; continue; }
+            if (isOp(')')) break;
+            fail(`у виклику ${tk.v}(...) очікується «,» або «)»`);
+          }
+        }
+        p++; return {t:'call', id:tk.v, args};
+      }
+      return {t:'name', id:tk.v};
+    }
+    if (tk.t === 'op' && tk.v === '('){
+      const e = orE(); if (!isOp(')')) fail('не вистачає закривальної дужки «)»'); p++; return e;
+    }
+    fail(`неочікуване «${tk.v}» у виразі`);
+  }
+  if (!toks.length) fail('порожній вираз');
+  const e = orE();
+  if (p < toks.length) fail(`зайвий фрагмент «${toks[p].v}» у виразі`);
+  return e;
+}
+
+/** Розбір усієї програми. Повертає список інструкцій верхнього рівня. */
+function parseProgram(text){
+  const raw = text.replace(/\r/g, '').split('\n');
+  const lines = [];
+  raw.forEach((s, k) => {
+    const code = stripComment(s.replace(/\t/g, '    ')).replace(/\s+$/, '');
+    if (!code.trim()) return;
+    const indent = code.length - code.trimStart().length;
+    lines.push({no:k + 1, indent, toks:tokenize(code.trim(), k + 1)});
+  });
+  let pos = 0;
+
+  function header(ln, kw){   // «if умова:» → лексеми умови
+    const t = ln.toks;
+    if (!(t[t.length - 1].t === 'op' && t[t.length - 1].v === ':'))
+      throw new SyntaxErr(ln.no, `після ${kw} наприкінці рядка має стояти двокрапка «:»`);
+    return t.slice(1, -1);
+  }
+  function block(parentIndent, ln, inFunc){
+    if (pos >= lines.length || lines[pos].indent <= parentIndent)
+      throw new SyntaxErr(ln.no, 'після «:» очікується блок інструкцій з відступом');
+    return parseBlock(lines[pos].indent, inFunc);
+  }
+  function parseBlock(indent, inFunc){
+    const body = [];
+    while (pos < lines.length){
+      const ln = lines[pos];
+      if (ln.indent < indent) break;
+      if (ln.indent > indent) throw new SyntaxErr(ln.no, 'зайвий відступ');
+      body.push(parseStmt(ln, indent, inFunc));
+    }
+    return body;
+  }
+  function parseStmt(ln, indent, inFunc){
+    const t = ln.toks, first = t[0];
+    pos++;
+    if (first.t === 'kw'){
+      switch (first.v){
+        case 'def': {
+          if (inFunc || indent > 0) throw new SyntaxErr(ln.no, 'у цьому тренажері функції оголошуються лише на верхньому рівні (без відступу)');
+          const h = header(ln, 'def');
+          if (!h.length || h[0].t !== 'name' || !h[1] || h[1].v !== '(' || h[h.length - 1].v !== ')')
+            throw new SyntaxErr(ln.no, 'очікується запис def імʼя(параметри):');
+          const params = [];
+          const inner = h.slice(2, -1);
+          for (let k = 0; k < inner.length; k++){
+            if (k % 2 === 0){
+              if (inner[k].t !== 'name') throw new SyntaxErr(ln.no, `«${inner[k].v}» не може бути імʼям параметра`);
+              if (params.includes(inner[k].v)) throw new SyntaxErr(ln.no, `параметр ${inner[k].v} повторюється`);
+              params.push(inner[k].v);
+            } else if (inner[k].v !== ',') throw new SyntaxErr(ln.no, 'параметри розділяються комами');
+          }
+          if (inner.length && inner[inner.length - 1].v === ',') throw new SyntaxErr(ln.no, 'зайва кома в списку параметрів');
+          const body = block(indent, ln, true);
+          const def = {t:'def', line:ln.no, name:h[0].v, params, body, endLine:lines[pos - 1].no};
+          analyzeScopes(def);
+          return def;
+        }
+        case 'if': {
+          const branches = [{cond:parseExpr(header(ln,'if'), ln.no), line:ln.no, body:block(indent, ln, inFunc)}];
+          let elseBody = null, elseLine = null;
+          while (pos < lines.length && lines[pos].indent === indent && lines[pos].toks[0].t === 'kw'){
+            const l2 = lines[pos], k = l2.toks[0].v;
+            if (k === 'elif'){ pos++; branches.push({cond:parseExpr(header(l2,'elif'), l2.no), line:l2.no, body:block(indent, l2, inFunc)}); }
+            else if (k === 'else'){
+              pos++; if (l2.toks.length !== 2 || l2.toks[1].v !== ':') throw new SyntaxErr(l2.no, 'після else має стояти лише двокрапка');
+              elseLine = l2.no; elseBody = block(indent, l2, inFunc); break;
+            } else break;
+          }
+          return {t:'if', line:ln.no, branches, elseBody, elseLine};
+        }
+        case 'elif': case 'else': throw new SyntaxErr(ln.no, `${first.v} без відповідного if`);
+        case 'while': return {t:'while', line:ln.no, cond:parseExpr(header(ln,'while'), ln.no), body:block(indent, ln, inFunc)};
+        case 'return':
+          if (!inFunc) throw new SyntaxErr(ln.no, 'return можна використовувати лише всередині функції');
+          return {t:'return', line:ln.no, expr: t.length > 1 ? parseExpr(t.slice(1), ln.no) : null};
+        case 'global': {
+          if (!inFunc) throw new SyntaxErr(ln.no, 'global має сенс лише всередині функції');
+          const names = t.slice(1).filter((_, k) => k % 2 === 0).map(x => { if (x.t !== 'name') throw new SyntaxErr(ln.no, 'після global очікуються імена змінних'); return x.v; });
+          if (!names.length) throw new SyntaxErr(ln.no, 'після global очікуються імена змінних');
+          return {t:'global', line:ln.no, names};
+        }
+        case 'pass': return {t:'pass', line:ln.no};
+      }
+    }
+    // Присвоювання: імʼя = вираз (або +=, -=, *=)
+    if (first.t === 'name' && t[1] && t[1].t === 'op' && ['=','+=','-=','*='].includes(t[1].v)){
+      return {t:'assign', line:ln.no, name:first.v, op:t[1].v, expr:parseExpr(t.slice(2), ln.no)};
+    }
+    if (t.some(x => x.t === 'op' && x.v === '=')) throw new SyntaxErr(ln.no, 'ліворуч від «=» має бути імʼя змінної (для порівняння використовуйте «==»)');
+    const e = parseExpr(t, ln.no);
+    if (e.t !== 'call') throw new SyntaxErr(ln.no, 'такий рядок нічого не робить: очікується присвоювання або виклик функції');
+    return {t:'expr', line:ln.no, expr:e};
+  }
+
+  const prog = parseBlock(0, false);
+  if (pos < lines.length) throw new SyntaxErr(lines[pos].no, 'зайвий відступ');
+  return prog;
+}
+
+/** Як у Python: змінна, якій щось присвоюється в тілі функції, вважається локальною
+    (якщо не оголошена global). Параметри — теж локальні. */
+function analyzeScopes(def){
+  const globals = new Set(), assigned = new Set();
+  (function walk(list){
+    for (const s of list){
+      if (s.t === 'global') s.names.forEach(n => globals.add(n));
+      if (s.t === 'assign') assigned.add(s.name);
+      if (s.t === 'if'){ s.branches.forEach(b => walk(b.body)); if (s.elseBody) walk(s.elseBody); }
+      if (s.t === 'while') walk(s.body);
+    }
+  })(def.body);
+  for (const p of def.params) if (globals.has(p)) throw new SyntaxErr(def.line, `параметр ${p} не може бути оголошений як global`);
+  def.globalDecl = globals;
+  def.localNames = new Set([...def.params, ...[...assigned].filter(n => !globals.has(n))]);
+}
+
+/* =====================================================================
+   3. ВИКОНАННЯ З ЗАПИСОМ ЗНІМКІВ
+   ===================================================================== */
+const MAX_STEPS = 600, MAX_DEPTH = 25;
+const isFunc = v => v && typeof v === 'object' && v.type === 'func';
+
+/** Текстове подання значення так, як його друкує print */
+function pyStr(v){
+  if (v === null || v === undefined) return 'None';
+  if (v === true) return 'True';
+  if (v === false) return 'False';
+  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : String(+v.toPrecision(10));
+  if (isFunc(v)) return `<функція ${v.def.name}>`;
+  return String(v);
+}
+/** Подання значення у таблиці змінних (рядки — у лапках) */
+function repr(v){ return typeof v === 'string' ? `"${v}"` : pyStr(v); }
+
+/** Вираз → текст (для пояснень) */
+const PREC = {or:1, and:2, '==':4,'!=':4,'<':4,'>':4,'<=':4,'>=':4,'+':5,'-':5,'*':6,'/':6,'//':6,'%':6};
+function exprStr(n, parent = 0){
+  switch (n.t){
+    case 'num': return pyStr(n.v);
+    case 'str': return `"${n.v}"`;
+    case 'const': return pyStr(n.v);
+    case 'name': return n.id;
+    case 'call': return `${n.id}(${n.args.map(a => exprStr(a)).join(', ')})`;
+    case 'un': return n.op === 'not' ? `not ${exprStr(n.e, 3)}` : `-${exprStr(n.e, 7)}`;
+    case 'bin': {
+      const p = PREC[n.op];
+      const s = `${exprStr(n.l, p)} ${n.op} ${exprStr(n.r, p + 0.5)}`;
+      return p < parent ? `(${s})` : s;
+    }
+  }
+  return '?';
+}
+
+function run(prog){
+  const steps = [];
+  const G = new Map();           // глобальна область видимості
+  const stack = [];              // кадри стеку викликів
+  const out = [];                // рядки виведення
+  let curLine = 0, frameId = 0;
+
+  /** Запис знімка поточного стану */
+  function snap(text, extra){
+    const top = stack[stack.length - 1];
+    const localsOfTop = top ? new Set(top.vars.keys()) : new Set();
+    const globals = [...G].map(([k, v]) => ({
+      name:k, value: isFunc(v) ? `функція (${v.def.params.join(', ')})` : repr(v), func:isFunc(v),
+      hidden: !isFunc(v) && localsOfTop.has(k)       // затінена локальною змінною активного кадру
+    }));
+    const frames = stack.map(f => ({
+      id:f.id, fn:f.def.name, params:f.def.params, callLine:f.callLine, callSrc:f.callSrc,
+      returning:!!f.returning, ret: f.returning ? repr(f.ret) : null,
+      vars:[...f.vars].map(([k, v]) => ({
+        name:k, value:repr(v), kind: f.def.params.includes(k) ? 'param' : 'local',
+        shadow: G.has(k) && !isFunc(G.get(k)), argSrc: f.argSrc[k]
+      }))
+    }));
+    steps.push(Object.assign({line:curLine, globals, frames, out:[...out], text}, extra || {}));
+    if (steps.length > MAX_STEPS) throw new RunError(`Програма виконала понад ${MAX_STEPS} кроків. Можливо, цикл while ніколи не завершується.`);
+  }
+
+  const num = (v, op) => {
+    if (typeof v === 'boolean') return v ? 1 : 0;
+    if (typeof v !== 'number') throw new RunError(`операцію «${op}» не можна виконати над ${typeof v === 'string' ? 'рядком' : pyStr(v)}`);
+    return v;
+  };
+  const truthy = v => !(v === null || v === false || v === 0 || v === '');
+
+  /** Пошук значення змінної за правилами областей видимості */
+  function lookup(name, f){
+    if (f){
+      if (f.def.globalDecl.has(name)){
+        if (G.has(name)) return G.get(name);
+        throw new RunError(`глобальна змінна ${name} ще не має значення`);
+      }
+      if (f.def.localNames.has(name)){
+        if (f.vars.has(name)) return f.vars.get(name);
+        throw new RunError(`локальну змінну «${name}» використано до присвоєння. Оскільки у функції ${f.def.name} їй присвоюється значення, ` +
+          `Python вважає її локальною в усьому тілі функції (глобальну ${name} тут не видно). Допоможе рядок «global ${name}».`);
+      }
+    }
+    if (G.has(name)) return G.get(name);
+    throw new RunError(`змінна «${name}» не визначена — їй ще не присвоєно значення`);
+  }
+
+  /** Обчислення виразу; f — активний кадр (null — основна програма) */
+  function evalE(n, f){
+    switch (n.t){
+      case 'num': case 'str': case 'const': return n.v;
+      case 'name': return lookup(n.id, f);
+      case 'un': {
+        const v = evalE(n.e, f);
+        return n.op === 'not' ? !truthy(v) : -num(v, '-');
+      }
+      case 'bin': {
+        if (n.op === 'and'){ const a = evalE(n.l, f); return truthy(a) ? evalE(n.r, f) : a; }
+        if (n.op === 'or'){ const a = evalE(n.l, f); return truthy(a) ? a : evalE(n.r, f); }
+        return binop(n.op, evalE(n.l, f), evalE(n.r, f));
+      }
+      case 'call': return callF(n, f);
+    }
+  }
+
+  function binop(op, a, b){
+    switch (op){
+      case '+':
+        if (typeof a === 'string' && typeof b === 'string') return a + b;
+        if (typeof a === 'string' || typeof b === 'string') throw new RunError('не можна додавати рядок і число (спершу перетворіть: str(...) або int(...))');
+        return num(a, op) + num(b, op);
+      case '-': return num(a, op) - num(b, op);
+      case '*':
+        if (typeof a === 'string' && Number.isInteger(b)) return a.repeat(Math.max(0, b));
+        if (typeof b === 'string' && Number.isInteger(a)) return b.repeat(Math.max(0, a));
+        return num(a, op) * num(b, op);
+      case '/': if (num(b, op) === 0) throw new RunError('ділення на нуль'); return num(a, op) / b;
+      case '//': if (num(b, op) === 0) throw new RunError('ділення на нуль'); return Math.floor(num(a, op) / b);
+      case '%': if (num(b, op) === 0) throw new RunError('ділення на нуль'); { const r = num(a, op) % b; return (r !== 0 && (r < 0) !== (b < 0)) ? r + b : r; }
+      case '==': return a === b;
+      case '!=': return a !== b;
+      default: {
+        if (typeof a !== typeof b && !(typeof a !== 'string' && typeof b !== 'string'))
+          throw new RunError(`не можна порівнювати рядок і число операцією «${op}»`);
+        return op === '<' ? a < b : op === '>' ? a > b : op === '<=' ? a <= b : a >= b;
+      }
+    }
+  }
+
+  /** Вбудовані функції (для них кадр стеку не показуємо) */
+  const BUILTINS = {
+    abs: a => Math.abs(num(a[0], 'abs')),
+    int: a => { const v = a[0]; if (typeof v === 'string'){ if (!/^\s*-?\d+\s*$/.test(v)) throw new RunError(`int("${v}"): рядок не є цілим числом`); return parseInt(v, 10); } return Math.trunc(num(v, 'int')); },
+    str: a => pyStr(a[0]),
+    round: a => { const k = a.length > 1 ? num(a[1], 'round') : 0; const m = 10 ** k; return Math.round(num(a[0], 'round') * m) / m; },
+    len: a => { if (typeof a[0] !== 'string') throw new RunError('len() у цьому тренажері працює лише з рядками'); return a[0].length; },
+    min: a => { if (!a.length) throw new RunError('min() потребує аргументів'); return a.reduce((x, y) => binop('<', y, x) ? y : x); },
+    max: a => { if (!a.length) throw new RunError('max() потребує аргументів'); return a.reduce((x, y) => binop('>', y, x) ? y : x); }
+  };
+
+  /** Виклик функції: створення кадру, копіювання параметрів, виконання тіла, повернення */
+  function callF(n, f){
+    const name = n.id;
+    const fv = G.get(name);
+    if (!isFunc(fv)){
+      if (name === 'print') throw new RunError('print() використовуйте окремим рядком, а не всередині виразу');
+      if (BUILTINS[name]) return BUILTINS[name](n.args.map(a => evalE(a, f)));
+      throw new RunError(`функцію «${name}» не знайдено. Можливо, її ще не оголошено (def ${name} має стояти вище за виклик)`);
+    }
+    const def = fv.def;
+    if (n.args.length !== def.params.length)
+      throw new RunError(`функція ${name} має ${def.params.length} формальн. параметр(и) (${def.params.join(', ')}), а передано ${n.args.length} фактичн.`);
+    // Спочатку обчислюємо фактичні параметри (тут можуть бути інші виклики)
+    const vals = n.args.map(a => evalE(a, f));
+    if (stack.length >= MAX_DEPTH) throw new RunError(`занадто багато вкладених викликів (понад ${MAX_DEPTH}) — схоже на нескінченну рекурсію`);
+    const callerLine = curLine;
+    const frame = {id:++frameId, def, vars:new Map(), callLine:callerLine, callSrc:exprStr(n), argSrc:{}, returning:false, ret:null};
+    def.params.forEach((p, k) => { frame.vars.set(p, vals[k]); frame.argSrc[p] = exprStr(n.args[k]); });
+    stack.push(frame);
+    curLine = def.line;
+    const pairs = def.params.map((p, k) => `${p} ← ${repr(vals[k])}` + (exprStr(n.args[k]) !== repr(vals[k]) ? ` (з ${exprStr(n.args[k])})` : ''));
+    snap(`<b>Виклик ${esc(exprStr(n))}</b> з рядка ${callerLine}: у стеку створюється новий кадр <b>${name}</b>. ` +
+         (pairs.length ? `Значення фактичних параметрів копіюються у формальні: ${esc(pairs.join(', '))}.` : 'Параметрів немає.'),
+         {kind:'call', anim:{type:'call', frame:frame.id, params:def.params, from:callerLine}});
+    let explicit = false, ret = null;
+    try { execBlock(def.body, frame); curLine = def.endLine; }
+    catch (e){ if (e instanceof ReturnSig){ explicit = true; ret = e.v; } else throw e; }
+    frame.returning = true; frame.ret = ret;
+    const locals = [...frame.vars.keys()];
+    snap((explicit ? `<b>return</b>: функція ${name} повертає <b>${esc(repr(ret))}</b> у місце виклику (рядок ${callerLine}). `
+                   : `Тіло функції ${name} виконано до кінця без return — повертається None (така функція працює як процедура). `) +
+         (locals.length ? `Кадр ${name} знищується разом зі змінними ${locals.join(', ')}.` : `Кадр ${name} знищується.`),
+         {kind:'ret', anim:{type:'ret', frame:frame.id, to:callerLine}});
+    stack.pop();
+    curLine = callerLine;
+    return ret;
+  }
+
+  /** Збереження значення змінної у правильну область. Повертає пояснення. */
+  function store(name, v, f, isNew){
+    if (!f){
+      G.set(name, v);
+      return {scope:'g', text:`${isNew ? 'Створено глобальну змінну' : 'Глобальна змінна'} <b>${name} ← ${esc(repr(v))}</b>.`};
+    }
+    if (f.def.globalDecl.has(name)){
+      G.set(name, v);
+      return {scope:'g', text:`Імʼя ${name} оголошено як global, тому змінюється <b>глобальна</b> змінна: ${name} ← ${esc(repr(v))}.`};
+    }
+    const existed = f.vars.has(name);
+    f.vars.set(name, v);
+    const isParam = f.def.params.includes(name);
+    let t = existed
+      ? `${isParam ? 'Параметр' : 'Локальна змінна'} ${name} кадру ${f.def.name} отримує нове значення: <b>${name} ← ${esc(repr(v))}</b>.`
+      : `У кадрі ${f.def.name} створено <b>локальну</b> змінну <b>${name} = ${esc(repr(v))}</b>.`;
+    if (!existed && G.has(name) && !isFunc(G.get(name)))
+      t += ` Вона <b>затіняє</b> глобальну ${name} = ${esc(repr(G.get(name)))}: глобальна змінна не змінюється.`;
+    return {scope:f.id, text:t};
+  }
+
+  /** Пояснення до умови: «x > y: 3 > 7 → False» */
+  function evalCond(c, f){
+    if (c.t === 'bin' && PREC[c.op] === 4){
+      const a = evalE(c.l, f), b = evalE(c.r, f), r = binop(c.op, a, b);
+      return {v:r, s:`${exprStr(c)}: ${repr(a)} ${c.op} ${repr(b)} → ${pyStr(r)}`};
+    }
+    const r = evalE(c, f);
+    return {v:r, s:`${exprStr(c)} → ${pyStr(truthy(r))}`};
+  }
+
+  function execBlock(list, f){ for (const s of list) execStmt(s, f); }
+
+  function execStmt(s, f){
+    curLine = s.line;
+    switch (s.t){
+      case 'def':
+        G.set(s.name, {type:'func', def:s});
+        snap(`Оголошено функцію <b>${s.name}(${s.params.join(', ')})</b>. Її імʼя потрапляє в глобальну область, а тіло виконається лише під час виклику.`,
+             {changed:{scope:'g', name:s.name}});
+        break;
+      case 'assign': {
+        const scopeHas = f ? (f.def.globalDecl.has(s.name) ? G.has(s.name) : f.vars.has(s.name)) : G.has(s.name);
+        let v = evalE(s.expr, f);
+        let pre = '';
+        if (s.op !== '='){
+          const old = lookup(s.name, f);
+          v = binop(s.op[0], old, v);
+          pre = `${s.name} ${s.op} ${exprStr(s.expr)}: `;
+        } else if (!['num','str','const'].includes(s.expr.t)){
+          pre = `${s.name} = ${exprStr(s.expr)}: `;
+        }
+        curLine = s.line;
+        const r = store(s.name, v, f, !scopeHas);
+        snap(esc(pre) + (pre ? r.text.charAt(0).toLowerCase() + r.text.slice(1) : r.text), {changed:{scope:r.scope, name:s.name}});
+        break;
+      }
+      case 'expr': {
+        const e = s.expr;
+        if (e.id === 'print' && !isFunc(G.get('print'))){
+          const vals = e.args.map(a => evalE(a, f));
+          curLine = s.line;
+          const line = vals.map(pyStr).join(' ');
+          out.push(line);
+          snap(`print виводить на екран: <b>${esc(line)}</b>`, {newOut:true});
+        } else {
+          const v = evalE(e, f);
+          curLine = s.line;
+          snap(`Виклик ${esc(exprStr(e))} завершено` + (v !== null ? `; результат ${esc(repr(v))} ніде не зберігається.` : '.'));
+        }
+        break;
+      }
+      case 'if': {
+        for (const b of s.branches){
+          curLine = b.line;
+          const c = evalCond(b.cond, f);
+          curLine = b.line;
+          if (truthy(c.v)){ snap(`Умова ${esc(c.s)} — виконуємо цю гілку.`); execBlock(b.body, f); return; }
+          snap(`Умова ${esc(c.s)} — ` + 'гілку пропускаємо.' +
+               (b === s.branches[s.branches.length - 1] && s.elseBody ? ` Переходимо до else (рядок ${s.elseLine}).` : ''));
+        }
+        if (s.elseBody) execBlock(s.elseBody, f);
+        break;
+      }
+      case 'while':
+        while (true){
+          curLine = s.line;
+          const c = evalCond(s.cond, f);
+          curLine = s.line;
+          if (!truthy(c.v)){ snap(`Умова циклу ${esc(c.s)} — цикл завершено.`); break; }
+          snap(`Умова циклу ${esc(c.s)} — виконуємо тіло циклу.`);
+          execBlock(s.body, f);
+        }
+        break;
+      case 'return': {
+        const v = s.expr ? evalE(s.expr, f) : null;
+        curLine = s.line;
+        throw new ReturnSig(v);
+      }
+      case 'global':
+        snap(`global ${s.names.join(', ')}: у функції ${f.def.name} ${s.names.length > 1 ? 'ці імена означатимуть' : 'це імʼя означатиме'} <b>глобальну</b> змінну, нова локальна не створюватиметься.`);
+        break;
+      case 'pass':
+        snap('pass — порожня інструкція, нічого не відбувається.');
+        break;
+    }
+  }
+
+  snap('Програма готова до виконання. Натисніть «Крок» або «Старт».', {start:true});
+  try {
+    execBlock(prog, null);
+    curLine = 0;
+    snap('Програму виконано до кінця. Стек викликів порожній.', {kind:'ret', end:true});
+  } catch (e){
+    if (e instanceof RunError){
+      steps.push(Object.assign({}, steps[steps.length - 1], {line:curLine, text:`<b>Помилка виконання (рядок ${curLine}):</b> ${e.message}`, kind:'err', err:true, anim:null, changed:null, newOut:false}));
+    } else throw e;
+  }
+  return steps;
+}
+class ReturnSig { constructor(v){ this.v = v; } }
+
+/* =====================================================================
+   4. ВІДОБРАЖЕННЯ ЗНІМКА
+   ===================================================================== */
+let srcLines = [];      // рядки тексту програми для показу
+let lastShown = -1;     // номер попереднього показаного кроку (для анімації лише вперед)
+
+/** Просте підсвічування синтаксису одного рядка */
+function highlight(line){
+  const ci = stripComment(line).length;
+  const code = line.slice(0, ci), com = line.slice(ci);
+  let h = '';
+  const re = /("[^"]*"|'[^']*')|\b(def|return|if|elif|else|while|global|pass|and|or|not|True|False|None|print)\b/g;
+  let last = 0, m;
+  while ((m = re.exec(code))){
+    h += esc(code.slice(last, m.index));
+    h += m[1] ? `<span class="str">${esc(m[1])}</span>` : `<span class="kw">${m[2]}</span>`;
+    last = re.lastIndex;
+  }
+  h += esc(code.slice(last));
+  if (com) h += `<span class="com">${esc(com)}</span>`;
+  return h;
+}
+
+function render(st, i){
+  document.querySelectorAll('.chip').forEach(c => c.remove());   // прибираємо фішки попереднього кроку
+  // --- код: поточний рядок і місця викликів ---
+  const callers = new Set(st.frames.map(f => f.callLine));
+  $('code').innerHTML = srcLines.map((t, k) => {
+    const no = k + 1;
+    const cls = no === st.line ? (st.err ? 'err' : 'hl') : callers.has(no) ? 'caller' : '';
+    return `<div class="ln ${cls}" id="ln-${no}"><span class="no">${no}</span>${highlight(t) || ' '}</div>`;
+  }).join('');
+  const curEl = $('ln-' + st.line);
+  if (curEl) curEl.scrollIntoView({block:'nearest'});
+
+  // --- глобальна область ---
+  const ch = st.changed || {};
+  $('globals').innerHTML =
+    `<div class="title"><span>Глобальна область видимості</span><small>видно з усієї програми</small></div>` +
+    (st.globals.length ? `<table class="vars">` + st.globals.map(g =>
+      `<tr class="${ch.scope === 'g' && ch.name === g.name && i > lastShown ? 'changed' : ''}">
+         <td class="n">${esc(g.name)}</td>
+         <td class="v">${g.func ? `<span class="badge b-func">${esc(g.value)}</span>` : esc(g.value)}
+           ${g.hidden ? '<span class="badge b-hidden">затінена в активному кадрі</span>' : ''}</td></tr>`).join('') + `</table>`
+      : `<div class="stack-empty">поки порожньо</div>`);
+
+  // --- стек викликів: верхній (останній) кадр малюємо зверху ---
+  const prevFrames = (i > 0 && i === lastShown + 1) ? new Set(steps[i - 1].frames.map(f => f.id)) : null;
+  const frames = [...st.frames].reverse();
+  $('stack').innerHTML = frames.length ? frames.map((f, k) => {
+    const rows = f.vars.map(v => {
+      const badges = (v.kind === 'param' ? '<span class="badge b-param">параметр</span>' : '<span class="badge b-local">локальна</span>') +
+                     (v.shadow ? '<span class="badge b-shadow">затіняє глобальну</span>' : '');
+      const src = v.kind === 'param' && v.argSrc && v.argSrc !== v.value ? ` <span class="src">← ${esc(v.argSrc)}</span>` : '';
+      const changed = ch.scope === f.id && ch.name === v.name && i > lastShown ? 'changed' : '';
+      return `<tr class="${changed}" data-frame="${f.id}" data-var="${esc(v.name)}" style="background:${v.kind === 'param' ? 'var(--param-bg)' : 'var(--local-bg)'}">
+                <td class="n">${esc(v.name)}</td><td class="v"><span class="val">${esc(v.value)}</span>${src}${badges}</td></tr>`;
+    }).join('');
+    const ret = f.returning ? `<tr class="retrow"><td class="n">return</td><td class="v"><span class="val" id="ret-${f.id}">${esc(f.ret)}</span> → у рядок ${f.callLine}</td></tr>` : '';
+    const isNew = prevFrames && !prevFrames.has(f.id) ? ' new' : '';
+    return `<div class="frame${k === 0 ? ' top' : ''}${f.returning ? ' returning' : ''}${isNew}" id="frame-${f.id}">
+      <div class="title" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:.4rem;font-weight:800">
+        <span>Кадр ${esc(f.fn)}(${esc(f.params.join(', '))})</span>
+        <small class="src">виклик ${esc(f.callSrc)} з рядка ${f.callLine}</small></div>
+      <table class="vars">${rows || '<tr><td class="src">немає змінних</td></tr>'}${ret}</table></div>`;
+  }).join('') : `<div class="stack-empty">Стек порожній — виконується основна програма.</div>`;
+  $('depth').textContent = `глибина: ${st.frames.length}`;
+
+  // --- виведення ---
+  $('output').innerHTML = st.out.length
+    ? st.out.map((l, k) => `<div class="${st.newOut && k === st.out.length - 1 ? 'new' : ''}">${esc(l)}</div>`).join('')
+    : '<span style="opacity:.5">(поки нічого не виведено)</span>';
+
+  // --- пояснення ---
+  const ex = $('explain');
+  ex.innerHTML = st.text;
+  ex.className = 'explain' + (st.kind ? ' ' + st.kind : '');
+
+  // --- анімація «перельоту» значень (лише під час руху вперед) ---
+  if (st.anim && i === lastShown + 1) animate(st.anim);
+  lastShown = i;
+}
+
+/** Фішка зі значенням летить від елемента from до елемента to */
+function fly(text, fromEl, toEl, cls, delay){
+  if (!fromEl || !toEl) return;
+  const a = fromEl.getBoundingClientRect(), b = toEl.getBoundingClientRect();
+  const chip = document.createElement('div');
+  chip.className = 'chip ' + cls; chip.textContent = text;
+  document.body.appendChild(chip);
+  const sx = a.left + Math.min(a.width / 2, 260), sy = a.top + a.height / 2;
+  const ex = b.left + 10, ey = b.top + b.height / 2;
+  chip.style.left = sx + 'px'; chip.style.top = (sy - 14) + 'px';
+  const anim = chip.animate([
+    {transform:'translate(0,0) scale(.8)', opacity:0},
+    {transform:'translate(0,0) scale(1)', opacity:1, offset:.15},
+    {transform:`translate(${ex - sx}px, ${ey - sy}px) scale(1)`, opacity:1, offset:.85},
+    {transform:`translate(${ex - sx}px, ${ey - sy}px) scale(1)`, opacity:0}
+  ], {duration:1100, delay, easing:'ease-in-out', fill:'both'});
+  anim.onfinish = () => chip.remove();
+}
+function animate(a){
+  if (a.type === 'call'){
+    a.params.forEach((p, k) => {
+      const row = document.querySelector(`tr[data-frame="${a.frame}"][data-var="${CSS.escape(p)}"] .val`);
+      fly(row ? row.textContent : '', $('ln-' + a.from), row, 'call', k * 250);
+    });
+  } else {
+    const r = $('ret-' + a.frame);
+    fly(r ? r.textContent : '', r, $('ln-' + a.to), 'ret', 0);
+  }
+}
+
+/* =====================================================================
+   5. ПРОГРАВАЧ КРОКІВ
+   ===================================================================== */
+class Player {
+  constructor(root, render){
+    this.render = render; this.steps = []; this.i = 0; this.timer = null;
+    root.classList.add('controls');
+    root.innerHTML = `
+      <button class="btn" data-act="prev" title="Попередній крок (←)">◀ Назад</button>
+      <button class="btn primary" data-act="next" title="Наступний крок (→)">Крок ▶</button>
+      <button class="btn" data-act="toggle" title="Старт / Пауза (Пробіл)">▶ Старт</button>
+      <button class="btn" data-act="reset" title="Повернутися до початку">⟲ Скинути</button>
+      <label class="speed">Швидкість <input type="range" min="1" max="10" value="4"></label>
+      <span class="counter"></span>`;
+    this.bPrev = root.querySelector('[data-act=prev]');
+    this.bNext = root.querySelector('[data-act=next]');
+    this.bPlay = root.querySelector('[data-act=toggle]');
+    this.speed = root.querySelector('input[type=range]');
+    this.counter = root.querySelector('.counter');
+    root.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b) this[b.dataset.act](); });
+  }
+  get delay(){ return Math.round(2600 / Number(this.speed.value)); }
+  load(steps){ this.pause(); this.steps = steps; this.i = 0; lastShown = -1; this.show(); }
+  show(){
+    if (!this.steps.length) return;
+    this.render(this.steps[this.i], this.i);
+    this.counter.textContent = `Крок ${this.i} з ${this.steps.length - 1}`;
+    this.bPrev.disabled = this.i === 0;
+    this.bNext.disabled = this.i >= this.steps.length - 1;
+  }
+  next(){ if (this.i < this.steps.length - 1){ this.i++; this.show(); } if (this.i >= this.steps.length - 1) this.pause(); }
+  prev(){ this.pause(); if (this.i > 0){ this.i--; this.show(); } }
+  toggle(){
+    if (this.timer){ this.pause(); return; }
+    if (this.i >= this.steps.length - 1){ this.i = 0; lastShown = -1; this.show(); }
+    this.bPlay.textContent = '⏸ Пауза'; this.bPlay.classList.add('on');
+    const tick = () => { this.next(); if (this.timer) this.timer = setTimeout(tick, this.delay); };
+    this.timer = setTimeout(tick, this.delay);
+  }
+  pause(){ clearTimeout(this.timer); this.timer = null; this.bPlay.textContent = '▶ Старт'; this.bPlay.classList.remove('on'); }
+  reset(){ this.pause(); this.i = 0; lastShown = -1; this.show(); }
+}
+
+/* =====================================================================
+   6. КЕРУВАННЯ: приклади, редагування, завантаження програми
+   ===================================================================== */
+let steps = [];
+const player = new Player($('controls'), render);
+
+/** Розбирає і виконує текст програми. Повертає true, якщо все гаразд. */
+function loadProgram(text){
+  $('msg').className = 'msg';
+  let prog;
+  try { prog = parseProgram(text); }
+  catch (e){
+    if (e instanceof SyntaxErr){ $('msg').textContent = 'Синтаксична помилка. ' + e.message; $('msg').className = 'msg err'; return false; }
+    throw e;
+  }
+  if (!prog.length){ $('msg').textContent = 'Програма порожня.'; $('msg').className = 'msg err'; return false; }
+  srcLines = text.replace(/\r/g, '').replace(/\t/g, '    ').split('\n');
+  while (srcLines.length && !srcLines[srcLines.length - 1].trim()) srcLines.pop();
+  steps = run(prog);
+  player.load(steps);
+  return true;
+}
+
+function setEditMode(on){
+  $('editor').style.display = on ? '' : 'none';
+  $('code').style.display = on ? 'none' : '';
+  $('btn-edit').style.display = on ? 'none' : '';
+  $('btn-apply').style.display = on ? '' : 'none';
+  $('btn-cancel').style.display = on ? '' : 'none';
+  if (on){ player.pause(); $('editor').value = srcLines.join('\n'); $('editor').focus(); }
+}
+
+PRESETS.forEach((p, k) => $('preset').add(new Option(p.name, k)));
+$('preset').add(new Option('Власна програма', 'own'));
+$('preset').onchange = () => {
+  const v = $('preset').value;
+  if (v === 'own'){ $('preset-note').textContent = 'натисніть «Редагувати код» і напишіть свою програму'; setEditMode(true); return; }
+  setEditMode(false);
+  $('preset-note').textContent = PRESETS[v].note;
+  loadProgram(PRESETS[v].code);
+};
+$('btn-edit').onclick = () => setEditMode(true);
+$('btn-cancel').onclick = () => { setEditMode(false); $('msg').className = 'msg'; };
+$('btn-apply').onclick = () => { if (loadProgram($('editor').value)){ setEditMode(false); $('preset').value = 'own'; $('preset-note').textContent = 'власна програма'; } };
+// Tab у редакторі вставляє 4 пробіли
+$('editor').addEventListener('keydown', e => {
+  if (e.key === 'Tab'){ e.preventDefault(); const t = e.target, s = t.selectionStart; t.setRangeText('    ', s, t.selectionEnd, 'end'); }
+});
+document.addEventListener('keydown', e => {
+  if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  if (e.key === 'ArrowRight'){ player.next(); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft'){ player.prev(); e.preventDefault(); }
+  else if (e.key === ' '){ player.toggle(); e.preventDefault(); }
+});
+
+$('preset').value = '0';
+$('preset').onchange();
+</script>
+</body>
+</html>

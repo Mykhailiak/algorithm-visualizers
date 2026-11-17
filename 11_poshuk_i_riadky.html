@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Пошук у масиві та обробка рядків — 10 клас, тема 4.8</title>
+<!--
+  Засіб візуалізації № 11 комплекту.
+  Один самодостатній файл: HTML + CSS + JS, без бібліотек та інтернету.
+  Вкладки: 1) лінійний і бінарний пошук; 2) обробка рядків; 3) двовимірний масив.
+  Принцип роботи: для обраних даних алгоритм виконується заздалегідь і записує
+  список «кроків» (знімків стану). Програвач (клас Player) показує ці кроки по черзі.
+-->
+<style>
+  /* ===== Кольори та базові розміри (зручно змінювати вчителю) ===== */
+  :root{
+    --bg:#f3f5fa; --panel:#ffffff; --ink:#1a2233; --muted:#4f5a72; --line:#cfd6e4;
+    --accent:#1f5fd1; --accent-dark:#14306b;
+    --cur:#ffd23f;      /* поточний елемент */
+    --ok:#22a45d;       /* знайдено / збіг */
+    --bad:#d64545;      /* не збіг / помилка */
+    --visited:#e3e7ef;  /* вже переглянуто */
+    --drop:#9aa3b5;     /* відкинута частина */
+    --swap:#8a4fff;     /* замінений символ */
+  }
+  *{box-sizing:border-box}
+  html{font-size:18px}
+  body{margin:0;font-family:"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.4}
+  header{background:var(--accent-dark);color:#fff;padding:.5rem 1.2rem;display:flex;flex-wrap:wrap;gap:.3rem 1.5rem;align-items:baseline;justify-content:space-between}
+  header h1{font-size:1.45rem;margin:0}
+  header .meta{font-size:1rem;opacity:.92}
+  main{max-width:1500px;margin:0 auto;padding:.6rem 1rem}
+  footer{text-align:center;color:var(--muted);padding:.8rem 1rem 1.2rem;font-size:.95rem}
+
+  .tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.7rem}
+  .tab{font-size:1.05rem;padding:.55rem 1.1rem;border:2px solid var(--accent);background:#fff;color:var(--accent);border-radius:10px;cursor:pointer;font-weight:600}
+  .tab.active{background:var(--accent);color:#fff}
+  .view{display:none}
+  .view.active{display:block}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:.6rem .9rem;margin-bottom:.6rem}
+  .panel h2{font-size:1.15rem;margin:0 0 .5rem}
+  .row{display:flex;flex-wrap:wrap;gap:.6rem 1rem;align-items:center}
+  label{font-weight:600}
+  input[type=text],input[type=number],select,textarea{font:inherit;font-size:1rem;padding:.35rem .5rem;border:2px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+  input[type=text]:focus,input[type=number]:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  .btn{font:inherit;font-size:1rem;font-weight:600;padding:.45rem .9rem;border-radius:9px;border:2px solid var(--accent);background:#fff;color:var(--accent);cursor:pointer}
+  .btn:hover{background:#eaf1ff}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.primary:hover{background:#174cb0}
+  .btn.on{background:#ffecb3;border-color:#c98b00;color:#5a3d00}
+  .btn:disabled{opacity:.4;cursor:default}
+  .preset{border-style:dashed}
+  .msg{margin-top:.5rem;padding:.45rem .7rem;border-radius:8px;font-weight:600;display:none}
+  .msg.err{display:block;background:#fde8e8;color:#9b1c1c;border:2px solid var(--bad)}
+  .msg.info{display:block;background:#fff6d6;color:#6b4e00;border:2px solid #e0b400}
+
+  /* ===== Панель керування програвачем ===== */
+  .controls{display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:center;margin:.2rem 0 .7rem}
+  .controls .speed{display:flex;align-items:center;gap:.4rem;font-weight:600}
+  .controls input[type=range]{width:150px;accent-color:var(--accent)}
+  .controls .counter{font-weight:700;color:var(--muted)}
+
+  /* ===== Пояснення до кроку ===== */
+  .explain{font-size:1.15rem;background:#eef4ff;border-left:7px solid var(--accent);padding:.6rem .9rem;border-radius:8px;min-height:3.3em}
+  .explain.good{background:#e7f7ee;border-left-color:var(--ok)}
+  .explain.badc{background:#fdecec;border-left-color:var(--bad)}
+
+  /* ===== Масив / рядок як ряд клітинок ===== */
+  .arr{display:flex;flex-wrap:wrap;gap:6px 6px;padding:.3rem 0}
+  .cellwrap{display:flex;flex-direction:column;align-items:center;min-width:50px}
+  .idx{font-size:.85rem;color:var(--muted);font-weight:600;height:1.2em}
+  .cell{width:50px;height:50px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:700;border:3px solid #7a869e;border-radius:8px;background:#fff;transition:background .25s,border-color .25s,opacity .25s}
+  .cell.cur{background:var(--cur);border-color:#b98d00}
+  .cell.ok{background:var(--ok);border-color:#137a40;color:#fff}
+  .cell.bad{background:var(--bad);border-color:#8f1f1f;color:#fff}
+  .cell.visited{background:var(--visited);color:#6b7489}
+  .cell.drop{background:var(--drop);border-color:var(--drop);color:#eef0f4;opacity:.55}
+  .cell.swap{background:var(--swap);border-color:#5b2bb8;color:#fff}
+  .cell.empty{border-style:dashed;border-color:var(--line);color:transparent}
+  .mark{font-size:.95rem;font-weight:800;color:var(--accent);height:1.3em;white-space:nowrap}
+  .mark.L{color:#1f8a4c} .mark.R{color:#c0392b} .mark.M{color:#a26900}
+
+  /* ===== Псевдокод ===== */
+  .code{font-family:Consolas,"Courier New",monospace;font-size:1.02rem;background:#f8f9fc;border:1px solid var(--line);border-radius:8px;padding:.3rem 0;white-space:pre;overflow-x:auto}
+  .code .ln{padding:.08rem .7rem .08rem .3rem;border-left:5px solid transparent}
+  .code .no{display:inline-block;width:1.8em;color:#97a0b3;text-align:right;margin-right:.7em;user-select:none}
+  .code .ln.hl{background:#fff1b8;border-left-color:#e0a800;font-weight:700}
+
+  .vars{font-family:Consolas,"Courier New",monospace;font-size:1.05rem;margin-top:.4rem;display:flex;flex-wrap:wrap;gap:.4rem}
+  .var{background:#eef1f7;border:1px solid var(--line);border-radius:6px;padding:.1rem .5rem}
+  .var b{color:var(--accent)}
+
+  .grid2{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr);gap:1rem;align-items:start}
+  @media (max-width:950px){.grid2{grid-template-columns:1fr}}
+  .algo-title{font-size:1.1rem;font-weight:700;margin:0 0 .1rem}
+  .sub{color:var(--muted);font-size:.95rem}
+  .legend{display:flex;flex-wrap:wrap;gap:.3rem 1rem;font-size:.92rem;color:var(--muted);margin-top:.4rem}
+  .legend span::before{content:"";display:inline-block;width:14px;height:14px;border-radius:3px;margin-right:5px;vertical-align:-2px;background:var(--c);border:1px solid #0003}
+
+  /* ===== Двовимірний масив ===== */
+  table.mx{border-collapse:separate;border-spacing:5px;font-size:1.2rem}
+  table.mx th{color:var(--muted);font-size:.9rem;font-weight:700;padding:0 .2rem}
+  table.mx td{width:52px;height:48px;text-align:center;font-weight:700;border:3px solid #7a869e;border-radius:8px;background:#fff;transition:background .25s}
+  table.mx td.line{background:#eaf1ff}
+  table.mx td.cur{background:var(--cur);border-color:#b98d00}
+  table.mx td.best{outline:4px solid #e67e22;outline-offset:-1px}
+  table.mx td.okc{background:var(--ok);color:#fff;border-color:#137a40}
+  table.mx td.res{background:#f4f0ff;border-color:var(--swap);border-style:dashed;color:#4a2a8a}
+  table.mx td.res.filled{border-style:solid}
+  table.mx td.blank{border:none;background:transparent}
+  textarea{font-family:Consolas,"Courier New",monospace;width:100%;max-width:420px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Візуалізатор «Пошук у масиві та обробка рядків»</h1>
+  <div class="meta">10 клас · Тема 4.8. Масиви. Рядкові величини</div>
+</header>
+
+<main>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-view="search">1. Пошук у масиві</button>
+    <button class="tab" data-view="strings">2. Рядки</button>
+    <button class="tab" data-view="matrix">3. Двовимірний масив</button>
+  </nav>
+
+  <!-- ===================== ВКЛАДКА 1. ПОШУК ===================== -->
+  <section class="view active" id="view-search">
+    <div class="panel">
+      <div class="row">
+        <label for="s-arr">Масив:</label>
+        <input type="text" id="s-arr" size="44" title="Цілі числа через пробіл або кому (від 2 до 20 чисел)">
+        <label for="s-x">Шукаємо x =</label>
+        <input type="number" id="s-x" style="width:6em">
+        <label for="s-mode">Алгоритм:</label>
+        <select id="s-mode">
+          <option value="both">Порівняти обидва</option>
+          <option value="linear">Лінійний пошук</option>
+          <option value="binary">Бінарний пошук</option>
+        </select>
+        <button class="btn primary" id="s-apply">Застосувати</button>
+        <button class="btn" id="s-random">Випадковий масив</button>
+      </div>
+      <div class="row" style="margin-top:.5rem">
+        <span class="sub">Готові приклади:</span>
+        <button class="btn preset" data-sp="0">Елемент є</button>
+        <button class="btn preset" data-sp="1">Елемента немає</button>
+        <button class="btn preset" data-sp="2">Невідсортований масив</button>
+        <button class="btn preset" data-sp="3">20 елементів</button>
+      </div>
+      <div class="msg" id="s-msg"></div>
+    </div>
+
+    <div class="controls" id="s-controls"></div>
+
+    <div class="panel" id="s-lin-panel">
+      <div class="grid2">
+        <div>
+          <p class="algo-title">Лінійний пошук <span class="sub">— перевіряємо елементи по черзі</span></p>
+          <div class="arr" id="s-lin-arr"></div>
+          <div class="vars" id="s-lin-vars"></div>
+          <p class="sub" id="s-lin-text" style="font-size:1.02rem;color:var(--ink);margin:.4rem 0 0"></p>
+        </div>
+        <div class="code" id="s-lin-code"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="s-bin-panel">
+      <div class="grid2">
+        <div>
+          <p class="algo-title">Бінарний пошук <span class="sub">— щоразу ділимо діапазон навпіл</span></p>
+          <div class="arr" id="s-bin-arr"></div>
+          <div class="vars" id="s-bin-vars"></div>
+          <p class="sub" id="s-bin-text" style="font-size:1.02rem;color:var(--ink);margin:.4rem 0 0"></p>
+        </div>
+        <div class="code" id="s-bin-code"></div>
+      </div>
+    </div>
+
+    <div class="explain" id="s-explain"></div>
+    <div class="legend">
+      <span style="--c:var(--cur)">порівнюємо зараз</span>
+      <span style="--c:var(--visited)">уже переглянуто</span>
+      <span style="--c:var(--drop)">відкинута частина</span>
+      <span style="--c:var(--ok)">знайдено</span>
+    </div>
+  </section>
+
+  <!-- ===================== ВКЛАДКА 2. РЯДКИ ===================== -->
+  <section class="view" id="view-strings">
+    <div class="panel">
+      <div class="row">
+        <label for="t-str">Рядок s:</label>
+        <input type="text" id="t-str" size="30" maxlength="40" title="Від 1 до 24 символів">
+        <label for="t-alg">Алгоритм:</label>
+        <select id="t-alg">
+          <option value="count">Підрахунок символу</option>
+          <option value="pal">Перевірка на паліндром</option>
+          <option value="rev">Обернення рядка</option>
+          <option value="repl">Заміна символу</option>
+        </select>
+        <span id="t-p-count"><label for="t-c">символ c:</label> <input type="text" id="t-c" size="2" maxlength="2"></span>
+        <span id="t-p-repl"><label for="t-a">замінити a:</label> <input type="text" id="t-a" size="2" maxlength="2">
+          <label for="t-b">на b:</label> <input type="text" id="t-b" size="2" maxlength="2"></span>
+        <span id="t-p-pal"><label><input type="checkbox" id="t-norm" checked> ігнорувати пробіли, розділові знаки й регістр</label></span>
+        <button class="btn primary" id="t-apply">Застосувати</button>
+      </div>
+      <div class="row" style="margin-top:.5rem">
+        <span class="sub">Готові приклади:</span>
+        <button class="btn preset" data-tp="0">Паліндром «Я несу гусеня»</button>
+        <button class="btn preset" data-tp="1">Скільки літер «А»?</button>
+        <button class="btn preset" data-tp="2">Обернути «АЛГОРИТМ»</button>
+        <button class="btn preset" data-tp="3">Заміна М → Л</button>
+      </div>
+      <div class="msg" id="t-msg"></div>
+    </div>
+
+    <div class="controls" id="t-controls"></div>
+
+    <div class="panel">
+      <div class="grid2">
+        <div>
+          <p class="algo-title" id="t-title"></p>
+          <p class="sub" id="t-orig"></p>
+          <div class="sub">Рядок s — це масив символів, кожен має свій індекс:</div>
+          <div class="arr" id="t-arr"></div>
+          <div id="t-res-wrap" style="margin-top:.4rem">
+            <div class="sub">Новий рядок res:</div>
+            <div class="arr" id="t-res"></div>
+          </div>
+          <div class="vars" id="t-vars"></div>
+        </div>
+        <div class="code" id="t-code"></div>
+      </div>
+    </div>
+    <div class="explain" id="t-explain"></div>
+    <div class="legend">
+      <span style="--c:var(--cur)">поточний символ</span>
+      <span style="--c:var(--ok)">збіг</span>
+      <span style="--c:var(--bad)">не збіг</span>
+      <span style="--c:var(--swap)">замінений символ</span>
+    </div>
+  </section>
+
+  <!-- ===================== ВКЛАДКА 3. ДВОВИМІРНИЙ МАСИВ ===================== -->
+  <section class="view" id="view-matrix">
+    <div class="panel">
+      <div class="row" style="align-items:flex-start">
+        <div>
+          <label for="m-input">Масив A (кожен рядок — з нового рядка, числа через пробіл):</label><br>
+          <textarea id="m-input" rows="5"></textarea>
+        </div>
+        <div>
+          <label for="m-mode">Що шукаємо:</label><br>
+          <select id="m-mode">
+            <option value="rows">Максимум у кожному рядку</option>
+            <option value="cols">Максимум у кожному стовпці</option>
+          </select><br><br>
+          <button class="btn primary" id="m-apply">Застосувати</button>
+        </div>
+        <div>
+          <span class="sub">Готові приклади:</span><br>
+          <button class="btn preset" data-mp="0" style="margin:.2rem 0">Оцінки 4 учнів за 5 уроків</button><br>
+          <button class="btn preset" data-mp="1" style="margin:.2rem 0">Температура за тиждень</button><br>
+          <button class="btn preset" data-mp="2" style="margin:.2rem 0">Випадковий 5×6</button>
+        </div>
+      </div>
+      <div class="msg" id="m-msg"></div>
+    </div>
+
+    <div class="controls" id="m-controls"></div>
+
+    <div class="panel">
+      <div class="grid2">
+        <div style="overflow-x:auto">
+          <p class="algo-title" id="m-title"></p>
+          <table class="mx" id="m-table"></table>
+          <div class="vars" id="m-vars"></div>
+        </div>
+        <div class="code" id="m-code"></div>
+      </div>
+    </div>
+    <div class="explain" id="m-explain"></div>
+    <div class="legend">
+      <span style="--c:var(--cur)">поточна клітинка</span>
+      <span style="--c:#e67e22">поточний максимум</span>
+      <span style="--c:var(--ok)">максимум знайдено</span>
+    </div>
+  </section>
+</main>
+
+<footer>Розроблено автором · Клавіші: <b>→</b> крок, <b>←</b> назад, <b>Пробіл</b> старт/пауза</footer>
+
+<script>
+"use strict";
+/* =====================================================================
+   ЗАГАЛЬНІ УТИЛІТИ
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+
+/** Екранування тексту для вставки в HTML */
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/** Показ повідомлення під полями введення: type = 'err' | 'info' | '' (сховати) */
+function showMsg(id, text, type){
+  const m = $(id); m.textContent = text || ''; m.className = 'msg' + (text ? ' ' + type : '');
+}
+
+/** Розбирає рядок з цілими числами. Повертає {ok, values, error} */
+function parseIntList(text, minLen, maxLen, minV, maxV){
+  const parts = text.trim().split(/[\s,;]+/).filter(Boolean);
+  if (parts.length < minLen || parts.length > maxLen)
+    return {ok:false, error:`Потрібно від ${minLen} до ${maxLen} чисел, а введено ${parts.length}.`};
+  const values = [];
+  for (const p of parts){
+    if (!/^-?\d+$/.test(p)) return {ok:false, error:`«${p}» — не ціле число. Вводьте цілі числа через пробіл або кому.`};
+    const v = Number(p);
+    if (v < minV || v > maxV) return {ok:false, error:`Число ${v} поза межами: допустимо від ${minV} до ${maxV}.`};
+    values.push(v);
+  }
+  return {ok:true, values};
+}
+
+/** Малює псевдокод; hl — масив номерів рядків (з 1), які підсвітити */
+function renderCode(box, lines, hl){
+  hl = hl || [];
+  box.innerHTML = lines.map((t,k) =>
+    `<div class="ln${hl.includes(k+1) ? ' hl' : ''}"><span class="no">${k+1}</span>${esc(t)}</div>`).join('');
+}
+
+/** Малює ряд клітинок (масив або рядок).
+ *  values — значення; cls(i) — CSS-клас клітинки; marks — {індекс: ['L','M']} */
+function renderCells(box, values, cls, marks, showIdx = true){
+  marks = marks || {};
+  box.innerHTML = values.map((v,i) => {
+    const m = (marks[i] || []).map(t => `<span class="mark ${t}">${t}↑</span>`).join(' ');
+    const shown = v === ' ' ? '␣' : esc(v);
+    return `<div class="cellwrap"><div class="idx">${showIdx ? i : ''}</div>` +
+           `<div class="cell ${cls ? cls(i) : ''}">${shown}</div><div class="mark">${m}</div></div>`;
+  }).join('');
+}
+
+/** Малює набір змінних: {ім'я: значення} */
+function renderVars(box, vars){
+  box.innerHTML = Object.entries(vars || {}).map(([k,v]) => `<span class="var">${esc(k)} = <b>${esc(v)}</b></span>`).join('');
+}
+
+/** Пояснення під візуалізацією; kind: '' | 'good' | 'badc' */
+function setExplain(id, html, kind){ const e = $(id); e.innerHTML = html; e.className = 'explain' + (kind ? ' ' + kind : ''); }
+
+/* =====================================================================
+   ПРОГРАВАЧ КРОКІВ: «Назад», «Крок», «Старт/Пауза», «Скинути», швидкість
+   ===================================================================== */
+class Player {
+  constructor(root, render){
+    this.render = render; this.steps = []; this.i = 0; this.timer = null;
+    root.classList.add('controls');
+    root.innerHTML = `
+      <button class="btn" data-act="prev" title="Попередній крок (←)">◀ Назад</button>
+      <button class="btn primary" data-act="next" title="Наступний крок (→)">Крок ▶</button>
+      <button class="btn" data-act="toggle" title="Старт / Пауза (Пробіл)">▶ Старт</button>
+      <button class="btn" data-act="reset" title="Повернутися до початку">⟲ Скинути</button>
+      <label class="speed">Швидкість <input type="range" min="1" max="10" value="5"></label>
+      <span class="counter"></span>`;
+    this.bPrev = root.querySelector('[data-act=prev]');
+    this.bNext = root.querySelector('[data-act=next]');
+    this.bPlay = root.querySelector('[data-act=toggle]');
+    this.speed = root.querySelector('input[type=range]');
+    this.counter = root.querySelector('.counter');
+    root.addEventListener('click', e => {
+      const b = e.target.closest('[data-act]'); if (b) this[b.dataset.act]();
+    });
+  }
+  /** Затримка між кроками: швидкість 1 → 2,2 с, швидкість 10 → 0,22 с */
+  get delay(){ return Math.round(2200 / Number(this.speed.value)); }
+  load(steps){ this.pause(); this.steps = steps; this.i = 0; this.show(); }
+  show(){
+    if (!this.steps.length) return;
+    this.render(this.steps[this.i], this.i, this.steps.length);
+    this.counter.textContent = `Крок ${this.i} з ${this.steps.length - 1}`;
+    this.bPrev.disabled = this.i === 0;
+    this.bNext.disabled = this.i >= this.steps.length - 1;
+  }
+  next(){
+    if (this.i < this.steps.length - 1){ this.i++; this.show(); }
+    if (this.i >= this.steps.length - 1) this.pause();
+  }
+  prev(){ this.pause(); if (this.i > 0){ this.i--; this.show(); } }
+  toggle(){
+    if (this.timer){ this.pause(); return; }
+    if (this.i >= this.steps.length - 1){ this.i = 0; this.show(); }
+    this.bPlay.textContent = '⏸ Пауза'; this.bPlay.classList.add('on');
+    const tick = () => { this.next(); if (this.timer) this.timer = setTimeout(tick, this.delay); };
+    this.timer = setTimeout(tick, this.delay);
+  }
+  pause(){ clearTimeout(this.timer); this.timer = null; this.bPlay.textContent = '▶ Старт'; this.bPlay.classList.remove('on'); }
+  reset(){ this.pause(); this.i = 0; this.show(); }
+}
+
+/* =====================================================================
+   ВКЛАДКА 1. ЛІНІЙНИЙ І БІНАРНИЙ ПОШУК
+   ===================================================================== */
+const LIN_CODE = [
+  'для i від 0 до n − 1:',
+  '    якщо A[i] = x:',
+  '        повернути i',
+  'повернути −1'
+];
+const BIN_CODE = [
+  'L ← 0;  R ← n − 1',
+  'поки L ≤ R:',
+  '    M ← (L + R) div 2',
+  '    якщо A[M] = x: повернути M',
+  '    якщо A[M] < x: L ← M + 1',
+  '    інакше:        R ← M − 1',
+  'повернути −1'
+];
+
+/** Кроки лінійного пошуку. Кожен крок = одне порівняння. */
+function linearSteps(A, x){
+  const S = []; let cmp = 0;
+  S.push({cur:-1, last:-1, found:-1, cmp, hl:[], vars:{x, n:A.length},
+          text:`Переглядатимемо елементи по черзі, починаючи з індексу 0.`});
+  for (let i = 0; i < A.length; i++){
+    cmp++;
+    if (A[i] === x){
+      S.push({cur:i, last:i-1, found:i, cmp, hl:[2,3], done:true, vars:{i, 'A[i]':A[i], x, порівнянь:cmp},
+              text:`A[${i}] = ${A[i]} дорівнює x. Знайдено на індексі ${i} за ${cmp} порівн.`});
+      return S;
+    }
+    S.push({cur:i, last:i-1, found:-1, cmp, hl:[1,2], vars:{i, 'A[i]':A[i], x, порівнянь:cmp},
+            text:`A[${i}] = ${A[i]} ≠ ${x} → переходимо до наступного елемента.`});
+  }
+  S.push({cur:-1, last:A.length-1, found:-1, cmp, hl:[4], done:true, notFound:true, vars:{x, порівнянь:cmp},
+          text:`Переглянуто всі ${A.length} елементів — числа ${x} немає. Результат −1 (${cmp} порівн.).`});
+  return S;
+}
+
+/** Кроки бінарного пошуку. Кожен крок = одна ітерація (одне порівняння A[M] з x). */
+function binarySteps(A, x){
+  const S = []; let L = 0, R = A.length - 1, cmp = 0;
+  const drop = new Array(A.length).fill(false);
+  S.push({L, R, M:null, drop:[...drop], found:-1, cmp, hl:[1], vars:{L, R, x},
+          text:`Межі пошуку: L = 0, R = ${R}. Шукаємо в усьому масиві.`});
+  while (L <= R){
+    const M = Math.floor((L + R) / 2); cmp++;
+    if (A[M] === x){
+      S.push({L, R, M, drop:[...drop], found:M, cmp, hl:[2,3,4], done:true, vars:{L, R, M, 'A[M]':A[M], порівнянь:cmp},
+              text:`M = (${L} + ${R}) div 2 = ${M}; A[${M}] = ${A[M]} = x. Знайдено за ${cmp} порівн.`});
+      return S;
+    }
+    if (A[M] < x){
+      for (let k = L; k <= M; k++) drop[k] = true;
+      S.push({L, R, M, drop:[...drop], found:-1, cmp, hl:[2,3,5], vars:{L, R, M, 'A[M]':A[M], порівнянь:cmp},
+              text:`M = ${M}; A[M] = ${A[M]} < ${x} → шукане правіше. Відкидаємо індекси ${L}…${M}, L ← ${M+1}.`});
+      L = M + 1;
+    } else {
+      for (let k = M; k <= R; k++) drop[k] = true;
+      S.push({L, R, M, drop:[...drop], found:-1, cmp, hl:[2,3,6], vars:{L, R, M, 'A[M]':A[M], порівнянь:cmp},
+              text:`M = ${M}; A[M] = ${A[M]} > ${x} → шукане лівіше. Відкидаємо індекси ${M}…${R}, R ← ${M-1}.`});
+      R = M - 1;
+    }
+  }
+  S.push({L, R, M:null, drop:new Array(A.length).fill(true), found:-1, cmp, hl:[2,7], done:true, notFound:true,
+          vars:{L, R, порівнянь:cmp},
+          text:`L = ${L} > R = ${R}: діапазон порожній — числа ${x} немає. Результат −1 (${cmp} порівн.).`});
+  return S;
+}
+
+/* Готові приклади для пошуку */
+const SEARCH_PRESETS = [
+  {arr:'3 8 15 21 27 34 42 56 61 70', x:56, mode:'both'},
+  {arr:'2 5 9 14 20 23 31 38 44 50 57 63', x:40, mode:'both'},
+  {arr:'17 4 29 8 42 15 3 36', x:15, mode:'linear'},
+  {arr:'4 7 11 13 18 22 25 29 33 36 41 45 50 54 58 63 67 72 80 93', x:93, mode:'both'}
+];
+
+let searchData = null;   // {A, x, mode, lin:[], bin:[]}
+
+const searchPlayer = new Player($('s-controls'), renderSearchStep);
+
+function applySearch(){
+  showMsg('s-msg', '');
+  const p = parseIntList($('s-arr').value, 2, 20, -999, 999);
+  if (!p.ok){ showMsg('s-msg', p.error, 'err'); return; }
+  const xs = $('s-x').value.trim();
+  if (!/^-?\d+$/.test(xs)){ showMsg('s-msg', 'Шукане значення x має бути цілим числом.', 'err'); return; }
+  const x = Number(xs), mode = $('s-mode').value;
+  let A = p.values;
+  // Бінарний пошук можливий лише у відсортованому масиві
+  const sorted = A.every((v,i) => i === 0 || A[i-1] <= v);
+  if (mode !== 'linear' && !sorted){
+    A = [...A].sort((a,b) => a - b);
+    $('s-arr').value = A.join(' ');
+    showMsg('s-msg', 'Масив відсортовано за зростанням, бо бінарний пошук працює лише з упорядкованим масивом.', 'info');
+  }
+  const lin = mode !== 'binary' ? linearSteps(A, x) : null;
+  const bin = mode !== 'linear' ? binarySteps(A, x) : null;
+  searchData = {A, x, mode, lin, bin};
+  $('s-lin-panel').style.display = lin ? '' : 'none';
+  $('s-bin-panel').style.display = bin ? '' : 'none';
+  // У режимі «обидва» кроки йдуть синхронно: на кожному кроці кожен алгоритм робить одне порівняння
+  const total = Math.max(lin ? lin.length : 0, bin ? bin.length : 0);
+  searchPlayer.load(Array.from({length: total}, (_, k) => k));
+}
+
+function renderSearchStep(k){
+  const {A, x, lin, bin} = searchData;
+  const L = lin ? lin[Math.min(k, lin.length - 1)] : null;
+  const B = bin ? bin[Math.min(k, bin.length - 1)] : null;
+  if (L){
+    renderCells($('s-lin-arr'), A, i =>
+      i === L.found ? 'ok' : i === L.cur ? 'cur' : i <= L.last ? 'visited' : '',
+      L.cur >= 0 ? {[L.cur]:['i']} : {});
+    renderCode($('s-lin-code'), LIN_CODE, L.hl);
+    renderVars($('s-lin-vars'), L.vars);
+    $('s-lin-text').textContent = L.text;
+  }
+  if (B){
+    const marks = {};
+    const add = (i, t) => { if (i >= 0 && i < A.length) (marks[i] = marks[i] || []).push(t); };
+    if (!B.notFound){ add(B.L, 'L'); if (B.M !== null) add(B.M, 'M'); add(B.R, 'R'); }
+    renderCells($('s-bin-arr'), A, i =>
+      i === B.found ? 'ok' : i === B.M ? 'cur' : B.drop[i] ? 'drop' : '', marks);
+    renderCode($('s-bin-code'), BIN_CODE, B.hl);
+    renderVars($('s-bin-vars'), B.vars);
+    $('s-bin-text').textContent = B.text;
+  }
+  // Загальне пояснення
+  const n = A.length, worstBin = Math.floor(Math.log2(n)) + 1;
+  if (k === 0){
+    setExplain('s-explain', `Масив з <b>n = ${n}</b> елементів, шукаємо <b>x = ${x}</b>. Натисніть «Крок» або «Старт».` +
+      (bin ? ' Бінарний пошук можливий, бо масив відсортований.' : ''));
+  } else if (L && B && L.done && B.done){
+    setExplain('s-explain', `<b>Підсумок.</b> Лінійний пошук: <b>${L.cmp}</b> порівн., бінарний: <b>${B.cmp}</b> порівн. ` +
+      `У найгіршому випадку для n = ${n} лінійному потрібно ${n} порівнянь, бінарному — не більше ${worstBin} ` +
+      `(бо після кожного порівняння діапазон зменшується вдвічі).`, 'good');
+  } else if (L && B){
+    const who = L.done ? 'Лінійний пошук уже завершився. ' : B.done ? 'Бінарний пошук уже завершився, а лінійний ще перевіряє елементи. ' : '';
+    setExplain('s-explain', `Крок ${k}: кожен алгоритм виконує одне порівняння. ${who}` +
+      `Порівнянь: лінійний — <b>${L.cmp}</b>, бінарний — <b>${B.cmp}</b>.`);
+  } else {
+    const S = L || B;
+    setExplain('s-explain', S.text, S.done ? (S.notFound ? 'badc' : 'good') : '');
+  }
+}
+
+/* Обробники вкладки 1 */
+$('s-apply').onclick = applySearch;
+$('s-random').onclick = () => {
+  const n = 8 + Math.floor(Math.random() * 9);
+  const set = new Set(); while (set.size < n) set.add(1 + Math.floor(Math.random() * 99));
+  const A = [...set].sort((a,b) => a - b);
+  $('s-arr').value = A.join(' ');
+  $('s-x').value = Math.random() < 0.7 ? A[Math.floor(Math.random() * n)] : 100;
+  applySearch();
+};
+document.querySelectorAll('[data-sp]').forEach(b => b.onclick = () => {
+  const p = SEARCH_PRESETS[b.dataset.sp];
+  $('s-arr').value = p.arr; $('s-x').value = p.x; $('s-mode').value = p.mode; applySearch();
+});
+
+/* =====================================================================
+   ВКЛАДКА 2. ОБРОБКА РЯДКІВ
+   ===================================================================== */
+const STR_ALGOS = {
+  count: {title:'Підрахунок кількості символу c у рядку', code:[
+    'k ← 0',
+    'для i від 0 до довжина(s) − 1:',
+    '    якщо s[i] = c:',
+    '        k ← k + 1',
+    'вивести k']},
+  pal: {title:'Перевірка на паліндром (два вказівники назустріч)', code:[
+    'L ← 0;  R ← довжина(s) − 1',
+    'поки L < R:',
+    '    якщо s[L] ≠ s[R]: вивести «ні», стоп',
+    '    L ← L + 1;  R ← R − 1',
+    'вивести «так, паліндром»']},
+  rev: {title:'Обернення рядка (читаємо з кінця)', code:[
+    'res ← ""',
+    'для i від довжина(s) − 1 до 0 з кроком −1:',
+    '    res ← res + s[i]',
+    'вивести res']},
+  repl: {title:'Заміна символу a на символ b', code:[
+    'res ← ""',
+    'для i від 0 до довжина(s) − 1:',
+    '    якщо s[i] = a: res ← res + b',
+    '    інакше:        res ← res + s[i]',
+    'вивести res']}
+};
+
+const STR_PRESETS = [
+  {s:'Я несу гусеня', alg:'pal', norm:true},
+  {s:'ІНФОРМАТИКА', alg:'count', c:'А'},
+  {s:'АЛГОРИТМ', alg:'rev'},
+  {s:'МАМА МИЛА РАМУ', alg:'repl', a:'М', b:'Л'}
+];
+
+const q = ch => `«${ch === ' ' ? '␣' : ch}»`;   // символ у лапках для пояснень
+
+function countSteps(s, c){
+  const S = [], hit = new Set(); let k = 0;
+  S.push({cur:-1, hit:new Set(), vars:{k:0, c:q(c)}, hl:[1], text:`k ← 0. Рахуватимемо, скільки разів у рядку трапляється символ ${q(c)}.`});
+  for (let i = 0; i < s.length; i++){
+    if (s[i] === c){
+      k++; hit.add(i);
+      S.push({cur:i, hit:new Set(hit), curOk:true, vars:{i, 's[i]':q(s[i]), k}, hl:[2,3,4], text:`s[${i}] = ${q(s[i])} збігається з ${q(c)} → k ← ${k}.`});
+    } else {
+      S.push({cur:i, hit:new Set(hit), vars:{i, 's[i]':q(s[i]), k}, hl:[2,3], text:`s[${i}] = ${q(s[i])} ≠ ${q(c)} → k не змінюється.`});
+    }
+  }
+  S.push({cur:-1, hit:new Set(hit), vars:{k}, hl:[5], final:'good',
+          text:`Рядок переглянуто. Символ ${q(c)} трапляється <b>${k}</b> раз(и). Великі й малі літери вважаються різними символами.`});
+  return S;
+}
+
+function palSteps(s){
+  const S = [], okSet = new Set(); let L = 0, R = s.length - 1;
+  S.push({L, R, ok:new Set(), vars:{L, R}, hl:[1], text:`Ставимо вказівник L на початок (0), R — на кінець (${R}).`});
+  while (L < R){
+    if (s[L] !== s[R]){
+      S.push({L, R, ok:new Set(okSet), bad:[L,R], vars:{L, R, 's[L]':q(s[L]), 's[R]':q(s[R])}, hl:[2,3], final:'badc',
+              text:`s[${L}] = ${q(s[L])} ≠ s[${R}] = ${q(s[R])}. Рядок <b>не є паліндромом</b>.`});
+      return S;
+    }
+    okSet.add(L); okSet.add(R);
+    S.push({L, R, ok:new Set(okSet), cur:[L,R], vars:{L, R, 's[L]':q(s[L]), 's[R]':q(s[R])}, hl:[2,3,4],
+            text:`s[${L}] = s[${R}] = ${q(s[L])} — збігаються. Зсуваємо вказівники назустріч: L ← ${L+1}, R ← ${R-1}.`});
+    L++; R--;
+  }
+  if (L === R) okSet.add(L);
+  S.push({L, R, ok:new Set(okSet), vars:{L, R}, hl:[2,5], final:'good',
+          text:`Вказівники зустрілися (L ≥ R) і всі пари збіглися — рядок <b>є паліндромом</b>.` +
+               (L === R ? ` Середній символ ${q(s[L])} порівнювати не треба.` : '')});
+  return S;
+}
+
+function revSteps(s){
+  const S = []; const res = [];
+  S.push({cur:-1, res:[], vars:{res:'""'}, hl:[1], text:'Створюємо порожній рядок res. Будемо дописувати в нього символи з кінця s.'});
+  for (let i = s.length - 1; i >= 0; i--){
+    res.push(s[i]);
+    S.push({cur:i, res:[...res], newIdx:res.length-1, vars:{i, 's[i]':q(s[i]), res:`"${res.join('')}"`}, hl:[2,3],
+            text:`i = ${i}: дописуємо s[${i}] = ${q(s[i])} у кінець res.`});
+  }
+  S.push({cur:-1, res:[...res], vars:{res:`"${res.join('')}"`}, hl:[4], final:'good', text:`Готово: обернений рядок — <b>${esc(res.join(''))}</b>.`});
+  return S;
+}
+
+function replSteps(s, a, b){
+  const S = []; const res = []; const changed = new Set(); let cnt = 0;
+  S.push({cur:-1, res:[], changed:new Set(), vars:{res:'""', a:q(a), b:q(b)}, hl:[1], text:`Створюємо порожній рядок res. Кожен символ ${q(a)} замінюватимемо на ${q(b)}.`});
+  for (let i = 0; i < s.length; i++){
+    if (s[i] === a){ res.push(b); changed.add(res.length-1); cnt++; }
+    else res.push(s[i]);
+    const isA = s[i] === a;
+    S.push({cur:i, res:[...res], changed:new Set(changed), newIdx:res.length-1, curOk:isA,
+            vars:{i, 's[i]':q(s[i]), res:`"${res.join('')}"`}, hl: isA ? [2,3] : [2,3,4],
+            text: isA ? `s[${i}] = ${q(a)} → дописуємо в res замість нього ${q(b)}.`
+                      : `s[${i}] = ${q(s[i])} ≠ ${q(a)} → дописуємо символ без змін.`});
+  }
+  S.push({cur:-1, res:[...res], changed:new Set(changed), vars:{res:`"${res.join('')}"`}, hl:[5], final:'good',
+          text:`Готово: виконано замін — ${cnt}. Результат: <b>${esc(res.join(''))}</b>.`});
+  return S;
+}
+
+let strData = null;  // {chars, alg}
+const strPlayer = new Player($('t-controls'), renderStrStep);
+
+/** Показує тільки ті поля параметрів, які потрібні обраному алгоритму */
+function updateStrParams(){
+  const alg = $('t-alg').value;
+  $('t-p-count').style.display = alg === 'count' ? '' : 'none';
+  $('t-p-repl').style.display  = alg === 'repl'  ? '' : 'none';
+  $('t-p-pal').style.display   = alg === 'pal'   ? '' : 'none';
+}
+
+function applyStr(){
+  showMsg('t-msg', '');
+  const alg = $('t-alg').value;
+  let s = $('t-str').value;
+  if (s.length === 0){ showMsg('t-msg', 'Введіть рядок (хоча б один символ).', 'err'); return; }
+  if (s.length > 24){ showMsg('t-msg', `Рядок задовгий (${s.length} символів). Для наочності — не більше 24.`, 'err'); return; }
+  const one = (id, name) => {
+    const v = $(id).value;
+    if (v.length !== 1){ showMsg('t-msg', `Поле «${name}» має містити рівно один символ.`, 'err'); return null; }
+    return v;
+  };
+  let steps, orig = '';
+  if (alg === 'count'){ const c = one('t-c','символ c'); if (c === null) return; steps = countSteps(s, c); }
+  else if (alg === 'repl'){
+    const a = one('t-a','замінити a'); if (a === null) return;
+    const b = one('t-b','на b'); if (b === null) return;
+    steps = replSteps(s, a, b);
+  }
+  else if (alg === 'rev'){ steps = revSteps(s); }
+  else {
+    if ($('t-norm').checked){
+      const norm = s.toLowerCase().replace(/[^0-9a-zа-яіїєґ']/gi, '').replace(/'/g, '');
+      if (!norm.length){ showMsg('t-msg', 'Після вилучення пробілів і розділових знаків рядок порожній.', 'err'); return; }
+      orig = `Вихідний рядок: «${s}». Після вилучення пробілів, розділових знаків і переведення в малі літери: «${norm}».`;
+      s = norm;
+    }
+    steps = palSteps(s);
+  }
+  strData = {chars:[...s], alg, orig};
+  $('t-title').textContent = STR_ALGOS[alg].title;
+  $('t-orig').textContent = orig;
+  $('t-res-wrap').style.display = (alg === 'rev' || alg === 'repl') ? '' : 'none';
+  strPlayer.load(steps);
+}
+
+function renderStrStep(st, k){
+  const {chars, alg} = strData;
+  let cls, marks = {};
+  if (alg === 'count'){
+    cls = i => i === st.cur ? (st.curOk ? 'ok' : 'cur') : st.hit.has(i) ? 'ok' : (st.cur >= 0 && i < st.cur ? 'visited' : '');
+    if (st.cur >= 0) marks[st.cur] = ['i'];
+  } else if (alg === 'pal'){
+    cls = i => (st.bad && st.bad.includes(i)) ? 'bad' : (st.cur && st.cur.includes(i)) ? 'cur' : st.ok.has(i) ? 'ok' : '';
+    if (!st.final){ if (st.L < chars.length) (marks[st.L] = marks[st.L] || []).push('L'); if (st.R >= 0) (marks[st.R] = marks[st.R] || []).push('R'); }
+    else if (st.bad){ marks[st.L] = ['L']; marks[st.R] = ['R']; }
+  } else if (alg === 'rev'){
+    cls = i => i === st.cur ? 'cur' : (st.cur >= 0 && i > st.cur) || (st.cur < 0 && st.res.length) ? 'visited' : '';
+    if (st.cur >= 0) marks[st.cur] = ['i'];
+  } else {
+    cls = i => i === st.cur ? (st.curOk ? 'swap' : 'cur') : (st.cur >= 0 && i < st.cur) || (st.cur < 0 && st.res.length) ? 'visited' : '';
+    if (st.cur >= 0) marks[st.cur] = ['i'];
+  }
+  renderCells($('t-arr'), chars, cls, marks);
+  if (alg === 'rev' || alg === 'repl'){
+    // res показуємо на всю довжину: ще не заповнені клітинки — пунктирні
+    const full = chars.map((_, i) => i < st.res.length ? st.res[i] : '·');
+    renderCells($('t-res'), full, i =>
+      i >= st.res.length ? 'empty' : (st.changed && st.changed.has(i)) ? 'swap' : i === st.newIdx ? 'cur' : '');
+  }
+  renderCode($('t-code'), STR_ALGOS[alg].code, st.hl);
+  renderVars($('t-vars'), Object.assign({'довжина(s)': chars.length}, st.vars));
+  setExplain('t-explain', k === 0 ? st.text + ' Натисніть «Крок».' : st.text, st.final || '');
+}
+
+$('t-alg').onchange = updateStrParams;
+$('t-apply').onclick = applyStr;
+document.querySelectorAll('[data-tp]').forEach(b => b.onclick = () => {
+  const p = STR_PRESETS[b.dataset.tp];
+  $('t-str').value = p.s; $('t-alg').value = p.alg;
+  if (p.c) $('t-c').value = p.c;
+  if (p.a){ $('t-a').value = p.a; $('t-b').value = p.b; }
+  if (p.norm !== undefined) $('t-norm').checked = p.norm;
+  updateStrParams(); applyStr();
+});
+
+/* =====================================================================
+   ВКЛАДКА 3. ДВОВИМІРНИЙ МАСИВ: МАКСИМУМ У РЯДКАХ / СТОВПЦЯХ
+   ===================================================================== */
+const MX_CODE = {
+  rows:[
+    'для i від 0 до m − 1:',
+    '    max ← A[i][0]',
+    '    для j від 1 до n − 1:',
+    '        якщо A[i][j] > max:',
+    '            max ← A[i][j]',
+    '    вивести max'],
+  cols:[
+    'для j від 0 до n − 1:',
+    '    max ← A[0][j]',
+    '    для i від 1 до m − 1:',
+    '        якщо A[i][j] > max:',
+    '            max ← A[i][j]',
+    '    вивести max']
+};
+const MX_PRESETS = [
+  {text:'10 8 11 9 12\n7 6 9 8 7\n12 11 10 12 11\n5 9 6 8 10', mode:'rows', note:'рядок — учень, стовпець — урок'},
+  {text:'-3 -1 0 2 1 -2 -4\n4 6 7 9 8 5 3\n1 2 3 5 4 1 0', mode:'cols', note:'рядок — ранок/день/вечір, стовпець — день тижня'},
+  null // випадковий
+];
+
+/** Розбір матриці з текстового поля */
+function parseMatrix(text){
+  const lines = text.trim().split(/\n+/).map(l => l.trim()).filter(Boolean);
+  if (lines.length < 2 || lines.length > 6) return {ok:false, error:`Потрібно від 2 до 6 рядків, а введено ${lines.length}.`};
+  const M = [];
+  for (let r = 0; r < lines.length; r++){
+    const p = parseIntList(lines[r], 2, 8, -99, 999);
+    if (!p.ok) return {ok:false, error:`Рядок ${r + 1}: ${p.error}`};
+    M.push(p.values);
+  }
+  if (M.some(row => row.length !== M[0].length))
+    return {ok:false, error:'Усі рядки мають містити однакову кількість чисел (масив прямокутний).'};
+  return {ok:true, M};
+}
+
+/** Кроки пошуку максимуму. Для режиму «стовпці» просто міняємо ролі індексів. */
+function matrixSteps(A, mode){
+  const m = A.length, n = A[0].length, S = [];
+  const rows = mode === 'rows';
+  const outer = rows ? m : n, inner = rows ? n : m;
+  const get = (o, t) => rows ? A[o][t] : A[t][o];        // o — зовнішній індекс, t — внутрішній
+  const pos = (o, t) => rows ? [o, t] : [t, o];          // перетворення у [рядок, стовпець]
+  const name = rows ? 'рядка' : 'стовпця';
+  const iv = rows ? 'i' : 'j', jv = rows ? 'j' : 'i';
+  const res = new Array(outer).fill(null), done = [];
+  S.push({line:-1, cur:null, best:null, res:[...res], done:[], hl:[], vars:{m, n},
+          text:`Масив має m = ${m} рядк. і n = ${n} стовп. Знайдемо максимум кожного ${name}.`});
+  for (let o = 0; o < outer; o++){
+    let max = get(o, 0), bestT = 0;
+    S.push({line:o, cur:pos(o,0), best:pos(o,0), res:[...res], done:[...done], hl:[1,2], vars:{[iv]:o, max},
+            text:`${rows ? 'Рядок' : 'Стовпець'} ${o}: спочатку вважаємо максимумом перший елемент, max ← ${max}.`});
+    for (let t = 1; t < inner; t++){
+      const v = get(o, t);
+      const idx = rows ? `A[${o}][${t}]` : `A[${t}][${o}]`;
+      if (v > max){
+        max = v; bestT = t;
+        S.push({line:o, cur:pos(o,t), best:pos(o,t), res:[...res], done:[...done], hl:[3,4,5], vars:{[iv]:o, [jv]:t, max},
+                text:`${idx} = ${v} > max → новий максимум: max ← ${v}.`});
+      } else {
+        S.push({line:o, cur:pos(o,t), best:pos(o,bestT), res:[...res], done:[...done], hl:[3,4], vars:{[iv]:o, [jv]:t, max},
+                text:`${idx} = ${v} ≤ max = ${max} → max не змінюється.`});
+      }
+    }
+    res[o] = max; done.push(pos(o, bestT));
+    S.push({line:o, cur:null, best:null, res:[...res], done:[...done], hl:[6], vars:{[iv]:o, max},
+            text:`Максимум ${name} ${o}: <b>${max}</b>. Переходимо до наступного ${name}.`});
+  }
+  S[S.length - 1].final = 'good';
+  S[S.length - 1].text = `Готово! Максимуми кожного ${name}: <b>${res.join(', ')}</b>. ` +
+    `Усього порівнянь: ${outer * (inner - 1)} (= ${outer} × ${inner - 1}).`;
+  return S;
+}
+
+let mxData = null;
+const mxPlayer = new Player($('m-controls'), renderMxStep);
+
+function applyMatrix(note){
+  showMsg('m-msg', '');
+  const p = parseMatrix($('m-input').value);
+  if (!p.ok){ showMsg('m-msg', p.error, 'err'); return; }
+  const mode = $('m-mode').value;
+  mxData = {A:p.M, mode};
+  $('m-title').textContent = (mode === 'rows' ? 'Пошук максимуму в кожному рядку' : 'Пошук максимуму в кожному стовпці') +
+    (typeof note === 'string' ? ` (${note})` : '');
+  mxPlayer.load(matrixSteps(p.M, mode));
+}
+
+function renderMxStep(st, k){
+  const {A, mode} = mxData, m = A.length, n = A[0].length, rows = mode === 'rows';
+  const eq = (p, r, c) => p && p[0] === r && p[1] === c;
+  let h = '<tr><th></th>' + A[0].map((_, c) => `<th>[${c}]</th>`).join('') + (rows ? '<th>max</th>' : '') + '</tr>';
+  for (let r = 0; r < m; r++){
+    h += `<tr><th>[${r}]</th>`;
+    for (let c = 0; c < n; c++){
+      const cl = [];
+      if (st.line >= 0 && (rows ? r === st.line : c === st.line) && st.cur) cl.push('line');
+      if (st.done.some(p => eq(p, r, c))) cl.push('okc');
+      if (eq(st.cur, r, c)) cl.push('cur');
+      if (eq(st.best, r, c)) cl.push('best');
+      h += `<td class="${cl.join(' ')}">${A[r][c]}</td>`;
+    }
+    if (rows) h += `<td class="res${st.res[r] !== null ? ' filled' : ''}">${st.res[r] !== null ? st.res[r] : ''}</td>`;
+    h += '</tr>';
+  }
+  if (!rows){
+    h += '<tr><th>max</th>' + st.res.map(v => `<td class="res${v !== null ? ' filled' : ''}">${v !== null ? v : ''}</td>`).join('') + '</tr>';
+  }
+  $('m-table').innerHTML = h;
+  renderCode($('m-code'), MX_CODE[mode], st.hl);
+  renderVars($('m-vars'), st.vars);
+  setExplain('m-explain', k === 0 ? st.text + ' Натисніть «Крок».' : st.text, st.final || '');
+}
+
+$('m-apply').onclick = () => applyMatrix();
+document.querySelectorAll('[data-mp]').forEach(b => b.onclick = () => {
+  const p = MX_PRESETS[b.dataset.mp];
+  if (p){ $('m-input').value = p.text; $('m-mode').value = p.mode; applyMatrix(p.note); }
+  else {
+    const rnd = () => 1 + Math.floor(Math.random() * 99);
+    $('m-input').value = Array.from({length:5}, () => Array.from({length:6}, rnd).join(' ')).join('\n');
+    applyMatrix();
+  }
+});
+
+/* =====================================================================
+   ПЕРЕМИКАННЯ ВКЛАДОК І КЛАВІАТУРА
+   ===================================================================== */
+const players = {search: searchPlayer, strings: strPlayer, matrix: mxPlayer};
+let activeView = 'search';
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  players[activeView].pause();
+  activeView = t.dataset.view;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + activeView));
+});
+document.addEventListener('keydown', e => {
+  if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;   // не заважаємо введенню
+  const p = players[activeView];
+  if (e.key === 'ArrowRight'){ p.next(); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft'){ p.prev(); e.preventDefault(); }
+  else if (e.key === ' '){ p.toggle(); e.preventDefault(); }
+});
+
+/* Стартові дані для кожної вкладки */
+document.querySelector('[data-sp="0"]').click();
+document.querySelector('[data-tp="0"]').click();
+document.querySelector('[data-mp="0"]').click();
+</script>
+</body>
+</html>
