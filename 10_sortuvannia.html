@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Візуалізатор «Алгоритми сортування масиву» — 10 клас, тема 4.8</title>
+<style>
+/* ==================================================================
+   СПІЛЬНІ СТИЛІ КОМПЛЕКТУ ВІЗУАЛІЗАТОРІВ
+   Великий шрифт і контрастні кольори розраховані на проєктор 1366×768.
+   Щоб змінити кольори для всього засобу, достатньо змінити змінні нижче.
+   ================================================================== */
+:root {
+  --bg: #eef2f8;          /* тло сторінки */
+  --panel: #ffffff;       /* тло панелей */
+  --ink: #17202f;         /* основний текст */
+  --muted: #4f5a6e;       /* другорядний текст */
+  --line: #b9c3d6;        /* рамки */
+  --brand: #16325c;       /* темно-синій (шапка, заголовки) */
+  --accent: #1f5fbf;      /* кнопки */
+  --cur: #ffd23f;         /* поточний крок (жовтий) */
+  --cmp: #ff9f1c;         /* порівняння (помаранчевий) */
+  --swap: #e0413a;        /* обмін / активний шлях (червоний) */
+  --ok: #1d8a4c;          /* істина / готово (зелений) */
+  --bad: #c62828;         /* хиба / помилка (червоний) */
+  --visited: #d7e6ff;     /* вже пройдене (блакитний) */
+  --radius: 12px;
+  font-size: 18px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif;
+  background: var(--bg); color: var(--ink); line-height: 1.4;
+  min-height: 100vh; display: flex; flex-direction: column;
+}
+
+/* ---------- шапка: назва засобу, клас і тема ---------- */
+header.top {
+  background: var(--brand); color: #fff; padding: 10px 24px;
+  display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center;
+}
+header.top h1 { margin: 0; font-size: 1.45rem; flex: 1 1 auto; }
+header.top .badge {
+  background: var(--cur); color: var(--brand); font-weight: 700;
+  padding: 4px 14px; border-radius: 999px; white-space: nowrap;
+}
+header.top .topic { width: 100%; opacity: .92; font-size: .95rem; }
+
+main { flex: 1; width: 100%; max-width: 1700px; margin: 0 auto; padding: 14px 20px; }
+footer.bottom { text-align: center; padding: 12px; color: var(--muted); border-top: 2px solid var(--line); background: #fff; }
+
+/* ---------- панелі та сітки ---------- */
+.panel {
+  background: var(--panel); border: 2px solid var(--line);
+  border-radius: var(--radius); padding: 12px 16px; min-width: 0;
+}
+.panel > h2 { margin: 0 0 10px; font-size: 1.12rem; color: var(--brand); }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.mt { margin-top: 14px; }
+@media (max-width: 1050px) { .grid2 { grid-template-columns: 1fr; } }
+
+/* ---------- кнопки і поля введення ---------- */
+button {
+  font: inherit; font-weight: 600; min-height: 46px; padding: 8px 16px;
+  border-radius: 10px; border: 2px solid var(--accent);
+  background: #fff; color: var(--accent); cursor: pointer;
+}
+button:hover:not(:disabled) { background: #e8f0ff; }
+button.primary { background: var(--accent); color: #fff; }
+button.primary:hover:not(:disabled) { background: #174c9c; }
+button:disabled { opacity: .4; cursor: not-allowed; }
+button.chip { min-height: 40px; padding: 6px 12px; font-size: .95rem; }
+button.chip.active, .tabs button[aria-selected="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
+:focus-visible { outline: 4px solid var(--cmp); outline-offset: 2px; }
+
+input[type=text], input[type=number], textarea, select {
+  font: inherit; padding: 7px 10px; border: 2px solid var(--line);
+  border-radius: 8px; background: #fff; color: var(--ink);
+}
+input[type=number] { width: 6.5em; }
+input.invalid, textarea.invalid { border-color: var(--bad); background: #fff0f0; }
+label.field { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+input[type=checkbox] { width: 22px; height: 22px; vertical-align: middle; }
+input[type=range] { width: 150px; height: 30px; accent-color: var(--accent); }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.tabs button { font-size: 1rem; }
+
+/* ---------- панель керування і пояснення кроку ---------- */
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.controls .speed { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.controls .stepinfo { color: var(--muted); font-weight: 600; margin-left: auto; }
+.explain {
+  margin-top: 10px; background: #fff8dc; border-left: 8px solid var(--cur);
+  padding: 10px 16px; border-radius: 8px; font-size: 1.15rem; min-height: 3em;
+}
+.explain.err { background: #ffecec; border-left-color: var(--bad); }
+.msg-error { color: var(--bad); font-weight: 700; min-height: 1.4em; }
+
+/* ---------- код / псевдокод з підсвіткою рядка ---------- */
+.code {
+  font-family: Consolas, "Courier New", monospace; font-size: 1.05rem;
+  background: #f7f9fc; border: 2px solid var(--line); border-radius: 8px;
+  padding: 6px 0; overflow-x: auto; margin: 0;
+}
+.code .ln { display: block; padding: 1px 12px; white-space: pre; border-left: 6px solid transparent; }
+.code .ln .no { display: inline-block; width: 2em; color: #8a94a8; user-select: none; }
+.code .ln.cur { background: var(--cur); border-left-color: var(--swap); font-weight: 700; }
+.code .kw { color: #0b4fb3; font-weight: 700; }
+.code .ln.cur .kw { color: #0a2e6e; }
+
+/* ---------- таблиці ---------- */
+table.tbl { border-collapse: collapse; width: 100%; font-size: 1rem; }
+table.tbl th, table.tbl td { border: 1.5px solid var(--line); padding: 4px 8px; text-align: center; }
+table.tbl th { background: #e3eaf6; color: var(--brand); }
+table.tbl tr.cur td { background: var(--cur); font-weight: 700; }
+.t { color: var(--ok); font-weight: 700; }
+.f { color: var(--bad); font-weight: 700; }
+.scroll { overflow: auto; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .95rem; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 18px; border-radius: 4px; vertical-align: -3px; margin-right: 5px; border: 1.5px solid #0003; }
+.hint { color: var(--muted); font-size: .95rem; }
+.big { font-size: 1.6rem; font-weight: 800; }
+
+
+/* ---------- стилі саме цього засобу ---------- */
+.lanes { display: grid; gap: 14px; }
+.lanes.single { grid-template-columns: 1.5fr 1.2fr; }
+.lanes.race { grid-template-columns: 1fr 1fr; }
+@media (max-width: 1050px) { .lanes.single, .lanes.race { grid-template-columns: 1fr; } }
+.lane-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.lane-head h2 { margin: 0; font-size: 1.15rem; color: var(--brand); }
+.finish { font-weight: 800; color: var(--ok); }
+.counters { display: flex; gap: 10px; }
+.counters .box { background: var(--brand); color: #fff; border-radius: 10px; padding: 4px 12px; text-align: center; font-size: .9rem; }
+.counters .box b { display: block; font-size: 1.6rem; line-height: 1.1; }
+
+/* стовпчики масиву */
+.bars { position: relative; height: 330px; border-bottom: 3px solid var(--brand); margin: 0 4px; }
+.race .bars { height: 250px; }
+.bar {
+  position: absolute; bottom: 0; border-radius: 6px 6px 0 0;
+  background: #5b8def; border: 2px solid #2d5fb8;
+  transition: left .35s ease, background-color .2s, height .2s;
+  display: flex; justify-content: center; align-items: flex-start;
+}
+.bar span { font: 800 1.05rem Consolas, monospace; color: #10233f; margin-top: -1.55em; }
+.bar.part { background: #a8e0bd; border-color: #4caf7a; }
+.bar.sorted { background: var(--ok); border-color: #135f34; }
+.bar.cmp { background: var(--cmp); border-color: #b86b00; }
+.bar.swp { background: var(--swap); border-color: #8c1d18; }
+.bar.min { box-shadow: 0 0 0 4px #8e44ad; }
+.idx { position: relative; height: 1.6em; margin: 0 4px; }
+.idx span { position: absolute; text-align: center; font: 700 .95rem Consolas, monospace; color: var(--muted); }
+.ptrs { position: relative; height: 1.6em; margin: 0 4px; }
+.ptrs span { position: absolute; text-align: center; font: 800 1rem Consolas, monospace; color: #8e44ad; transition: left .3s; }
+.race .code { font-size: .9rem; }
+#arrInput { width: 22em; font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Візуалізатор «Алгоритми сортування масиву»</h1>
+  <span class="badge">10 клас · Тема 4.8</span>
+  <div class="topic">Розділ 4. Основи алгоритмізації та програмування · Масиви. Рядкові величини (класичні алгоритми сортування)</div>
+</header>
+
+<main>
+  <section class="panel">
+    <div class="row">
+      <b>Алгоритм:</b>
+      <span class="row" id="algA"></span>
+      <label class="field"><input type="checkbox" id="raceMode"> Режим «Змагання» з</label>
+      <span class="row" id="algB"></span>
+    </div>
+    <div class="row mt">
+      <b>Масив:</b>
+      <button type="button" class="chip" data-gen="random">🎲 Випадковий</button>
+      <button type="button" class="chip" data-gen="almost">Майже відсортований</button>
+      <button type="button" class="chip" data-gen="reverse">Обернений</button>
+      <label class="field">Кількість <input type="range" id="size" min="8" max="20" value="10"><span id="sizeVal">10</span></label>
+    </div>
+    <div class="row mt">
+      <label class="field">Свій масив: <input type="text" id="arrInput" placeholder="напр. 42 7 19 3 88 25 61 14"></label>
+      <button type="button" class="primary" id="applyArr">✔ Застосувати</button>
+      <span class="hint">8–20 цілих чисел від 1 до 99 через пробіл або кому</span>
+    </div>
+    <div class="msg-error" id="err" role="alert"></div>
+  </section>
+
+  <div class="lanes single mt" id="lanes"></div>
+
+  <section class="panel mt">
+    <div id="controls"></div>
+    <div class="explain" id="explain" aria-live="polite"></div>
+    <div class="legend mt">
+      <span><i style="background:#5b8def"></i>ще не впорядковано</span>
+      <span><i style="background:var(--cmp)"></i>порівнюються</span>
+      <span><i style="background:var(--swap)"></i>обмін</span>
+      <span><i style="background:#a8e0bd"></i>впорядкована частина (вставки)</span>
+      <span><i style="background:var(--ok)"></i>на своєму місці</span>
+      <span><i style="background:#fff;box-shadow:0 0 0 3px #8e44ad"></i>поточний мінімум (вибір)</span>
+    </div>
+  </section>
+</main>
+
+<footer class="bottom">Розроблено автором</footer>
+
+<script>
+/* ==================================================================
+   ПРОГРАВАЧ КРОКІВ (спільна частина всіх засобів комплекту)
+   Ідея: алгоритм виконується наперед, а кожен його крок зберігається
+   як «знімок» стану. Програвач лише показує знімки по черзі. Тому
+   легко зробити кнопки «Крок», «Назад», «Старт/Пауза» і «Скинути».
+   Клавіші: → або пробіл — крок уперед, ← — крок назад.
+   ================================================================== */
+class StepPlayer {
+  /**
+   * @param {HTMLElement} root   контейнер, у який буде вставлено кнопки
+   * @param {Function} render    render(step, index, total, dir) — малює знімок
+   * @param {Object} [hooks]     { beforeStep(nextStep, nextIndex) → false, щоб не йти далі }
+   */
+  constructor(root, render, hooks = {}) {
+    this.render = render;
+    this.hooks = hooks;
+    this.steps = [];
+    this.i = 0;
+    this.timer = null;
+    root.classList.add('controls');
+    root.innerHTML = `
+      <button type="button" data-act="back" title="Крок назад (клавіша ←)">◀ Назад</button>
+      <button type="button" data-act="step" class="primary" title="Наступний крок (клавіша → або пробіл)">Крок ▶</button>
+      <button type="button" data-act="play" title="Автоматичне виконання">▶ Старт</button>
+      <button type="button" data-act="reset" title="Повернутися до першого кроку">⟲ Скинути</button>
+      <label class="speed">Швидкість
+        <input type="range" min="1" max="10" value="5" aria-label="Швидкість виконання">
+      </label>
+      <span class="stepinfo" aria-live="polite"></span>`;
+    this.btn = {};
+    root.querySelectorAll('button').forEach(b => (this.btn[b.dataset.act] = b));
+    this.range = root.querySelector('input[type=range]');
+    this.info = root.querySelector('.stepinfo');
+
+    this.btn.back.onclick = () => { this.pause(); this.back(); };
+    this.btn.step.onclick = () => { this.pause(); this.next(); };
+    this.btn.play.onclick = () => this.toggle();
+    this.btn.reset.onclick = () => this.reset();
+    // Якщо швидкість змінили під час відтворення — продовжуємо з новою.
+    this.range.oninput = () => { if (this.timer) { this.pause(); this.play(); } };
+
+    document.addEventListener('keydown', e => {
+      const ae = document.activeElement;
+      const tag = ae ? ae.tagName : '';
+      // не заважаємо введенню тексту і повзункам; прапорці (checkbox) не заважають
+      if (/TEXTAREA|SELECT/.test(tag) || (tag === 'INPUT' && ae.type !== 'checkbox')) return;
+      if (tag === 'BUTTON' && e.key === ' ') return;           // пробіл на кнопці = її натискання
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); this.pause(); this.next(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); this.pause(); this.back(); }
+    });
+  }
+
+  /** Завантажити новий набір кроків і показати перший. */
+  load(steps) { this.pause(); this.steps = steps; this.i = 0; this.show(0); }
+
+  /** Затримка між кроками: від 1,9 с (повільно) до 0,1 с (швидко). */
+  get delay() { return 2100 - Number(this.range.value) * 200; }
+
+  next() {
+    if (this.i >= this.steps.length - 1) { this.pause(); return false; }
+    if (this.hooks.beforeStep && this.hooks.beforeStep(this.steps[this.i + 1], this.i + 1) === false) {
+      this.pause(); return false;
+    }
+    this.i++; this.show(1); return true;
+  }
+  back() { if (this.i > 0) { this.i--; this.show(-1); } }
+  reset() { this.pause(); this.i = 0; this.show(0); }
+
+  play() {
+    if (!this.steps.length) return;
+    if (this.i >= this.steps.length - 1) { this.i = 0; this.show(0); } // повтор з початку
+    this.btn.play.textContent = '⏸ Пауза';
+    const tick = () => { if (this.next()) this.timer = setTimeout(tick, this.delay); };
+    this.timer = setTimeout(tick, Math.min(this.delay, 600));
+  }
+  pause() { clearTimeout(this.timer); this.timer = null; this.btn.play.textContent = '▶ Старт'; }
+  toggle() { this.timer ? this.pause() : this.play(); }
+
+  show(dir) {
+    const n = this.steps.length;
+    this.btn.back.disabled = this.i <= 0;
+    this.btn.step.disabled = this.i >= n - 1;
+    this.info.textContent = n ? `Крок ${this.i + 1} з ${n}` : '';
+    if (n) this.render(this.steps[this.i], this.i, n, dir);
+  }
+}
+
+/* ---------- дрібні допоміжні функції ---------- */
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+/** Екранування тексту для вставлення в HTML. */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+/** Гарний запис числа: цілі — як є, дробові — до 4 знаків після крапки. */
+function fmtNum(v) {
+  if (Number.isInteger(v)) return String(v);
+  return String(Math.round(v * 10000) / 10000);
+}
+
+
+/* ==================================================================
+   АЛГОРИТМИ СОРТУВАННЯ
+   Кожна функція отримує масив і повертає список кадрів (знімків).
+   Кадр: { arr (порядок id елементів), cmp[], swp[], sorted[], part, min,
+           line (рядок псевдокоду), comps, swaps, explain }
+   Значення елемента: VAL[id]. Так стовпчики плавно переїжджають при обміні.
+   ================================================================== */
+let VAL = [];   // значення за id елемента
+
+const ALGOS = {
+  bubble: {
+    name: 'Бульбашкою',
+    code: [
+      'для i від 0 до n−2 виконувати',
+      '   обміни := хиба',
+      '   для j від 0 до n−2−i виконувати',
+      '      якщо a[j] > a[j+1] то',
+      '         обміняти a[j] ↔ a[j+1]; обміни := істина',
+      '   якщо не обміни то завершити'
+    ],
+    run(a) {
+      const n = a.length, F = [], sorted = new Set();
+      let comps = 0, swaps = 0;
+      const push = o => F.push({ arr: a.slice(), sorted: [...sorted], comps, swaps, cmp: [], swp: [], ...o });
+      push({ line: -1, explain: 'Сортування бульбашкою: порівнюємо сусідні елементи й міняємо їх місцями, якщо лівий більший. Великі елементи «спливають» праворуч.' });
+      for (let i = 0; i < n - 1; i++) {
+        let swapped = false;
+        push({ line: 1, ptr: { i }, explain: `Прохід № ${i + 1}. Скидаємо прапорець: обмінів поки не було.` });
+        for (let j = 0; j < n - 1 - i; j++) {
+          comps++;
+          const x = VAL[a[j]], y = VAL[a[j + 1]];
+          push({ line: 3, cmp: [j, j + 1], ptr: { i, j }, explain: `Порівнюємо a[${j}] = ${x} і a[${j + 1}] = ${y}: ${x > y ? `${x} > ${y}, порядок неправильний — треба обміняти.` : `${x} ≤ ${y}, порядок правильний, нічого не робимо.`}` });
+          if (x > y) {
+            [a[j], a[j + 1]] = [a[j + 1], a[j]]; swaps++; swapped = true;
+            push({ line: 4, swp: [j, j + 1], ptr: { i, j }, explain: `Обмінюємо: тепер a[${j}] = ${y}, a[${j + 1}] = ${x}.` });
+          }
+        }
+        sorted.add(n - 1 - i);
+        if (!swapped) {
+          for (let k = 0; k < n; k++) sorted.add(k);
+          push({ line: 5, explain: `За прохід № ${i + 1} не було жодного обміну — отже, масив уже впорядкований. Завершуємо достроково!` });
+          return F;
+        }
+        push({ line: 5, explain: `Прохід № ${i + 1} завершено. Елемент ${VAL[a[n - 1 - i]]} «сплив» на своє місце (індекс ${n - 1 - i}). Обміни були, тому продовжуємо.` });
+      }
+      for (let k = 0; k < n; k++) sorted.add(k);
+      push({ line: -1, explain: 'Масив відсортовано за зростанням.' });
+      return F;
+    }
+  },
+
+  selection: {
+    name: 'Вибором',
+    code: [
+      'для i від 0 до n−2 виконувати',
+      '   min := i',
+      '   для j від i+1 до n−1 виконувати',
+      '      якщо a[j] < a[min] то',
+      '         min := j',
+      '   якщо min ≠ i то',
+      '      обміняти a[i] ↔ a[min]'
+    ],
+    run(a) {
+      const n = a.length, F = [], sorted = new Set();
+      let comps = 0, swaps = 0;
+      const push = o => F.push({ arr: a.slice(), sorted: [...sorted], comps, swaps, cmp: [], swp: [], min: -1, ...o });
+      push({ line: -1, explain: 'Сортування вибором: шукаємо найменший елемент у невпорядкованій частині й ставимо його на початок цієї частини.' });
+      for (let i = 0; i < n - 1; i++) {
+        let min = i;
+        push({ line: 1, min, ptr: { i }, explain: `Крок № ${i + 1}. Вважаємо мінімальним a[${i}] = ${VAL[a[i]]}.` });
+        for (let j = i + 1; j < n; j++) {
+          comps++;
+          const less = VAL[a[j]] < VAL[a[min]];
+          push({ line: 3, cmp: [j, min], min, ptr: { i, j }, explain: `Порівнюємо a[${j}] = ${VAL[a[j]]} з поточним мінімумом a[${min}] = ${VAL[a[min]]}: ${less ? 'менше — запам\'ятовуємо новий мінімум.' : 'не менше — мінімум не змінюється.'}` });
+          if (less) { min = j; push({ line: 4, min, ptr: { i, j }, explain: `Новий мінімум: a[${min}] = ${VAL[a[min]]}.` }); }
+        }
+        if (min !== i) {
+          [a[i], a[min]] = [a[min], a[i]]; swaps++;
+          push({ line: 6, swp: [i, min], min: i, ptr: { i }, explain: `Мінімум ${VAL[a[i]]} ставимо на позицію ${i}: обмінюємо a[${i}] і a[${min}].` });
+        } else {
+          push({ line: 5, min: i, ptr: { i }, explain: `Мінімум уже стоїть на позиції ${i} — обмін не потрібен.` });
+        }
+        sorted.add(i);
+      }
+      for (let k = 0; k < n; k++) sorted.add(k);
+      push({ line: -1, explain: 'Масив відсортовано за зростанням. Зверніть увагу: обмінів значно менше, ніж порівнянь.' });
+      return F;
+    }
+  },
+
+  insertion: {
+    name: 'Вставками',
+    code: [
+      'для i від 1 до n−1 виконувати',
+      '   j := i',
+      '   поки j > 0 і a[j−1] > a[j] виконувати',
+      '      обміняти a[j−1] ↔ a[j]',
+      '      j := j − 1'
+    ],
+    run(a) {
+      const n = a.length, F = [], sorted = new Set();
+      let comps = 0, swaps = 0;
+      const push = o => F.push({ arr: a.slice(), sorted: [...sorted], comps, swaps, cmp: [], swp: [], ...o });
+      push({ line: -1, part: 1, explain: 'Сортування вставками: ліва частина масиву вже впорядкована (спочатку це один елемент). Кожен наступний елемент «вставляємо» в неї на своє місце.' });
+      for (let i = 1; i < n; i++) {
+        let j = i;
+        push({ line: 1, part: i, cmp: [i], ptr: { i, j }, explain: `Беремо елемент a[${i}] = ${VAL[a[i]]} і вставлятимемо його у впорядковану частину a[0..${i - 1}].` });
+        for (;;) {
+          if (j === 0) { push({ line: 2, part: i + 1, ptr: { i, j }, explain: 'Дійшли до початку масиву (j = 0) — елемент став першим.' }); break; }
+          comps++;
+          const x = VAL[a[j - 1]], y = VAL[a[j]];
+          if (x > y) {
+            push({ line: 2, part: i, cmp: [j - 1, j], ptr: { i, j }, explain: `a[${j - 1}] = ${x} > a[${j}] = ${y} — елемент треба зсунути лівіше.` });
+            [a[j - 1], a[j]] = [a[j], a[j - 1]]; swaps++;
+            push({ line: 3, part: i, swp: [j - 1, j], ptr: { i, j }, explain: `Обмінюємо a[${j - 1}] і a[${j}].` });
+            j--;
+          } else {
+            push({ line: 2, part: i + 1, cmp: [j - 1, j], ptr: { i, j }, explain: `a[${j - 1}] = ${x} ≤ a[${j}] = ${y} — елемент на своєму місці у впорядкованій частині.` });
+            break;
+          }
+        }
+      }
+      for (let k = 0; k < n; k++) sorted.add(k);
+      push({ line: -1, explain: 'Масив відсортовано за зростанням. На майже відсортованому масиві вставки працюють дуже швидко!' });
+      return F;
+    }
+  }
+};
+
+/* ==================================================================
+   «ДОРІЖКА» — відображення одного алгоритму (стовпчики, лічильники, код)
+   ================================================================== */
+class Lane {
+  constructor(parent, algoKey, race) {
+    this.algo = ALGOS[algoKey];
+    this.el = document.createElement('section');
+    this.el.className = 'panel';
+    const codeHtml = this.algo.code.map((l, k) =>
+      `<span class="ln" data-k="${k}"><span class="no">${k + 1}</span>${esc(l).replace(/^(\s*)(для|якщо|поки|обміняти)/, '$1<span class="kw">$2</span>').replace(/ то (завершити)$/, ' <span class="kw">то</span> $1').replace(/ (виконувати|то)$/, ' <span class="kw">$1</span>')}</span>`).join('');
+    const head = `<div class="lane-head"><h2>Сортування ${this.algo.name.toLowerCase()}</h2>
+      <span class="finish"></span>
+      <div class="counters"><div class="box">Порівнянь<b class="c1">0</b></div><div class="box">Обмінів<b class="c2">0</b></div></div></div>`;
+    const bars = '<div class="bars"></div><div class="ptrs"></div><div class="idx"></div>';
+    if (race) {
+      this.el.innerHTML = head + bars + `<pre class="code mt">${codeHtml}</pre>`;
+      parent.appendChild(this.el);
+    } else {
+      // у звичайному режимі код і лічильники — окремою панеллю праворуч
+      this.el.innerHTML = head.replace(/<div class="counters">.*<\/div><\/div>/s, '</div>') + bars;
+      parent.appendChild(this.el);
+      const side = document.createElement('section');
+      side.className = 'panel';
+      side.innerHTML = `<h2>Псевдокод</h2><pre class="code">${codeHtml}</pre>
+        <div class="counters mt"><div class="box">Порівнянь<b class="c1">0</b></div><div class="box">Обмінів<b class="c2">0</b></div></div>
+        <p class="hint">Масив позначено a, кількість елементів — n, індекси починаються з 0.</p>`;
+      parent.appendChild(side);
+      this.side = side;
+    }
+    this.root = race ? this.el : parent;
+  }
+  /** Створити стовпчики для масиву (один раз для кожного нового масиву). */
+  setup(n) {
+    this.n = n;
+    const max = Math.max(...VAL);
+    const bars = $('.bars', this.el);
+    const H = bars.clientHeight - 34;
+    const w = 100 / n;
+    bars.innerHTML = VAL.map((v, id) =>
+      `<div class="bar" data-id="${id}" style="width:calc(${w}% - 6px);height:${Math.max(8, v / max * H)}px"><span>${v}</span></div>`).join('');
+    $('.idx', this.el).innerHTML = Array.from({ length: n }, (_, k) => `<span style="left:${k * w}%;width:${w}%">${k}</span>`).join('');
+    this.barEls = $$('.bar', bars);
+  }
+  render(fr, finished) {
+    const w = 100 / this.n;
+    fr.arr.forEach((id, pos) => {
+      const b = this.barEls[id];
+      b.style.left = `calc(${pos * w}% + 3px)`;
+      let cls = 'bar';
+      if (fr.sorted.includes(pos)) cls += ' sorted';
+      else if (fr.part && pos < fr.part) cls += ' part';
+      if (fr.cmp.includes(pos)) cls += ' cmp';
+      if (fr.swp.includes(pos)) cls += ' swp';
+      if (fr.min === pos) cls += ' min';
+      b.className = cls;
+    });
+    // вказівники i та j під індексами
+    const p = fr.ptr || {};
+    const marks = {};   // позиція → «i», «j» або «i,j»
+    ['i', 'j'].forEach(k => { if (p[k] !== undefined && p[k] < this.n) marks[p[k]] = marks[p[k]] ? marks[p[k]] + ',' + k : k; });
+    $('.ptrs', this.el).innerHTML = Object.keys(marks)
+      .map(pos => `<span style="left:${pos * w}%;width:${w}%">${marks[pos]}↑</span>`).join('');
+    $$('.c1', this.root).forEach(e => (e.textContent = fr.comps));
+    $$('.c2', this.root).forEach(e => (e.textContent = fr.swaps));
+    $$('.code .ln', this.root).forEach(l => l.classList.toggle('cur', Number(l.dataset.k) === fr.line));
+    $('.finish', this.el).textContent = finished ? '✔ Готово!' : '';
+  }
+}
+
+/* ==================================================================
+   КЕРУВАННЯ
+   ================================================================== */
+let algoA = 'bubble', algoB = 'selection', race = false;
+let baseArray = [];      // поточний масив (значення)
+let lanes = [];
+
+function chips(container, current, onPick, exclude) {
+  container.innerHTML = Object.keys(ALGOS).map(k =>
+    `<button type="button" class="chip${k === current ? ' active' : ''}" data-k="${k}"${k === exclude ? ' disabled' : ''}>${ALGOS[k].name}</button>`).join('');
+  $$('.chip', container).forEach(b => (b.onclick = () => onPick(b.dataset.k)));
+}
+function drawChips() {
+  chips($('#algA'), algoA, k => { algoA = k; if (algoB === k) algoB = Object.keys(ALGOS).find(x => x !== k); rebuild(); });
+  chips($('#algB'), algoB, k => { algoB = k; rebuild(); }, algoA);
+  $$('#algB .chip').forEach(b => (b.hidden = !race));
+}
+
+function rebuild() {
+  drawChips();
+  VAL = baseArray.slice();
+  const ids = VAL.map((_, i) => i);
+  const box = $('#lanes');
+  box.className = 'lanes mt ' + (race ? 'race' : 'single');
+  box.innerHTML = '';
+  const keys = race ? [algoA, algoB] : [algoA];
+  lanes = keys.map(k => new Lane(box, k, race));
+  lanes.forEach(l => l.setup(VAL.length));
+  const runs = keys.map(k => ALGOS[k].run(ids.slice()));
+  // Об'єднуємо кадри: у змаганні обидва алгоритми роблять по одному кроку одночасно
+  const total = Math.max(...runs.map(r => r.length));
+  const steps = [];
+  for (let s = 0; s < total; s++) {
+    steps.push(runs.map(r => ({ fr: r[Math.min(s, r.length - 1)], done: s >= r.length - 1 })));
+  }
+  if (race) {
+    // Підсумок змагання — у поясненні останнього кроку
+    const last = runs.map(r => r[r.length - 1]);
+    const names = keys.map(k => ALGOS[k].name.toLowerCase());
+    steps[steps.length - 1].summary = `🏁 Підсумок. ${names[0]}: ${runs[0].length - 1} кроків, ${last[0].comps} порівнянь, ${last[0].swaps} обмінів. ` +
+      `${names[1]}: ${runs[1].length - 1} кроків, ${last[1].comps} порівнянь, ${last[1].swaps} обмінів.`;
+  }
+  player.load(steps);
+}
+
+function render(step) {
+  step.forEach((s, k) => lanes[k].render(s.fr, s.done && race));
+  const ex = $('#explain');
+  if (step.summary) ex.textContent = step.summary;
+  else if (race) ex.innerHTML = step.map((s, k) => `<b>${ALGOS[[algoA, algoB][k]].name}:</b> ${esc(s.done ? 'завершено.' : s.fr.explain)}`).join('<br>');
+  else ex.textContent = step[0].fr.explain;
+}
+const player = new StepPlayer($('#controls'), render);
+
+/* ---------- генерування і введення масиву ---------- */
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+function generate(kind) {
+  const n = Number($('#size').value);
+  let arr = Array.from({ length: n }, () => rnd(5, 99));
+  if (kind === 'almost') {
+    arr.sort((x, y) => x - y);
+    for (let k = 0; k < 2; k++) { const p = rnd(0, n - 2); [arr[p], arr[p + 1]] = [arr[p + 1], arr[p]]; }
+  } else if (kind === 'reverse') arr.sort((x, y) => y - x);
+  baseArray = arr;
+  $('#arrInput').value = arr.join(' ');
+  $('#err').textContent = ''; $('#arrInput').classList.remove('invalid');
+  rebuild();
+}
+function applyCustom() {
+  const inp = $('#arrInput'), err = $('#err');
+  const parts = inp.value.trim().split(/[\s,;]+/).filter(Boolean);
+  const bad = parts.find(p => !/^\d+$/.test(p) || +p < 1 || +p > 99);
+  let msg = '';
+  if (bad !== undefined) msg = `«${bad}» — не ціле число від 1 до 99.`;
+  else if (parts.length < 8 || parts.length > 20) msg = `Потрібно від 8 до 20 чисел, а введено ${parts.length}.`;
+  inp.classList.toggle('invalid', !!msg);
+  err.textContent = msg ? '⚠ ' + msg : '';
+  if (msg) return;
+  baseArray = parts.map(Number);
+  $('#size').value = baseArray.length; $('#sizeVal').textContent = baseArray.length;
+  rebuild();
+}
+
+$$('[data-gen]').forEach(b => (b.onclick = () => generate(b.dataset.gen)));
+$('#size').oninput = () => { $('#sizeVal').textContent = $('#size').value; };
+$('#size').onchange = () => generate('random');
+$('#applyArr').onclick = applyCustom;
+$('#arrInput').addEventListener('keydown', e => { if (e.key === 'Enter') applyCustom(); });
+$('#raceMode').onchange = () => { race = $('#raceMode').checked; rebuild(); };
+window.addEventListener('resize', () => { lanes.forEach(l => l.setup(VAL.length)); player.show(0); });
+
+// Стартовий приклад — фіксований, щоб на уроці всі бачили однакову картину
+baseArray = [42, 7, 19, 3, 88, 25, 61, 14, 50, 33];
+$('#arrInput').value = baseArray.join(' ');
+rebuild();
+</script>
+</body>
+</html>

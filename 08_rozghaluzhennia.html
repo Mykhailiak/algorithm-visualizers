@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тренажер «Логічні вирази та шлях розгалуження» — 10 клас, тема 4.6</title>
+<style>
+/* ==================================================================
+   СПІЛЬНІ СТИЛІ КОМПЛЕКТУ ВІЗУАЛІЗАТОРІВ
+   Великий шрифт і контрастні кольори розраховані на проєктор 1366×768.
+   Щоб змінити кольори для всього засобу, достатньо змінити змінні нижче.
+   ================================================================== */
+:root {
+  --bg: #eef2f8;          /* тло сторінки */
+  --panel: #ffffff;       /* тло панелей */
+  --ink: #17202f;         /* основний текст */
+  --muted: #4f5a6e;       /* другорядний текст */
+  --line: #b9c3d6;        /* рамки */
+  --brand: #16325c;       /* темно-синій (шапка, заголовки) */
+  --accent: #1f5fbf;      /* кнопки */
+  --cur: #ffd23f;         /* поточний крок (жовтий) */
+  --cmp: #ff9f1c;         /* порівняння (помаранчевий) */
+  --swap: #e0413a;        /* обмін / активний шлях (червоний) */
+  --ok: #1d8a4c;          /* істина / готово (зелений) */
+  --bad: #c62828;         /* хиба / помилка (червоний) */
+  --visited: #d7e6ff;     /* вже пройдене (блакитний) */
+  --radius: 12px;
+  font-size: 18px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif;
+  background: var(--bg); color: var(--ink); line-height: 1.4;
+  min-height: 100vh; display: flex; flex-direction: column;
+}
+
+/* ---------- шапка: назва засобу, клас і тема ---------- */
+header.top {
+  background: var(--brand); color: #fff; padding: 10px 24px;
+  display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center;
+}
+header.top h1 { margin: 0; font-size: 1.45rem; flex: 1 1 auto; }
+header.top .badge {
+  background: var(--cur); color: var(--brand); font-weight: 700;
+  padding: 4px 14px; border-radius: 999px; white-space: nowrap;
+}
+header.top .topic { width: 100%; opacity: .92; font-size: .95rem; }
+
+main { flex: 1; width: 100%; max-width: 1700px; margin: 0 auto; padding: 14px 20px; }
+footer.bottom { text-align: center; padding: 12px; color: var(--muted); border-top: 2px solid var(--line); background: #fff; }
+
+/* ---------- панелі та сітки ---------- */
+.panel {
+  background: var(--panel); border: 2px solid var(--line);
+  border-radius: var(--radius); padding: 12px 16px; min-width: 0;
+}
+.panel > h2 { margin: 0 0 10px; font-size: 1.12rem; color: var(--brand); }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.mt { margin-top: 14px; }
+@media (max-width: 1050px) { .grid2 { grid-template-columns: 1fr; } }
+
+/* ---------- кнопки і поля введення ---------- */
+button {
+  font: inherit; font-weight: 600; min-height: 46px; padding: 8px 16px;
+  border-radius: 10px; border: 2px solid var(--accent);
+  background: #fff; color: var(--accent); cursor: pointer;
+}
+button:hover:not(:disabled) { background: #e8f0ff; }
+button.primary { background: var(--accent); color: #fff; }
+button.primary:hover:not(:disabled) { background: #174c9c; }
+button:disabled { opacity: .4; cursor: not-allowed; }
+button.chip { min-height: 40px; padding: 6px 12px; font-size: .95rem; }
+button.chip.active, .tabs button[aria-selected="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
+:focus-visible { outline: 4px solid var(--cmp); outline-offset: 2px; }
+
+input[type=text], input[type=number], textarea, select {
+  font: inherit; padding: 7px 10px; border: 2px solid var(--line);
+  border-radius: 8px; background: #fff; color: var(--ink);
+}
+input[type=number] { width: 6.5em; }
+input.invalid, textarea.invalid { border-color: var(--bad); background: #fff0f0; }
+label.field { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+input[type=checkbox] { width: 22px; height: 22px; vertical-align: middle; }
+input[type=range] { width: 150px; height: 30px; accent-color: var(--accent); }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.tabs button { font-size: 1rem; }
+
+/* ---------- панель керування і пояснення кроку ---------- */
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.controls .speed { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.controls .stepinfo { color: var(--muted); font-weight: 600; margin-left: auto; }
+.explain {
+  margin-top: 10px; background: #fff8dc; border-left: 8px solid var(--cur);
+  padding: 10px 16px; border-radius: 8px; font-size: 1.15rem; min-height: 3em;
+}
+.explain.err { background: #ffecec; border-left-color: var(--bad); }
+.msg-error { color: var(--bad); font-weight: 700; min-height: 1.4em; }
+
+/* ---------- код / псевдокод з підсвіткою рядка ---------- */
+.code {
+  font-family: Consolas, "Courier New", monospace; font-size: 1.05rem;
+  background: #f7f9fc; border: 2px solid var(--line); border-radius: 8px;
+  padding: 6px 0; overflow-x: auto; margin: 0;
+}
+.code .ln { display: block; padding: 1px 12px; white-space: pre; border-left: 6px solid transparent; }
+.code .ln .no { display: inline-block; width: 2em; color: #8a94a8; user-select: none; }
+.code .ln.cur { background: var(--cur); border-left-color: var(--swap); font-weight: 700; }
+.code .kw { color: #0b4fb3; font-weight: 700; }
+.code .ln.cur .kw { color: #0a2e6e; }
+
+/* ---------- таблиці ---------- */
+table.tbl { border-collapse: collapse; width: 100%; font-size: 1rem; }
+table.tbl th, table.tbl td { border: 1.5px solid var(--line); padding: 4px 8px; text-align: center; }
+table.tbl th { background: #e3eaf6; color: var(--brand); }
+table.tbl tr.cur td { background: var(--cur); font-weight: 700; }
+.t { color: var(--ok); font-weight: 700; }
+.f { color: var(--bad); font-weight: 700; }
+.scroll { overflow: auto; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .95rem; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 18px; border-radius: 4px; vertical-align: -3px; margin-right: 5px; border: 1.5px solid #0003; }
+.hint { color: var(--muted); font-size: .95rem; }
+.big { font-size: 1.6rem; font-weight: 800; }
+
+/* ---------- блок-схема ---------- */
+.fc-wrap { overflow: auto; background: #fbfcfe; border: 2px solid var(--line); border-radius: 8px; padding: 4px; text-align: center; }
+svg.fc { display: inline-block; height: auto; max-width: none; }
+svg.fc .shape { fill: #fff; stroke: var(--brand); stroke-width: 2.5; transition: fill .25s; }
+svg.fc .txt { font: 600 17px "Segoe UI", Roboto, Arial, sans-serif; fill: var(--ink); }
+svg.fc .lbl { paint-order: stroke; stroke: #fbfcfe; stroke-width: 4px; font: 700 15px "Segoe UI", Roboto, Arial, sans-serif; fill: var(--muted); }
+svg.fc .ln { fill: none; stroke: #5d6880; stroke-width: 2.2; transition: stroke .2s; }
+svg.fc .ln.on { stroke: var(--swap); stroke-width: 5; marker-end: url(#arOn); }
+svg.fc .ln.on:not([marker-end^="url"]) { marker-end: none; }
+svg.fc .dot { fill: #5d6880; }
+svg.fc .node.on .shape { fill: var(--visited); }
+svg.fc .node.cur .shape { fill: var(--cur); stroke: var(--swap); stroke-width: 4; }
+svg.fc .badge { font: 800 17px Consolas, "Courier New", monospace; paint-order: stroke; stroke: #fff; stroke-width: 5px; }
+svg.fc .badge.t { fill: var(--ok); }
+svg.fc .badge.f { fill: var(--bad); }
+
+/* ---------- змінні у вигляді «коробок» ---------- */
+.vars { display: flex; flex-wrap: wrap; gap: 10px; }
+.var { border: 2px solid var(--brand); border-radius: 10px; min-width: 86px; text-align: center; overflow: hidden; background: #fff; }
+.var .nm { background: var(--brand); color: #fff; font-weight: 700; padding: 2px 8px; font-family: Consolas, monospace; }
+.var .vl { font: 800 1.45rem Consolas, monospace; padding: 4px 10px; }
+.var.changed { border-color: var(--swap); box-shadow: 0 0 0 3px #e0413a55; }
+.var.changed .vl { background: #fff1c2; }
+.outbox { font-family: Consolas, monospace; background: #10233f; color: #e9f1ff; border-radius: 8px; padding: 8px 12px; min-height: 2.4em; white-space: pre-wrap; }
+
+
+/* ---------- стилі саме цього засобу ---------- */
+.layout { display: grid; grid-template-columns: minmax(360px, 1fr) 2fr; gap: 14px; align-items: start; }
+@media (max-width: 1200px) { .layout { grid-template-columns: 1fr; } }
+#lexpr { width: 100%; font: 700 1.25rem Consolas, "Courier New", monospace; }
+.builder button { min-width: 52px; font-family: Consolas, monospace; }
+.lx-view { font: 700 1.25rem Consolas, monospace; padding: 10px 4px 4px; overflow-x: auto; }
+/* Кожен підвираз — «коробочка» з підкресленням і значенням знизу */
+.lx { display: inline-flex; flex-direction: column; align-items: center; vertical-align: top; margin: 0 2px; }
+.lx > .b { padding: 0 3px 2px; border-bottom: 4px solid; white-space: nowrap; }
+.lx > .v { font-size: .8rem; font-weight: 800; }
+.lx.t > .b { border-color: var(--ok); } .lx.t > .v { color: var(--ok); }
+.lx.f > .b { border-color: var(--bad); } .lx.f > .v { color: var(--bad); }
+.result { margin-top: 8px; font-size: 1.3rem; font-weight: 800; padding: 6px 12px; border-radius: 8px; display: inline-block; }
+.result.t { background: #d8f5e2; color: var(--ok); } .result.f { background: #ffe1e1; color: var(--bad); }
+.atoms { font-family: Consolas, monospace; margin: 6px 0; }
+#truth th, #truth td { font-family: Consolas, monospace; }
+#truth td.t, #truth td.f { font-size: .95rem; }
+.inputs label { font-weight: 700; }
+.side3 { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 12px; margin-top: 12px; }
+@media (max-width: 900px) { .side3 { grid-template-columns: 1fr; } }
+.side3 h3 { margin: 0 0 6px; font-size: 1rem; color: var(--brand); }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Тренажер «Логічні вирази та шлях розгалуження»</h1>
+  <span class="badge">10 клас · Тема 4.6</span>
+  <div class="topic">Розділ 4. Основи алгоритмізації та програмування · Алгоритми з розгалуженнями</div>
+</header>
+
+<main>
+  <div class="layout">
+    <!-- ЛІВА ПАНЕЛЬ: логічний вираз і таблиця істинності -->
+    <section class="panel">
+      <h2>Конструктор логічного виразу</h2>
+      <div class="row" id="lpresets"></div>
+      <input type="text" id="lexpr" class="mt" aria-label="Логічний вираз" spellcheck="false">
+      <div class="row builder mt" id="builder" aria-label="Кнопки для складання виразу"></div>
+      <div class="row inputs mt">
+        <label class="field">x = <input type="number" id="lx" value="5" step="any"></label>
+        <label class="field">y = <input type="number" id="ly" value="3" step="any"></label>
+      </div>
+      <div class="msg-error" id="lerr" role="alert"></div>
+      <div class="lx-view" id="lview" aria-live="polite"></div>
+      <div id="lresult"></div>
+      <h2 class="mt">Таблиця істинності</h2>
+      <div class="atoms" id="atoms"></div>
+      <div class="scroll"><table class="tbl" id="truth"></table></div>
+      <p class="hint">Пріоритет: спочатку порівняння (&gt;, &lt;, =…), потім <b>NOT</b>, потім <b>AND</b>, і лише потім <b>OR</b>. Дужки змінюють порядок. Рядок, що відповідає введеним x і y, підсвічено.</p>
+    </section>
+
+    <!-- ПРАВА ПАНЕЛЬ: блок-схема з розгалуженням -->
+    <section class="panel">
+      <h2>Блок-схема: яким шляхом піде виконання?</h2>
+      <div class="row" id="presets"></div>
+      <div class="row inputs mt" id="vinputs"></div>
+      <div class="msg-error" id="verr" role="alert"></div>
+      <div class="fc-wrap mt"><svg class="fc" id="svg" role="img" aria-label="Блок-схема алгоритму"></svg></div>
+      <div id="controls" class="mt"></div>
+      <div class="explain" id="explain" aria-live="polite"></div>
+      <div class="side3">
+        <div><h3>Псевдокод</h3><pre class="code" id="code"></pre></div>
+        <div><h3>Змінні</h3><div class="vars" id="vars"></div></div>
+        <div><h3>Виведення</h3><div class="outbox" id="out"></div></div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="bottom">Розроблено автором</footer>
+
+<script>
+/* ==================================================================
+   ПРОГРАВАЧ КРОКІВ (спільна частина всіх засобів комплекту)
+   Ідея: алгоритм виконується наперед, а кожен його крок зберігається
+   як «знімок» стану. Програвач лише показує знімки по черзі. Тому
+   легко зробити кнопки «Крок», «Назад», «Старт/Пауза» і «Скинути».
+   Клавіші: → або пробіл — крок уперед, ← — крок назад.
+   ================================================================== */
+class StepPlayer {
+  /**
+   * @param {HTMLElement} root   контейнер, у який буде вставлено кнопки
+   * @param {Function} render    render(step, index, total, dir) — малює знімок
+   * @param {Object} [hooks]     { beforeStep(nextStep, nextIndex) → false, щоб не йти далі }
+   */
+  constructor(root, render, hooks = {}) {
+    this.render = render;
+    this.hooks = hooks;
+    this.steps = [];
+    this.i = 0;
+    this.timer = null;
+    root.classList.add('controls');
+    root.innerHTML = `
+      <button type="button" data-act="back" title="Крок назад (клавіша ←)">◀ Назад</button>
+      <button type="button" data-act="step" class="primary" title="Наступний крок (клавіша → або пробіл)">Крок ▶</button>
+      <button type="button" data-act="play" title="Автоматичне виконання">▶ Старт</button>
+      <button type="button" data-act="reset" title="Повернутися до першого кроку">⟲ Скинути</button>
+      <label class="speed">Швидкість
+        <input type="range" min="1" max="10" value="5" aria-label="Швидкість виконання">
+      </label>
+      <span class="stepinfo" aria-live="polite"></span>`;
+    this.btn = {};
+    root.querySelectorAll('button').forEach(b => (this.btn[b.dataset.act] = b));
+    this.range = root.querySelector('input[type=range]');
+    this.info = root.querySelector('.stepinfo');
+
+    this.btn.back.onclick = () => { this.pause(); this.back(); };
+    this.btn.step.onclick = () => { this.pause(); this.next(); };
+    this.btn.play.onclick = () => this.toggle();
+    this.btn.reset.onclick = () => this.reset();
+    // Якщо швидкість змінили під час відтворення — продовжуємо з новою.
+    this.range.oninput = () => { if (this.timer) { this.pause(); this.play(); } };
+
+    document.addEventListener('keydown', e => {
+      const ae = document.activeElement;
+      const tag = ae ? ae.tagName : '';
+      // не заважаємо введенню тексту і повзункам; прапорці (checkbox) не заважають
+      if (/TEXTAREA|SELECT/.test(tag) || (tag === 'INPUT' && ae.type !== 'checkbox')) return;
+      if (tag === 'BUTTON' && e.key === ' ') return;           // пробіл на кнопці = її натискання
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); this.pause(); this.next(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); this.pause(); this.back(); }
+    });
+  }
+
+  /** Завантажити новий набір кроків і показати перший. */
+  load(steps) { this.pause(); this.steps = steps; this.i = 0; this.show(0); }
+
+  /** Затримка між кроками: від 1,9 с (повільно) до 0,1 с (швидко). */
+  get delay() { return 2100 - Number(this.range.value) * 200; }
+
+  next() {
+    if (this.i >= this.steps.length - 1) { this.pause(); return false; }
+    if (this.hooks.beforeStep && this.hooks.beforeStep(this.steps[this.i + 1], this.i + 1) === false) {
+      this.pause(); return false;
+    }
+    this.i++; this.show(1); return true;
+  }
+  back() { if (this.i > 0) { this.i--; this.show(-1); } }
+  reset() { this.pause(); this.i = 0; this.show(0); }
+
+  play() {
+    if (!this.steps.length) return;
+    if (this.i >= this.steps.length - 1) { this.i = 0; this.show(0); } // повтор з початку
+    this.btn.play.textContent = '⏸ Пауза';
+    const tick = () => { if (this.next()) this.timer = setTimeout(tick, this.delay); };
+    this.timer = setTimeout(tick, Math.min(this.delay, 600));
+  }
+  pause() { clearTimeout(this.timer); this.timer = null; this.btn.play.textContent = '▶ Старт'; }
+  toggle() { this.timer ? this.pause() : this.play(); }
+
+  show(dir) {
+    const n = this.steps.length;
+    this.btn.back.disabled = this.i <= 0;
+    this.btn.step.disabled = this.i >= n - 1;
+    this.info.textContent = n ? `Крок ${this.i + 1} з ${n}` : '';
+    if (n) this.render(this.steps[this.i], this.i, n, dir);
+  }
+}
+
+/* ---------- дрібні допоміжні функції ---------- */
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+/** Екранування тексту для вставлення в HTML. */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+/** Гарний запис числа: цілі — як є, дробові — до 4 знаків після крапки. */
+function fmtNum(v) {
+  if (Number.isInteger(v)) return String(v);
+  return String(Math.round(v * 10000) / 10000);
+}
+
+/* ==================================================================
+   БЛОК-СХЕМИ: ПОБУДОВА І ПОКРОКОВЕ ВИКОНАННЯ
+   Програма задається деревом операторів (див. приклади нижче у файлі).
+   З цього дерева автоматично будуються:
+     1) блок-схема у SVG (позначення як у ДСТУ ISO 5807 / ГОСТ 19.701:
+        овал — початок/кінець, паралелограм — введення/виведення,
+        прямокутник — дія, ромб — умова, шестикутник — цикл з параметром);
+     2) псевдокод українською;
+     3) список кроків виконання для програвача.
+
+   Види операторів (поле t):
+     start, end                          — початок / кінець
+     io   {text, run(v, ctx)}            — введення / виведення
+     proc {text, run(v, ctx)}            — дія (присвоювання)
+     if   {text, cond(v), then:[], else:[]}
+     case {text, branches:[{label, test(v), body:[]}], else:[]}
+     while  {text, cond(v), body:[]}     — цикл з передумовою
+     repeat {text, cond(v), body:[]}     — цикл з післяумовою (повторювати … до умови)
+     for    {text, v:'i', from(v), to(v), body:[]} — цикл з параметром
+   run() повертає рядок-пояснення для учня.
+   ================================================================== */
+
+const FC = {
+  W: 196, H: 54,          // розмір прямокутника / паралелограма
+  DW: 236, DH: 88,        // розмір ромба
+  HW: 236, HH: 60,        // розмір шестикутника
+  TW: 150, TH: 46,        // розмір овалу «Початок/Кінець»
+  VG: 34,                 // вертикальний відступ між блоками
+  PAD: 12                 // відступ ліворуч і праворуч від блока
+};
+const SVGNS = 'http://www.w3.org/2000/svg';
+
+/** Створити SVG-елемент з атрибутами і додати до батька. */
+function svgEl(tag, attrs, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+/** Призначити кожному оператору унікальний id (n1, n2, …). */
+let fcCounter = 0;
+function fcAssignIds(seq) {
+  for (const n of seq) {
+    n.id = 'n' + (++fcCounter);
+    if (n.then) fcAssignIds(n.then);
+    if (n.else) fcAssignIds(n.else);
+    if (n.body) fcAssignIds(n.body);
+    if (n.branches) n.branches.forEach(b => fcAssignIds(b.body));
+  }
+}
+
+/** Розбити текст на рядки довжиною до max символів (за словами). */
+function wrapText(text, max) {
+  const words = String(text).split(' ');
+  const lines = [];
+  let cur = '';
+  for (const w of words) {
+    if (cur && (cur + ' ' + w).length > max) { lines.push(cur); cur = w; }
+    else cur = cur ? cur + ' ' + w : w;
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+/** Лінія-з'єднання. cls — класи для підсвітки шляху. */
+function fcLine(g, pts, cls, arrow) {
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0] + ' ' + p[1]).join(' ');
+  svgEl('path', { d, class: 'ln ' + cls, 'marker-end': arrow ? 'url(#ar)' : '' }, g);
+}
+function fcLabel(g, x, y, text, anchor = 'start') {
+  const t = svgEl('text', { x, y, class: 'lbl', 'text-anchor': anchor }, g);
+  t.textContent = text;
+}
+
+/** Розмір фігури для оператора. */
+function fcShapeSize(n) {
+  if (n.t === 'start' || n.t === 'end') return { w: FC.TW, h: FC.TH };
+  if (n.t === 'if' || n.t === 'case' || n.t === 'while' || n.t === 'repeat') return { w: FC.DW, h: FC.DH };
+  if (n.t === 'for') return { w: FC.HW, h: FC.HH };
+  const w = n.w || FC.W;                         // ширину можна задати в операторі (поле w)
+  const lines = wrapText(n.text, Math.floor(w / 9.6)).length;
+  return { w, h: Math.max(FC.H, 22 + lines * 22) };
+}
+
+/** Намалювати фігуру оператора з центром (x, y). */
+function fcDrawShape(g, n, x, y) {
+  const { w, h } = fcShapeSize(n);
+  const grp = svgEl('g', { class: 'node nd-' + n.id }, g);
+  let shape;
+  if (n.t === 'start' || n.t === 'end') {
+    shape = svgEl('rect', { x: x - w / 2, y: y - h / 2, width: w, height: h, rx: h / 2 }, grp);
+  } else if (n.t === 'io') {
+    const s = 16;
+    shape = svgEl('polygon', { points: `${x - w / 2 + s},${y - h / 2} ${x + w / 2},${y - h / 2} ${x + w / 2 - s},${y + h / 2} ${x - w / 2},${y + h / 2}` }, grp);
+  } else if (n.t === 'proc') {
+    shape = svgEl('rect', { x: x - w / 2, y: y - h / 2, width: w, height: h }, grp);
+  } else if (n.t === 'for') {
+    const s = 22;
+    shape = svgEl('polygon', { points: `${x - w / 2 + s},${y - h / 2} ${x + w / 2 - s},${y - h / 2} ${x + w / 2},${y} ${x + w / 2 - s},${y + h / 2} ${x - w / 2 + s},${y + h / 2} ${x - w / 2},${y}` }, grp);
+  } else {
+    shape = svgEl('polygon', { points: `${x},${y - h / 2} ${x + w / 2},${y} ${x},${y + h / 2} ${x - w / 2},${y}` }, grp);
+  }
+  shape.setAttribute('class', 'shape');
+  // Текст усередині фігури
+  const label = n.t === 'start' ? 'Початок' : n.t === 'end' ? 'Кінець' : n.text;
+  const max = (n.t === 'if' || n.t === 'case' || n.t === 'while' || n.t === 'repeat') ? 15 : Math.floor(w / 9.6);
+  const lines = wrapText(label, max);
+  const lh = 20;
+  lines.forEach((ln, i) => {
+    const t = svgEl('text', { x, y: y + (i - (lines.length - 1) / 2) * lh + 6, 'text-anchor': 'middle', class: 'txt' }, grp);
+    t.textContent = ln;
+  });
+  // Місце для «значка» результату умови (true/false) і лічильника ітерацій
+  if (n.t !== 'start' && n.t !== 'end' && n.t !== 'io' && n.t !== 'proc') {
+    const b = svgEl('text', { x: x + w / 2 + 8, y: y - h / 2 + 4, class: 'badge', id: 'bd-' + n.id }, g);
+    b.textContent = '';
+  }
+}
+
+/* ------------------------------------------------------------------
+   РОЗМІЩЕННЯ (layout). Кожна функція повертає «блок»:
+   { w, h, cx, noArrow, draw(g, x, y) }
+   w, h — розміри; cx — x-координата входу/виходу відносно лівого краю;
+   draw малює блок, лівий верхній кут якого в точці (x, y).
+   ------------------------------------------------------------------ */
+function fcLayoutSeq(seq) {
+  const blocks = seq.map(fcLayoutNode);
+  if (!blocks.length) return { w: 60, h: 0, cx: 30, draw() {} };
+  const L = Math.max(...blocks.map(b => b.cx));
+  const R = Math.max(...blocks.map(b => b.w - b.cx));
+  let h = 0;
+  blocks.forEach((b, i) => { h += b.h + (i ? FC.VG : 0); });
+  return {
+    w: L + R, h, cx: L, noArrow: blocks[0].noArrow,
+    draw(g, x, y) {
+      let cy = y;
+      blocks.forEach((b, i) => {
+        if (i) { fcLine(g, [[x + L, cy], [x + L, cy + FC.VG]], 'in-' + seq[i].id, !b.noArrow); cy += FC.VG; }
+        b.draw(g, x + L - b.cx, cy);
+        cy += b.h;
+      });
+    }
+  };
+}
+
+function fcLayoutNode(n) {
+  if (n.t === 'if') return fcLayoutIf(n);
+  if (n.t === 'case') return fcLayoutCase(n);
+  if (n.t === 'while' || n.t === 'for') return fcLayoutWhile(n);
+  if (n.t === 'repeat') return fcLayoutRepeat(n);
+  const s = fcShapeSize(n);
+  const cx = s.w / 2 + FC.PAD;
+  return { w: s.w + 2 * FC.PAD, h: s.h, cx, draw(g, x, y) { fcDrawShape(g, n, x + cx, y + s.h / 2); } };
+}
+
+/** Розгалуження: «ні» — ліворуч, «так» — праворуч, злиття внизу. */
+function fcLayoutIf(n) {
+  const T = fcLayoutSeq(n.then || []), E = fcLayoutSeq(n.else || []);
+  const wl = Math.max(E.w, 60), wr = Math.max(T.w, 60);
+  const lc = E.h ? E.cx : wl / 2;                // центр лівої гілки
+  const tcx = T.h ? T.cx : wr / 2;
+  const gap = Math.max(24, FC.DW + 40 - (wl - lc) - tcx);
+  const rc = wl + gap + tcx;                     // центр правої гілки
+  const cx = (lc + rc) / 2;
+  const bT = FC.DH + 26;                         // верх гілок
+  const J = bT + Math.max(E.h, T.h) + 28;        // рівень злиття
+  return {
+    w: wl + gap + wr, h: J, cx,
+    draw(g, x, y) {
+      const X = x + cx, mid = y + FC.DH / 2, top = y + bT, jy = y + J;
+      const LX = x + lc, RX = x + rc;
+      const branch = (BX, B, k, vx) => {
+        const cls = `br-${n.id}-${k}`;
+        if (B.h) {
+          fcLine(g, [[vx, mid], [BX, mid], [BX, top]], cls, !B.noArrow);
+          B.draw(g, BX - B.cx, top);
+          fcLine(g, [[BX, top + B.h], [BX, jy], [X, jy]], cls, false);
+        } else {
+          fcLine(g, [[vx, mid], [BX, mid], [BX, jy], [X, jy]], cls, false);
+        }
+      };
+      branch(LX, E, 0, X - FC.DW / 2);
+      branch(RX, T, 1, X + FC.DW / 2);
+      fcDrawShape(g, n, X, mid);
+      fcLabel(g, X - FC.DW / 2 - 6, mid - 8, 'ні', 'end');
+      fcLabel(g, X + FC.DW / 2 + 6, mid - 8, 'так', 'start');
+      svgEl('circle', { cx: X, cy: jy, r: 5, class: 'dot' }, g);
+    }
+  };
+}
+
+/** Оператор вибору: ромб, від нього шина з кількома гілками. */
+function fcLayoutCase(n) {
+  const all = n.branches.map(b => ({ label: b.label, B: fcLayoutSeq(b.body) }));
+  all.push({ label: 'інакше', B: fcLayoutSeq(n.else || []) });
+  const GAP = 14;
+  let off = 0;
+  const cols = all.map(c => {
+    const cw = Math.max(c.B.w, 120);
+    const left = off + (cw - c.B.w) / 2;
+    const center = c.B.h ? left + c.B.cx : off + cw / 2;
+    off += cw + GAP;
+    return { ...c, left, center };
+  });
+  const w = off - GAP;
+  const cx = (cols[0].center + cols[cols.length - 1].center) / 2;
+  const busY = FC.DH + 18, bT = busY + 44;
+  const J = bT + Math.max(...cols.map(c => c.B.h)) + 28;
+  return {
+    w, h: J, cx,
+    draw(g, x, y) {
+      const X = x + cx, top = y + bT, jy = y + J;
+      cols.forEach((c, k) => {
+        const cls = `br-${n.id}-${k}`, CX = x + c.center;
+        fcLine(g, [[X, y + FC.DH], [X, y + busY], [CX, y + busY], [CX, top]], cls, c.B.h && !c.B.noArrow);
+        fcLabel(g, CX + 9, y + busY + 26, c.label);
+        if (c.B.h) c.B.draw(g, CX - c.B.cx, top);
+        fcLine(g, [[CX, top + c.B.h], [CX, jy], [X, jy]], cls, false);
+      });
+      fcDrawShape(g, n, X, y + FC.DH / 2);
+      svgEl('circle', { cx: X, cy: jy, r: 5, class: 'dot' }, g);
+    }
+  };
+}
+
+/** Цикл з передумовою (ромб) або з параметром (шестикутник). */
+function fcLayoutWhile(n) {
+  const B = fcLayoutSeq(n.body || []);
+  const S = fcShapeSize(n);
+  const TOP = 24;
+  const cx = 52 + Math.max(B.cx, S.w / 2);
+  const right = Math.max(B.w - B.cx, S.w / 2) + 56;
+  const bT = TOP + S.h + 34;
+  const bodyBottom = bT + B.h;
+  const retY = bodyBottom + 22;
+  const exitY = retY + 26;
+  return {
+    w: cx + right, h: exitY, cx, noArrow: true,
+    draw(g, x, y) {
+      const X = x + cx, mid = y + TOP + S.h / 2;
+      const isFor = n.t === 'for';
+      fcLine(g, [[X, y], [X, y + TOP]], 'in-' + n.id, true);
+      // вхід у тіло циклу
+      fcLine(g, [[X, y + TOP + S.h], [X, y + bT]], `lp-${n.id}-body`, !B.noArrow);
+      B.draw(g, X - B.cx, y + bT);
+      // стрілка повернення до перевірки умови
+      fcLine(g, [[X, y + bodyBottom], [X, y + retY], [x + 20, y + retY], [x + 20, y + TOP / 2], [X, y + TOP / 2]], `lp-${n.id}-back`, true);
+      // вихід з циклу
+      const rx = x + cx + right - 22;
+      fcLine(g, [[X + S.w / 2, mid], [rx, mid], [rx, y + exitY], [X, y + exitY]], `lp-${n.id}-exit`, false);
+      fcDrawShape(g, n, X, mid);
+      if (!isFor) {
+        fcLabel(g, X + 8, y + TOP + S.h + 20, 'так');
+        fcLabel(g, X + S.w / 2 + 6, mid - 8, 'ні');
+      } else {
+        fcLabel(g, X + S.w / 2 + 6, mid + 22, 'кінець');
+      }
+    }
+  };
+}
+
+/** Цикл з післяумовою: спочатку тіло, потім ромб з умовою виходу. */
+function fcLayoutRepeat(n) {
+  const B = fcLayoutSeq(n.body || []);
+  const TOP = 24;
+  const cx = 52 + Math.max(B.cx, FC.DW / 2);
+  const right = Math.max(B.w - B.cx, FC.DW / 2) + 30;
+  const bodyBottom = TOP + B.h;
+  const dTop = bodyBottom + 34;
+  const exitY = dTop + FC.DH + 30;
+  return {
+    w: cx + right, h: exitY, cx, noArrow: true,
+    draw(g, x, y) {
+      const X = x + cx, dMid = y + dTop + FC.DH / 2;
+      fcLine(g, [[X, y], [X, y + TOP]], `in-${n.id} lp-${n.id}-body`, !B.noArrow);
+      B.draw(g, X - B.cx, y + TOP);
+      fcLine(g, [[X, y + bodyBottom], [X, y + dTop]], `lp-${n.id}-check`, true);
+      fcLine(g, [[X, y + dTop + FC.DH], [X, y + exitY]], `lp-${n.id}-exit`, false);
+      fcLine(g, [[X - FC.DW / 2, dMid], [x + 20, dMid], [x + 20, y + TOP / 2], [X, y + TOP / 2]], `lp-${n.id}-back`, true);
+      fcDrawShape(g, n, X, dMid);
+      fcLabel(g, X + 8, y + dTop + FC.DH + 20, 'так');
+      fcLabel(g, X - FC.DW / 2 - 6, dMid - 8, 'ні', 'end');
+    }
+  };
+}
+
+/** Побудувати блок-схему програми в елементі svg. */
+function fcRender(svg, program) {
+  svg.innerHTML = '';
+  const defs = svgEl('defs', {}, svg);
+  [['ar', '#5d6880'], ['arOn', '#e0413a']].forEach(([id, color]) => {
+    const big = id === 'arOn' ? 15 : 12;
+    const m = svgEl('marker', { id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: big, markerHeight: big, markerUnits: 'userSpaceOnUse', orient: 'auto-start-reverse' }, defs);
+    svgEl('path', { d: 'M0,0 L10,5 L0,10 z', fill: color }, m);
+  });
+  const L = fcLayoutSeq(program);
+  const M = 14;
+  const W = L.w + 2 * M + 70, H = L.h + 2 * M;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.dataset.w = W;
+  const g = svgEl('g', {}, svg);
+  L.draw(g, M, M);
+  fcFit(svg);
+}
+
+/** Масштаб схеми: вміщаємо в ширину контейнера, але не дрібніше 70 %. */
+function fcFit(svg) {
+  const W = Number(svg.dataset.w || 0);
+  const box = svg.parentElement.clientWidth - 4;
+  if (!W || !box) return;
+  const scale = Math.max(0.7, Math.min(1.15, box / W));
+  svg.style.width = Math.round(W * scale) + 'px';
+}
+
+/* ------------------------------------------------------------------
+   ПСЕВДОКОД. Кожен рядок пам'ятає id оператора для підсвітки.
+   ------------------------------------------------------------------ */
+function fcCode(seq, ind = 0, out = []) {
+  const p = '   '.repeat(ind);
+  const kw = s => `<span class="kw">${s}</span>`;
+  for (const n of seq) {
+    if (n.t === 'start') out.push({ id: n.id, html: p + kw('початок') });
+    else if (n.t === 'end') out.push({ id: n.id, html: p + kw('кінець') });
+    else if (n.t === 'io' || n.t === 'proc') {
+      out.push({ id: n.id, html: p + esc(n.text).replace(/^(ввести|вивести)/, m => kw(m)) });
+    } else if (n.t === 'if') {
+      out.push({ id: n.id, html: p + kw('якщо ') + esc(n.text) + kw(' то') });
+      fcCode(n.then || [], ind + 1, out);
+      if (n.else && n.else.length) { out.push({ id: null, html: p + kw('інакше') }); fcCode(n.else, ind + 1, out); }
+      out.push({ id: null, html: p + kw('все') });
+    } else if (n.t === 'case') {
+      out.push({ id: n.id, html: p + kw('вибір ') + esc(n.text) });
+      n.branches.forEach(b => { out.push({ id: null, html: p + '   ' + esc(b.label) + ':' }); fcCode(b.body, ind + 2, out); });
+      if (n.else && n.else.length) { out.push({ id: null, html: p + '   ' + kw('інакше') + ':' }); fcCode(n.else, ind + 2, out); }
+      out.push({ id: null, html: p + kw('все') });
+    } else if (n.t === 'while') {
+      out.push({ id: n.id, html: p + kw('поки ') + esc(n.text) + kw(' виконувати') });
+      fcCode(n.body, ind + 1, out);
+      out.push({ id: null, html: p + kw('кінець циклу') });
+    } else if (n.t === 'repeat') {
+      out.push({ id: null, html: p + kw('повторювати') });
+      fcCode(n.body, ind + 1, out);
+      out.push({ id: n.id, html: p + kw('до ') + esc(n.text) });
+    } else if (n.t === 'for') {
+      out.push({ id: n.id, html: p + kw('для ') + esc(n.codeText || n.text) + kw(' виконувати') });
+      fcCode(n.body, ind + 1, out);
+      out.push({ id: null, html: p + kw('кінець циклу') });
+    }
+  }
+  return out;
+}
+function fcRenderCode(pre, program) {
+  pre.innerHTML = fcCode(program).map((l, i) =>
+    `<span class="ln" data-id="${l.id || ''}"><span class="no">${i + 1}</span>${l.html}</span>`).join('');
+}
+
+/* ------------------------------------------------------------------
+   ВИКОНАННЯ. Інтерпретатор проходить деревом і складає список кроків.
+   Кожен крок: { cur, hl[], vars, out[], explain, badges, iters, logLen, err }
+   hl — класи ліній і блоків, що підсвічуються (пройдений шлях).
+   ------------------------------------------------------------------ */
+function fcRun(program, vars, opts = {}) {
+  const maxIter = opts.maxIter || 50;
+  const steps = [], out = [], log = [];
+  const trail = new Set();
+  let badges = {};
+  const iters = {};
+  const ctx = { out, log, extra: opts.extra || {} };
+  const clone = o => JSON.parse(JSON.stringify(o));
+
+  function snap(cur, explain, more = {}) {
+    if (steps.length > 3000) throw { tooLong: true };
+    steps.push({ cur, hl: [...trail], vars: clone(vars), out: [...out], explain,
+      badges: { ...badges }, iters: { ...iters }, logLen: log.length, ...more });
+  }
+  // Початок нового проходу (після повернення в циклі): стираємо старий слід
+  function resetTrail(keepBadgesOf) {
+    trail.clear();
+    const b = {};
+    if (keepBadgesOf) for (const k in badges) if (keepBadgesOf.includes(k)) b[k] = badges[k];
+    badges = b;
+  }
+  const yes = r => r ? 'так (true)' : 'ні (false)';
+
+  function execSeq(seq, firstArrival) {
+    seq.forEach((n, i) => execNode(n, i === 0 ? firstArrival : ['in-' + n.id]));
+  }
+
+  function execNode(n, arrival) {
+    arrival.forEach(c => trail.add(c));
+    trail.add('nd-' + n.id);
+    switch (n.t) {
+      case 'start': snap(n.id, 'Початок виконання алгоритму.'); break;
+      case 'end': snap(n.id, 'Кінець алгоритму.', { done: true }); break;
+      case 'io':
+      case 'proc': {
+        const msg = n.run(vars, ctx);
+        snap(n.id, msg || n.text);
+        break;
+      }
+      case 'if': {
+        const r = !!n.cond(vars);
+        badges[n.id] = { text: r ? 'true' : 'false', ok: r };
+        snap(n.id, `Перевіряємо умову «${n.text}»: ${yes(r)}. ${r ? 'Виконуємо гілку «так».' : (n.else && n.else.length ? 'Виконуємо гілку «ні».' : 'Гілки «ні» немає — обходимо дію.')}`);
+        trail.add(`br-${n.id}-${r ? 1 : 0}`);
+        execSeq(r ? (n.then || []) : (n.else || []), []);
+        break;
+      }
+      case 'case': {
+        let k = n.branches.findIndex(b => b.test(vars));
+        const label = k >= 0 ? n.branches[k].label : 'інакше';
+        if (k < 0) k = n.branches.length;
+        badges[n.id] = { text: '→ ' + label, ok: true };
+        snap(n.id, `Оператор вибору: значення «${n.text}» = ${n.show ? n.show(vars) : ''} — обираємо гілку «${label}».`);
+        trail.add(`br-${n.id}-${k}`);
+        execSeq(k < n.branches.length ? n.branches[k].body : (n.else || []), []);
+        break;
+      }
+      case 'while': {
+        iters[n.id] = 0;
+        for (;;) {
+          const r = !!n.cond(vars);
+          badges[n.id] = { text: r ? 'true' : 'false', ok: r };
+          log.push({ id: n.id, iter: iters[n.id], vars: clone(vars), cond: r });
+          snap(n.id, `Перевіряємо умову «${n.text}»: ${yes(r)}. ` + (r ? `Виконуємо тіло циклу (ітерація ${iters[n.id] + 1}).` : (iters[n.id] === 0 ? 'Умова хибна вже на початку — тіло не виконається жодного разу!' : `Виходимо з циклу. Тіло виконано ${iters[n.id]} раз(ів).`)));
+          if (!r) { trail.add(`lp-${n.id}-exit`); break; }
+          trail.add(`lp-${n.id}-body`);
+          execSeq(n.body, []);
+          iters[n.id]++;
+          if (iters[n.id] >= maxIter) throw { emergency: n.id };
+          resetTrail(opts.keepBadges);
+          trail.add(`lp-${n.id}-back`); trail.add('nd-' + n.id);
+        }
+        break;
+      }
+      case 'repeat': {
+        iters[n.id] = 0;
+        trail.add(`lp-${n.id}-body`);
+        for (;;) {
+          execSeq(n.body, []);
+          iters[n.id]++;
+          trail.add(`lp-${n.id}-check`); trail.add('nd-' + n.id);
+          const r = !!n.cond(vars);
+          badges[n.id] = { text: r ? 'true' : 'false', ok: r };
+          log.push({ id: n.id, iter: iters[n.id], vars: clone(vars), cond: r });
+          snap(n.id, `Тіло виконано (ітерація ${iters[n.id]}). Перевіряємо умову виходу «${n.text}»: ${yes(r)}. ` + (r ? 'Умова істинна — виходимо з циклу.' : 'Умова хибна — повторюємо тіло ще раз.'));
+          if (r) { trail.add(`lp-${n.id}-exit`); break; }
+          if (iters[n.id] >= maxIter) throw { emergency: n.id };
+          resetTrail(opts.keepBadges);
+          trail.add(`lp-${n.id}-back`); trail.add(`lp-${n.id}-body`);
+        }
+        break;
+      }
+      case 'for': {
+        iters[n.id] = 0;
+        const a = n.from(vars), b = n.to(vars);
+        vars[n.v] = a;
+        let first = true;
+        for (;;) {
+          const r = vars[n.v] <= b;
+          badges[n.id] = { text: `${n.v} = ${vars[n.v]}`, ok: r };
+          log.push({ id: n.id, iter: iters[n.id], vars: clone(vars), cond: r });
+          const head = first ? `Параметр циклу ${n.v} отримує початкове значення ${a}. ` : `Параметр ${n.v} збільшився на 1 і дорівнює ${vars[n.v]}. `;
+          snap(n.id, head + (r ? `${n.v} ≤ ${b} — виконуємо тіло (ітерація ${iters[n.id] + 1}).` : `${n.v} > ${b} — цикл завершено. Тіло виконано ${iters[n.id]} раз(ів).`));
+          first = false;
+          if (!r) { trail.add(`lp-${n.id}-exit`); break; }
+          trail.add(`lp-${n.id}-body`);
+          execSeq(n.body, []);
+          iters[n.id]++;
+          if (iters[n.id] >= maxIter) throw { emergency: n.id };
+          resetTrail(opts.keepBadges);
+          trail.add(`lp-${n.id}-back`); trail.add('nd-' + n.id);
+          vars[n.v]++;
+        }
+        break;
+      }
+    }
+  }
+
+  try {
+    execSeq(program, []);
+  } catch (e) {
+    if (e && e.emergency) {
+      snap(e.emergency, `⚠ Аварійна зупинка: виконано ${maxIter} ітерацій, а умова виходу так і не виконалась. Це нескінченний цикл — у тілі циклу змінна з умови не змінюється!`, { err: true, done: true });
+    } else if (e && e.tooLong) {
+      steps.push({ ...steps[steps.length - 1], explain: '⚠ Забагато кроків — виконання зупинено.', err: true });
+    } else if (e && e.userError) {
+      snap(null, '⚠ ' + e.userError, { err: true, done: true });
+    } else throw e;
+  }
+  return { steps, log };
+}
+
+/** Показати крок на схемі й у псевдокоді. */
+function fcApply(svg, pre, step) {
+  $$('.on', svg).forEach(e => e.classList.remove('on'));
+  $$('.cur', svg).forEach(e => e.classList.remove('cur'));
+  for (const c of step.hl) {
+    $$('.' + c, svg).forEach(e => {
+      e.classList.add('on');
+      if (e.tagName === 'path') e.parentNode.appendChild(e); // активну лінію — поверх інших
+    });
+  }
+  if (step.cur) { const g = $('.nd-' + step.cur, svg); if (g) g.classList.add('cur'); }
+  $$('.badge', svg).forEach(b => { b.textContent = ''; b.classList.remove('t', 'f'); });
+  for (const id in step.badges) {
+    const b = $('#bd-' + id, svg);
+    if (b) { b.textContent = step.badges[id].text; b.classList.add(step.badges[id].ok ? 't' : 'f'); }
+  }
+  if (pre) $$('.ln', pre).forEach(l => l.classList.toggle('cur', !!step.cur && l.dataset.id === step.cur));
+}
+
+
+/* ==================================================================
+   ЧАСТИНА 1. ЛОГІЧНІ ВИРАЗИ
+   Дозволено: числа, змінні x і y, + − * /, порівняння > < >= <= = <>,
+   логічні операції AND / OR / NOT (або українською І / АБО / НЕ), дужки.
+   ================================================================== */
+const LPRESETS = [
+  '(x > 0) AND (y < 10)',
+  '(x < 0) OR (x > 100)',
+  'NOT (x = y)',
+  '(x > 0) AND (y > 0) OR (x = 0)',
+  '(x >= 1) AND (x <= 12) AND NOT (y = 0)'
+];
+const BUILDER = ['x', 'y', '>', '<', '=', '>=', '<=', '<>', 'AND', 'OR', 'NOT', '(', ')', '0', '10'];
+
+function ltokenize(s) {
+  const toks = []; let i = 0;
+  while (i < s.length) {
+    const rest = s.slice(i); let m;
+    if (/^\s/.test(rest)) { i++; continue; }
+    if ((m = /^\d+(\.\d+)?/.exec(rest))) { toks.push({ k: 'num', v: parseFloat(m[0]) }); i += m[0].length; continue; }
+    if ((m = /^(>=|<=|<>|!=|==|=|>|<)/.exec(rest))) {
+      const op = { '!=': '<>', '==': '=' }[m[0]] || m[0];
+      toks.push({ k: 'rel', v: op }); i += m[0].length; continue;
+    }
+    if ((m = /^[A-Za-zА-ЯҐЄІЇа-яґєії_]+/.exec(rest))) {
+      const w = m[0].toLowerCase();
+      const logic = { and: 'AND', 'і': 'AND', 'та': 'AND', or: 'OR', 'або': 'OR', not: 'NOT', 'не': 'NOT' }[w];
+      if (logic) toks.push({ k: 'log', v: logic });
+      else if (w === 'x' || w === 'y') toks.push({ k: 'var', v: w });
+      else throw `Невідоме слово «${m[0]}». Можна використовувати лише змінні x, y та AND, OR, NOT.`;
+      i += m[0].length; continue;
+    }
+    if ('+-*/()'.includes(rest[0])) { toks.push({ k: 'op', v: rest[0] }); i++; continue; }
+    throw `Незрозумілий символ «${rest[0]}»`;
+  }
+  return toks;
+}
+
+/** Синтаксичний аналіз: OR → AND → NOT → порівняння → арифметика. */
+function lparse(s) {
+  const t = ltokenize(s); let p = 0;
+  if (!t.length) throw 'Введіть логічний вираз.';
+  const is = (k, v) => t[p] && t[p].k === k && (v === undefined || t[p].v === v);
+  function or() { let n = and(); while (is('log', 'OR')) { p++; n = { k: 'OR', l: n, r: and() }; } return n; }
+  function and() { let n = not(); while (is('log', 'AND')) { p++; n = { k: 'AND', l: n, r: not() }; } return n; }
+  function not() { if (is('log', 'NOT')) { p++; return { k: 'NOT', e: not() }; } return cmp(); }
+  function cmp() {
+    const l = sum();
+    if (is('rel')) { const op = t[p++].v; return { k: 'cmp', op, l, r: sum() }; }
+    return l;
+  }
+  function sum() { let n = mul(); while (is('op', '+') || is('op', '-')) { const op = t[p++].v; n = { k: 'ar', op, l: n, r: mul() }; } return n; }
+  function mul() { let n = atom(); while (is('op', '*') || is('op', '/')) { const op = t[p++].v; n = { k: 'ar', op, l: n, r: atom() }; } return n; }
+  function atom() {
+    if (is('num')) return { k: 'num', v: t[p++].v };
+    if (is('var')) return { k: 'var', v: t[p++].v };
+    if (is('op', '-')) { p++; return { k: 'ar', op: '-', l: { k: 'num', v: 0 }, r: atom(), neg: true }; }
+    if (is('op', '(')) {
+      p++; const e = or();
+      if (!is('op', ')')) throw 'Бракує закривної дужки «)».';
+      p++; e.paren = true; return e;
+    }
+    throw t[p] ? `Неочікуваний елемент «${t[p].v}».` : 'Вираз обірвано — бракує операнда.';
+  }
+  const root = or();
+  if (p < t.length) throw `Зайвий фрагмент: «${t[p].v}». Можливо, бракує AND / OR між частинами.`;
+  return root;
+}
+
+/** Ключ порівняння без зовнішніх дужок: «(x > 0)» і «x > 0» — те саме. */
+const akey = n => lstr({ ...n, paren: false });
+const isBoolNode = n => ['cmp', 'AND', 'OR', 'NOT'].includes(n.k);
+/** Перевірка типів: AND/OR/NOT працюють лише з логічними значеннями. */
+function lcheck(n) {
+  if (n.k === 'AND' || n.k === 'OR') { [n.l, n.r].forEach(c => { if (!isBoolNode(c)) throw `«${lstr(c)}» — це число, а не умова. Для ${n.k} потрібні умови, наприклад x > 0.`; lcheck(c); }); }
+  else if (n.k === 'NOT') { if (!isBoolNode(n.e)) throw `Після NOT має бути умова, а не число «${lstr(n.e)}».`; lcheck(n.e); }
+  else if (n.k === 'cmp') { [n.l, n.r].forEach(c => { if (isBoolNode(c)) throw 'Порівнювати можна лише числа, а не умови.'; }); }
+  else if (n.k === 'ar') { [n.l, n.r].forEach(c => { if (isBoolNode(c)) throw 'В арифметиці не можна використовувати умови.'; }); }
+}
+/** Текстовий запис вузла; letters — заміна порівнянь на літери A, B, … */
+function lstr(n, letters) {
+  let s;
+  if (letters && n.k === 'cmp') s = letters[akey(n)];
+  else switch (n.k) {
+    case 'num': s = fmtNum(n.v); break;
+    case 'var': s = n.v; break;
+    case 'ar': s = n.neg ? `-${lstr(n.r, letters)}` : `${lstr(n.l, letters)} ${n.op} ${lstr(n.r, letters)}`; break;
+    case 'cmp': s = `${lstr(n.l)} ${n.op} ${lstr(n.r)}`; break;
+    case 'NOT': s = `NOT ${lstr(n.e, letters)}`; break;
+    default: s = `${lstr(n.l, letters)} ${n.k} ${lstr(n.r, letters)}`;
+  }
+  return n.paren && !(letters && n.k === 'cmp') ? `(${s})` : s;
+}
+/** Обчислення: env — {x, y}; atomVals — задані значення порівнянь (для таблиці). */
+function leval(n, env, atomVals) {
+  switch (n.k) {
+    case 'num': return n.v;
+    case 'var': return env[n.v];
+    case 'ar': {
+      const a = leval(n.l, env), b = leval(n.r, env);
+      if (n.op === '/' && b === 0) throw 'Ділення на нуль!';
+      return { '+': a + b, '-': a - b, '*': a * b, '/': a / b }[n.op];
+    }
+    case 'cmp': {
+      if (atomVals) return atomVals[akey(n)];
+      const a = leval(n.l, env), b = leval(n.r, env);
+      return { '>': a > b, '<': a < b, '>=': a >= b, '<=': a <= b, '=': a === b, '<>': a !== b }[n.op];
+    }
+    case 'NOT': return !leval(n.e, env, atomVals);
+    case 'AND': return leval(n.l, env, atomVals) && leval(n.r, env, atomVals);
+    case 'OR': return leval(n.l, env, atomVals) || leval(n.r, env, atomVals);
+  }
+}
+/** Зібрати порівняння (атоми) і логічні підвирази в порядку обчислення. */
+function lcollect(n, atoms = [], subs = []) {
+  if (n.k === 'cmp') { const k = akey(n); if (!atoms.includes(k)) atoms.push(k); return { atoms, subs }; }
+  if (n.k === 'NOT') lcollect(n.e, atoms, subs);
+  if (n.k === 'AND' || n.k === 'OR') { lcollect(n.l, atoms, subs); lcollect(n.r, atoms, subs); }
+  if (isBoolNode(n) && !subs.includes(n)) subs.push(n);
+  return { atoms, subs };
+}
+/** Вираз з «коробочками» значень кожного підвиразу. */
+function lview(n, env) {
+  if (!isBoolNode(n)) return esc(lstr(n));
+  const v = leval(n, env);
+  let inner;
+  if (n.k === 'cmp') inner = esc(lstr({ ...n, paren: false }));
+  else if (n.k === 'NOT') inner = `NOT ${lview(n.e, env)}`;
+  else inner = `${lview(n.l, env)} ${n.k} ${lview(n.r, env)}`;
+  if (n.paren) inner = `(${inner})`;
+  return `<span class="lx ${v ? 't' : 'f'}"><span class="b">${inner}</span><span class="v">${v}</span></span>`;
+}
+
+const L = { input: $('#lexpr'), x: $('#lx'), y: $('#ly'), err: $('#lerr'), view: $('#lview'), res: $('#lresult'), atoms: $('#atoms'), truth: $('#truth') };
+
+function updateLogic() {
+  L.err.textContent = ''; L.input.classList.remove('invalid');
+  [L.x, L.y].forEach(i => i.classList.remove('invalid'));
+  let ast;
+  try { ast = lparse(L.input.value); if (!isBoolNode(ast)) throw 'Це арифметичний вираз, а не умова. Додайте порівняння, наприклад x > 0.'; lcheck(ast); }
+  catch (e) { L.err.textContent = '⚠ ' + e; L.input.classList.add('invalid'); L.view.innerHTML = ''; L.res.innerHTML = ''; L.truth.innerHTML = ''; L.atoms.innerHTML = ''; return; }
+  const env = { x: parseFloat(L.x.value), y: parseFloat(L.y.value) };
+  const badIn = [['x', L.x], ['y', L.y]].filter(([, el]) => L.x && !isFinite(parseFloat(el.value)));
+  if (badIn.length) { badIn.forEach(([, el]) => el.classList.add('invalid')); L.err.textContent = '⚠ Введіть числові значення x та y.'; }
+
+  const { atoms, subs } = lcollect(ast);
+  if (atoms.length > 4) { L.err.textContent = '⚠ Для таблиці істинності — не більше 4 різних порівнянь.'; }
+  const letters = {}; atoms.forEach((a, i) => (letters[a] = 'ABCD'[i]));
+  L.atoms.innerHTML = atoms.slice(0, 4).map(a => `<b>${letters[a]}</b>: ${esc(a)}`).join(' &nbsp; ');
+
+  let curVals = null;
+  if (!badIn.length) {
+    try {
+      L.view.innerHTML = lview(ast, env);
+      const r = leval(ast, env);
+      L.res.innerHTML = `<span class="result ${r ? 't' : 'f'}">Результат при x = ${fmtNum(env.x)}, y = ${fmtNum(env.y)}: ${r ? 'true (істина)' : 'false (хиба)'}</span>`;
+      curVals = {}; atoms.forEach(a => (curVals[a] = leval(lparse(a), env)));
+    } catch (e) { L.err.textContent = '⚠ ' + e; }
+  }
+  if (atoms.length > 4) { L.truth.innerHTML = ''; return; }
+  // Таблиця істинності: усі 2^n комбінацій значень порівнянь
+  const cols = subs.filter(s => s.k !== 'cmp');
+  const head = `<tr>${atoms.map(a => `<th>${letters[a]}</th>`).join('')}${cols.map((c, i) => `<th>${esc(lstr({ ...c, paren: false }, letters))}${i === cols.length - 1 ? ' <br>(результат)' : ''}</th>`).join('')}</tr>`;
+  let rows = '';
+  const n = atoms.length;
+  for (let m = 0; m < (1 << n); m++) {
+    const vals = {}; atoms.forEach((a, i) => (vals[a] = !!(m & (1 << (n - 1 - i)))));
+    const isCur = curVals && atoms.every(a => vals[a] === curVals[a]);
+    const cell = v => `<td class="${v ? 't' : 'f'}">${v}</td>`;
+    rows += `<tr class="${isCur ? 'cur' : ''}">${atoms.map(a => cell(vals[a])).join('')}${cols.map(c => cell(leval(c, {}, vals))).join('')}</tr>`;
+  }
+  L.truth.innerHTML = head + rows;
+}
+
+$('#lpresets').innerHTML = LPRESETS.map((p, k) => `<button type="button" class="chip" data-k="${k}">${esc(p)}</button>`).join('');
+$$('#lpresets .chip').forEach(b => (b.onclick = () => {
+  L.input.value = LPRESETS[+b.dataset.k];
+  $$('#lpresets .chip').forEach(c => c.classList.toggle('active', c === b));
+  updateLogic();
+}));
+$('#builder').innerHTML = BUILDER.map(t => `<button type="button" class="chip" data-t="${esc(t)}">${esc(t)}</button>`).join('') +
+  '<button type="button" class="chip" data-t="⌫" title="Стерти останній елемент">⌫</button><button type="button" class="chip" data-t="clear">Очистити</button>';
+$$('#builder .chip').forEach(b => (b.onclick = () => {
+  const t = b.dataset.t;
+  if (t === 'clear') L.input.value = '';
+  else if (t === '⌫') L.input.value = L.input.value.trimEnd().replace(/(\S+)$/, '').trimEnd();
+  else L.input.value = (L.input.value.trimEnd() + ' ' + t).trim().replace(/\( /g, '(').replace(/ \)/g, ')');
+  updateLogic();
+}));
+[L.input, L.x, L.y].forEach(el => el.addEventListener('input', updateLogic));
+L.input.value = LPRESETS[0];
+$('#lpresets .chip').classList.add('active');
+updateLogic();
+
+/* ==================================================================
+   ЧАСТИНА 2. БЛОК-СХЕМИ З РОЗГАЛУЖЕННЯМ
+   Кожен приклад — дерево операторів (опис формату — у бібліотеці вище).
+   ================================================================== */
+const say = (ctx, text) => { ctx.out.push(text); return `Виводимо на екран: «${text}».`; };
+const inp = names => ({ t: 'io', text: 'ввести ' + names.join(', '), run: v => `Вводимо вхідні дані: ${names.map(n => `${n} = ${fmtNum(v[n])}`).join(', ')}.` });
+
+const PRESETS = [
+  {
+    name: 'Модуль числа (неповне)', vars: [['x', -7]],
+    prog: () => [
+      { t: 'start' }, inp(['x']),
+      { t: 'if', text: 'x < 0', cond: v => v.x < 0,
+        then: [{ t: 'proc', text: 'x := -x', run: v => { const o = v.x; v.x = -v.x; return `x := -x: змінюємо знак, ${fmtNum(o)} → ${fmtNum(v.x)}.`; } }],
+        else: [] },
+      { t: 'io', text: 'вивести x', run: (v, c) => say(c, fmtNum(v.x)) }, { t: 'end' }
+    ]
+  },
+  {
+    name: 'Більше з двох (повне)', vars: [['x', 4], ['y', 9]],
+    prog: () => [
+      { t: 'start' }, inp(['x', 'y']),
+      { t: 'if', text: 'x > y', cond: v => v.x > v.y,
+        then: [{ t: 'proc', text: 'max := x', run: v => { v.max = v.x; return `max := x, тобто max = ${fmtNum(v.max)}.`; } }],
+        else: [{ t: 'proc', text: 'max := y', run: v => { v.max = v.y; return `max := y, тобто max = ${fmtNum(v.max)}.`; } }] },
+      { t: 'io', text: 'вивести max', run: (v, c) => say(c, fmtNum(v.max)) }, { t: 'end' }
+    ]
+  },
+  {
+    name: 'Знак числа (вкладене)', vars: [['x', 0]],
+    prog: () => [
+      { t: 'start' }, inp(['x']),
+      { t: 'if', text: 'x > 0', cond: v => v.x > 0,
+        then: [{ t: 'io', text: 'вивести «додатне»', run: (v, c) => say(c, 'додатне') }],
+        else: [{ t: 'if', text: 'x < 0', cond: v => v.x < 0,
+          then: [{ t: 'io', text: 'вивести «від\'ємне»', run: (v, c) => say(c, 'від\'ємне') }],
+          else: [{ t: 'io', text: 'вивести «нуль»', run: (v, c) => say(c, 'нуль') }] }] },
+      { t: 'end' }
+    ]
+  },
+  {
+    name: 'Тип трикутника (вкладене)', vars: [['a', 5], ['b', 5], ['c', 8]],
+    prog: () => [
+      { t: 'start' }, inp(['a', 'b', 'c']),
+      { t: 'if', text: 'a+b>c AND a+c>b AND b+c>a', cond: v => v.a + v.b > v.c && v.a + v.c > v.b && v.b + v.c > v.a,
+        then: [{ t: 'if', text: 'a = b AND b = c', cond: v => v.a === v.b && v.b === v.c,
+          then: [{ t: 'io', text: 'вивести «рівносторонній»', run: (v, c) => say(c, 'рівносторонній') }],
+          else: [{ t: 'if', text: 'a = b OR b = c OR a = c', cond: v => v.a === v.b || v.b === v.c || v.a === v.c,
+            then: [{ t: 'io', text: 'вивести «рівнобедрений»', run: (v, c) => say(c, 'рівнобедрений') }],
+            else: [{ t: 'io', text: 'вивести «різносторонній»', run: (v, c) => say(c, 'різносторонній') }] }] }],
+        else: [{ t: 'io', text: 'вивести «не існує»', run: (v, c) => say(c, 'трикутник не існує') }] },
+      { t: 'end' }
+    ]
+  },
+  {
+    name: 'Рівень за балом (case)', vars: [['бал', 8]],
+    prog: () => [
+      { t: 'start' }, inp(['бал']),
+      { t: 'case', text: 'бал', show: v => fmtNum(v['бал']),
+        branches: [
+          { label: '1..3', test: v => v['бал'] >= 1 && v['бал'] <= 3, body: [{ t: 'io', text: 'вивести «початковий»', w: 150, run: (v, c) => say(c, 'початковий') }] },
+          { label: '4..6', test: v => v['бал'] >= 4 && v['бал'] <= 6, body: [{ t: 'io', text: 'вивести «середній»', w: 150, run: (v, c) => say(c, 'середній') }] },
+          { label: '7..9', test: v => v['бал'] >= 7 && v['бал'] <= 9, body: [{ t: 'io', text: 'вивести «достатній»', w: 150, run: (v, c) => say(c, 'достатній') }] },
+          { label: '10..12', test: v => v['бал'] >= 10 && v['бал'] <= 12, body: [{ t: 'io', text: 'вивести «високий»', w: 150, run: (v, c) => say(c, 'високий') }] }
+        ],
+        else: [{ t: 'io', w: 150, text: 'вивести «помилка»', run: (v, c) => say(c, 'помилка: бал має бути від 1 до 12') }] },
+      { t: 'end' }
+    ],
+    integer: true
+  }
+];
+
+const R = { svg: $('#svg'), code: $('#code'), vars: $('#vars'), out: $('#out'), explain: $('#explain'), inputs: $('#vinputs'), err: $('#verr') };
+let current = 0, program = null;
+
+function renderStep(step) {
+  fcApply(R.svg, R.code, step);
+  R.vars.innerHTML = Object.keys(step.vars).map(k =>
+    `<div class="var"><div class="nm">${esc(k)}</div><div class="vl">${esc(fmtNum(step.vars[k]))}</div></div>`).join('') || '<span class="hint">—</span>';
+  R.out.textContent = step.out.join('\n');
+  R.explain.textContent = step.explain;
+  R.explain.classList.toggle('err', !!step.err);
+}
+const player = new StepPlayer($('#controls'), renderStep);
+
+function choose(k) {
+  current = k;
+  const p = PRESETS[k];
+  $$('#presets .chip').forEach((b, j) => b.classList.toggle('active', j === k));
+  R.inputs.innerHTML = p.vars.map(([n, d]) =>
+    `<label class="field">${esc(n)} = <input type="number" step="any" data-v="${esc(n)}" value="${d}"></label>`).join('') +
+    '<button type="button" class="primary" id="run">▶ Виконати з цими даними</button>';
+  $('#run').onclick = run;
+  $$('#vinputs input').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') run(); }));
+  program = p.prog();
+  fcCounter = 0; fcAssignIds(program);
+  fcRender(R.svg, program);
+  fcRenderCode(R.code, program);
+  run();
+}
+
+function run() {
+  const p = PRESETS[current];
+  const vars = {};
+  R.err.textContent = '';
+  for (const el of $$('#vinputs input')) {
+    el.classList.remove('invalid');
+    const raw = el.value.trim().replace(',', '.');
+    const v = Number(raw);
+    if (raw === '' || !isFinite(v)) { el.classList.add('invalid'); R.err.textContent = `⚠ Значення «${el.dataset.v}» має бути числом.`; return; }
+    if (p.integer && !Number.isInteger(v)) { el.classList.add('invalid'); R.err.textContent = '⚠ Бал має бути цілим числом.'; return; }
+    vars[el.dataset.v] = v;
+  }
+  player.load(fcRun(program, vars).steps);
+}
+
+$('#presets').innerHTML = PRESETS.map((p, k) => `<button type="button" class="chip" data-k="${k}">${esc(p.name)}</button>`).join('');
+$$('#presets .chip').forEach(b => (b.onclick = () => choose(+b.dataset.k)));
+window.addEventListener('resize', () => fcFit(R.svg));
+choose(2);
+</script>
+</body>
+</html>

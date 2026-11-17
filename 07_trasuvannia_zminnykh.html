@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Трасувальник «Змінні в пам'яті» — 10 клас, тема 4.5</title>
+<style>
+/* ==================================================================
+   СПІЛЬНІ СТИЛІ КОМПЛЕКТУ ВІЗУАЛІЗАТОРІВ
+   Великий шрифт і контрастні кольори розраховані на проєктор 1366×768.
+   Щоб змінити кольори для всього засобу, достатньо змінити змінні нижче.
+   ================================================================== */
+:root {
+  --bg: #eef2f8;          /* тло сторінки */
+  --panel: #ffffff;       /* тло панелей */
+  --ink: #17202f;         /* основний текст */
+  --muted: #4f5a6e;       /* другорядний текст */
+  --line: #b9c3d6;        /* рамки */
+  --brand: #16325c;       /* темно-синій (шапка, заголовки) */
+  --accent: #1f5fbf;      /* кнопки */
+  --cur: #ffd23f;         /* поточний крок (жовтий) */
+  --cmp: #ff9f1c;         /* порівняння (помаранчевий) */
+  --swap: #e0413a;        /* обмін / активний шлях (червоний) */
+  --ok: #1d8a4c;          /* істина / готово (зелений) */
+  --bad: #c62828;         /* хиба / помилка (червоний) */
+  --visited: #d7e6ff;     /* вже пройдене (блакитний) */
+  --radius: 12px;
+  font-size: 18px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif;
+  background: var(--bg); color: var(--ink); line-height: 1.4;
+  min-height: 100vh; display: flex; flex-direction: column;
+}
+
+/* ---------- шапка: назва засобу, клас і тема ---------- */
+header.top {
+  background: var(--brand); color: #fff; padding: 10px 24px;
+  display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center;
+}
+header.top h1 { margin: 0; font-size: 1.45rem; flex: 1 1 auto; }
+header.top .badge {
+  background: var(--cur); color: var(--brand); font-weight: 700;
+  padding: 4px 14px; border-radius: 999px; white-space: nowrap;
+}
+header.top .topic { width: 100%; opacity: .92; font-size: .95rem; }
+
+main { flex: 1; width: 100%; max-width: 1700px; margin: 0 auto; padding: 14px 20px; }
+footer.bottom { text-align: center; padding: 12px; color: var(--muted); border-top: 2px solid var(--line); background: #fff; }
+
+/* ---------- панелі та сітки ---------- */
+.panel {
+  background: var(--panel); border: 2px solid var(--line);
+  border-radius: var(--radius); padding: 12px 16px; min-width: 0;
+}
+.panel > h2 { margin: 0 0 10px; font-size: 1.12rem; color: var(--brand); }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.mt { margin-top: 14px; }
+@media (max-width: 1050px) { .grid2 { grid-template-columns: 1fr; } }
+
+/* ---------- кнопки і поля введення ---------- */
+button {
+  font: inherit; font-weight: 600; min-height: 46px; padding: 8px 16px;
+  border-radius: 10px; border: 2px solid var(--accent);
+  background: #fff; color: var(--accent); cursor: pointer;
+}
+button:hover:not(:disabled) { background: #e8f0ff; }
+button.primary { background: var(--accent); color: #fff; }
+button.primary:hover:not(:disabled) { background: #174c9c; }
+button:disabled { opacity: .4; cursor: not-allowed; }
+button.chip { min-height: 40px; padding: 6px 12px; font-size: .95rem; }
+button.chip.active, .tabs button[aria-selected="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
+:focus-visible { outline: 4px solid var(--cmp); outline-offset: 2px; }
+
+input[type=text], input[type=number], textarea, select {
+  font: inherit; padding: 7px 10px; border: 2px solid var(--line);
+  border-radius: 8px; background: #fff; color: var(--ink);
+}
+input[type=number] { width: 6.5em; }
+input.invalid, textarea.invalid { border-color: var(--bad); background: #fff0f0; }
+label.field { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+input[type=checkbox] { width: 22px; height: 22px; vertical-align: middle; }
+input[type=range] { width: 150px; height: 30px; accent-color: var(--accent); }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.tabs button { font-size: 1rem; }
+
+/* ---------- панель керування і пояснення кроку ---------- */
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.controls .speed { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.controls .stepinfo { color: var(--muted); font-weight: 600; margin-left: auto; }
+.explain {
+  margin-top: 10px; background: #fff8dc; border-left: 8px solid var(--cur);
+  padding: 10px 16px; border-radius: 8px; font-size: 1.15rem; min-height: 3em;
+}
+.explain.err { background: #ffecec; border-left-color: var(--bad); }
+.msg-error { color: var(--bad); font-weight: 700; min-height: 1.4em; }
+
+/* ---------- код / псевдокод з підсвіткою рядка ---------- */
+.code {
+  font-family: Consolas, "Courier New", monospace; font-size: 1.05rem;
+  background: #f7f9fc; border: 2px solid var(--line); border-radius: 8px;
+  padding: 6px 0; overflow-x: auto; margin: 0;
+}
+.code .ln { display: block; padding: 1px 12px; white-space: pre; border-left: 6px solid transparent; }
+.code .ln .no { display: inline-block; width: 2em; color: #8a94a8; user-select: none; }
+.code .ln.cur { background: var(--cur); border-left-color: var(--swap); font-weight: 700; }
+.code .kw { color: #0b4fb3; font-weight: 700; }
+.code .ln.cur .kw { color: #0a2e6e; }
+
+/* ---------- таблиці ---------- */
+table.tbl { border-collapse: collapse; width: 100%; font-size: 1rem; }
+table.tbl th, table.tbl td { border: 1.5px solid var(--line); padding: 4px 8px; text-align: center; }
+table.tbl th { background: #e3eaf6; color: var(--brand); }
+table.tbl tr.cur td { background: var(--cur); font-weight: 700; }
+.t { color: var(--ok); font-weight: 700; }
+.f { color: var(--bad); font-weight: 700; }
+.scroll { overflow: auto; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .95rem; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 18px; border-radius: 4px; vertical-align: -3px; margin-right: 5px; border: 1.5px solid #0003; }
+.hint { color: var(--muted); font-size: .95rem; }
+.big { font-size: 1.6rem; font-weight: 800; }
+
+/* ---------- блок-схема ---------- */
+.fc-wrap { overflow: auto; background: #fbfcfe; border: 2px solid var(--line); border-radius: 8px; padding: 4px; text-align: center; }
+svg.fc { display: inline-block; height: auto; max-width: none; }
+svg.fc .shape { fill: #fff; stroke: var(--brand); stroke-width: 2.5; transition: fill .25s; }
+svg.fc .txt { font: 600 17px "Segoe UI", Roboto, Arial, sans-serif; fill: var(--ink); }
+svg.fc .lbl { paint-order: stroke; stroke: #fbfcfe; stroke-width: 4px; font: 700 15px "Segoe UI", Roboto, Arial, sans-serif; fill: var(--muted); }
+svg.fc .ln { fill: none; stroke: #5d6880; stroke-width: 2.2; transition: stroke .2s; }
+svg.fc .ln.on { stroke: var(--swap); stroke-width: 5; marker-end: url(#arOn); }
+svg.fc .ln.on:not([marker-end^="url"]) { marker-end: none; }
+svg.fc .dot { fill: #5d6880; }
+svg.fc .node.on .shape { fill: var(--visited); }
+svg.fc .node.cur .shape { fill: var(--cur); stroke: var(--swap); stroke-width: 4; }
+svg.fc .badge { font: 800 17px Consolas, "Courier New", monospace; paint-order: stroke; stroke: #fff; stroke-width: 5px; }
+svg.fc .badge.t { fill: var(--ok); }
+svg.fc .badge.f { fill: var(--bad); }
+
+/* ---------- змінні у вигляді «коробок» ---------- */
+.vars { display: flex; flex-wrap: wrap; gap: 10px; }
+.var { border: 2px solid var(--brand); border-radius: 10px; min-width: 86px; text-align: center; overflow: hidden; background: #fff; }
+.var .nm { background: var(--brand); color: #fff; font-weight: 700; padding: 2px 8px; font-family: Consolas, monospace; }
+.var .vl { font: 800 1.45rem Consolas, monospace; padding: 4px 10px; }
+.var.changed { border-color: var(--swap); box-shadow: 0 0 0 3px #e0413a55; }
+.var.changed .vl { background: #fff1c2; }
+.outbox { font-family: Consolas, monospace; background: #10233f; color: #e9f1ff; border-radius: 8px; padding: 8px 12px; min-height: 2.4em; white-space: pre-wrap; }
+
+
+/* ---------- стилі саме цього засобу ---------- */
+.layout { display: grid; grid-template-columns: 1fr 1.25fr; gap: 14px; }
+@media (max-width: 1050px) { .layout { grid-template-columns: 1fr; } }
+textarea#src { width: 100%; min-height: 230px; font: 1.05rem Consolas, "Courier New", monospace; }
+.expr { font: 700 1.55rem Consolas, "Courier New", monospace; padding: 8px 4px; line-height: 1.9; word-break: break-word; }
+.expr .row-lbl { display: inline-block; width: 4.2em; font: 600 1rem "Segoe UI", Arial, sans-serif; color: var(--muted); }
+.expr .target { color: var(--brand); text-decoration: underline 3px; }
+.expr .hl { background: var(--cur); outline: 3px solid var(--swap); border-radius: 6px; padding: 0 4px; }
+.expr .fresh { background: #c9f2d6; color: #0d5a2e; border-radius: 6px; padding: 0 4px; }
+.expr .subst { background: var(--visited); border-radius: 6px; padding: 0 4px; }
+.expr .val { background: #c9f2d6; border-radius: 6px; padding: 0 6px; }
+.var .tp { font-size: .8rem; color: var(--muted); padding: 0 6px; border-top: 1px solid var(--line); }
+.var .old { font: 700 1rem Consolas, monospace; color: var(--bad); text-decoration: line-through 2px; display: block; }
+.var.pending .vl > .now { opacity: 0; }
+.var.landed .vl > .now { animation: pop .45s ease-out; }
+@keyframes pop { 0% { transform: scale(1.6); } 100% { transform: scale(1); } }
+.flyer {
+  position: fixed; z-index: 50; pointer-events: none; font: 800 1.5rem Consolas, monospace;
+  background: var(--cur); border: 3px solid var(--swap); border-radius: 8px; padding: 0 8px;
+  transition: transform .6s cubic-bezier(.5, 0, .3, 1);
+}
+.predict { margin-top: 10px; padding: 10px 14px; border: 3px dashed var(--accent); border-radius: 10px; background: #eef4ff; }
+.predict input { width: 9em; font-size: 1.2rem; }
+.fb-ok { color: var(--ok); font-weight: 800; }
+.fb-bad { color: var(--bad); font-weight: 800; }
+table.tbl td.chg { background: #fff1c2; font-weight: 800; }
+#trace td:nth-child(3) { font-family: Consolas, monospace; text-align: left; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Трасувальник «Змінні в пам'яті»</h1>
+  <span class="badge">10 клас · Тема 4.5</span>
+  <div class="topic">Розділ 4. Основи алгоритмізації та програмування · Лінійні алгоритми. Введення та виведення даних</div>
+</header>
+
+<main>
+  <div class="layout">
+    <!-- ЛІВА КОЛОНКА: програма -->
+    <div class="stack">
+      <section class="panel">
+        <h2>Програма</h2>
+        <div class="row" id="presets" aria-label="Готові приклади"></div>
+        <pre class="code mt" id="codeView" aria-label="Текст програми"></pre>
+        <textarea id="src" hidden spellcheck="false" aria-label="Редактор програми"></textarea>
+        <div class="row mt">
+          <button type="button" id="btnEdit">✎ Редагувати програму</button>
+          <button type="button" id="btnApply" class="primary" hidden>✔ Застосувати</button>
+          <label class="field">Вхідні дані для «ввести»:
+            <input type="text" id="inputData" placeholder="напр. 4 7" style="width: 9em">
+          </label>
+        </div>
+        <div class="msg-error" id="parseErr" role="alert"></div>
+        <details class="hint">
+          <summary>Які команди можна писати?</summary>
+          <div>
+            <b>a := 5</b> — присвоювання (можна й <b>a = 5</b>);
+            операції: <b>+ − * /</b>, <b>div</b> (ціла частина), <b>mod</b> (остача), дужки, функції <b>abs( )</b>, <b>sqrt( )</b>;<br>
+            <b>ввести a, b</b> — значення беруться з поля «Вхідні дані»;
+            <b>вивести "Текст", a</b> — виведення;
+            рядки — у лапках <b>"…"</b>; коментар — <b>//</b>.
+            Ділення <b>/</b> завжди дає дійсне число.
+          </div>
+        </details>
+      </section>
+      <section class="panel">
+        <h2>Виведення (екран)</h2>
+        <div class="outbox" id="out"></div>
+      </section>
+    </div>
+
+    <!-- ПРАВА КОЛОНКА: обчислення і пам'ять -->
+    <div class="stack">
+      <section class="panel">
+        <h2>Обчислення виразу</h2>
+        <div class="expr" id="expr" aria-live="polite"></div>
+      </section>
+      <section class="panel">
+        <h2>Пам'ять: змінні</h2>
+        <div class="vars" id="mem"></div>
+        <div class="hint mt">Кожна змінна — це підписана «коробка» в пам'яті. Нове значення стирає старе (старе показано закресленим).</div>
+        <label class="field mt"><input type="checkbox" id="predictMode"> Режим «Передбач значення до натискання Крок»</label>
+        <div id="predictBox"></div>
+      </section>
+    </div>
+  </div>
+
+  <section class="panel mt">
+    <div id="controls"></div>
+    <div class="explain" id="explain" aria-live="polite"></div>
+  </section>
+
+  <section class="panel mt">
+    <h2>Трасувальна таблиця</h2>
+    <div class="scroll"><table class="tbl" id="trace"></table></div>
+  </section>
+</main>
+
+<footer class="bottom">Розроблено автором</footer>
+
+<script>
+/* ==================================================================
+   ПРОГРАВАЧ КРОКІВ (спільна частина всіх засобів комплекту)
+   Ідея: алгоритм виконується наперед, а кожен його крок зберігається
+   як «знімок» стану. Програвач лише показує знімки по черзі. Тому
+   легко зробити кнопки «Крок», «Назад», «Старт/Пауза» і «Скинути».
+   Клавіші: → або пробіл — крок уперед, ← — крок назад.
+   ================================================================== */
+class StepPlayer {
+  /**
+   * @param {HTMLElement} root   контейнер, у який буде вставлено кнопки
+   * @param {Function} render    render(step, index, total, dir) — малює знімок
+   * @param {Object} [hooks]     { beforeStep(nextStep, nextIndex) → false, щоб не йти далі }
+   */
+  constructor(root, render, hooks = {}) {
+    this.render = render;
+    this.hooks = hooks;
+    this.steps = [];
+    this.i = 0;
+    this.timer = null;
+    root.classList.add('controls');
+    root.innerHTML = `
+      <button type="button" data-act="back" title="Крок назад (клавіша ←)">◀ Назад</button>
+      <button type="button" data-act="step" class="primary" title="Наступний крок (клавіша → або пробіл)">Крок ▶</button>
+      <button type="button" data-act="play" title="Автоматичне виконання">▶ Старт</button>
+      <button type="button" data-act="reset" title="Повернутися до першого кроку">⟲ Скинути</button>
+      <label class="speed">Швидкість
+        <input type="range" min="1" max="10" value="5" aria-label="Швидкість виконання">
+      </label>
+      <span class="stepinfo" aria-live="polite"></span>`;
+    this.btn = {};
+    root.querySelectorAll('button').forEach(b => (this.btn[b.dataset.act] = b));
+    this.range = root.querySelector('input[type=range]');
+    this.info = root.querySelector('.stepinfo');
+
+    this.btn.back.onclick = () => { this.pause(); this.back(); };
+    this.btn.step.onclick = () => { this.pause(); this.next(); };
+    this.btn.play.onclick = () => this.toggle();
+    this.btn.reset.onclick = () => this.reset();
+    // Якщо швидкість змінили під час відтворення — продовжуємо з новою.
+    this.range.oninput = () => { if (this.timer) { this.pause(); this.play(); } };
+
+    document.addEventListener('keydown', e => {
+      const ae = document.activeElement;
+      const tag = ae ? ae.tagName : '';
+      // не заважаємо введенню тексту і повзункам; прапорці (checkbox) не заважають
+      if (/TEXTAREA|SELECT/.test(tag) || (tag === 'INPUT' && ae.type !== 'checkbox')) return;
+      if (tag === 'BUTTON' && e.key === ' ') return;           // пробіл на кнопці = її натискання
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); this.pause(); this.next(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); this.pause(); this.back(); }
+    });
+  }
+
+  /** Завантажити новий набір кроків і показати перший. */
+  load(steps) { this.pause(); this.steps = steps; this.i = 0; this.show(0); }
+
+  /** Затримка між кроками: від 1,9 с (повільно) до 0,1 с (швидко). */
+  get delay() { return 2100 - Number(this.range.value) * 200; }
+
+  next() {
+    if (this.i >= this.steps.length - 1) { this.pause(); return false; }
+    if (this.hooks.beforeStep && this.hooks.beforeStep(this.steps[this.i + 1], this.i + 1) === false) {
+      this.pause(); return false;
+    }
+    this.i++; this.show(1); return true;
+  }
+  back() { if (this.i > 0) { this.i--; this.show(-1); } }
+  reset() { this.pause(); this.i = 0; this.show(0); }
+
+  play() {
+    if (!this.steps.length) return;
+    if (this.i >= this.steps.length - 1) { this.i = 0; this.show(0); } // повтор з початку
+    this.btn.play.textContent = '⏸ Пауза';
+    const tick = () => { if (this.next()) this.timer = setTimeout(tick, this.delay); };
+    this.timer = setTimeout(tick, Math.min(this.delay, 600));
+  }
+  pause() { clearTimeout(this.timer); this.timer = null; this.btn.play.textContent = '▶ Старт'; }
+  toggle() { this.timer ? this.pause() : this.play(); }
+
+  show(dir) {
+    const n = this.steps.length;
+    this.btn.back.disabled = this.i <= 0;
+    this.btn.step.disabled = this.i >= n - 1;
+    this.info.textContent = n ? `Крок ${this.i + 1} з ${n}` : '';
+    if (n) this.render(this.steps[this.i], this.i, n, dir);
+  }
+}
+
+/* ---------- дрібні допоміжні функції ---------- */
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+/** Екранування тексту для вставлення в HTML. */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+/** Гарний запис числа: цілі — як є, дробові — до 4 знаків після крапки. */
+function fmtNum(v) {
+  if (Number.isInteger(v)) return String(v);
+  return String(Math.round(v * 10000) / 10000);
+}
+
+
+/* ==================================================================
+   ГОТОВІ ПРИКЛАДИ (вчитель може додати свої у цей масив)
+   ================================================================== */
+const PRESETS = [
+  { name: 'Обчислення за формулою', input: '',
+    code: 'a := 5\nb := a * 2 + 1\na := b - a\nc := (a + b) / 2' },
+  { name: 'Обмін значень через третю змінну', input: '',
+    code: '// Обмін значень змінних x та y\nx := 3\ny := 8\nt := x\nx := y\ny := t' },
+  { name: 'Пріоритет операцій', input: '',
+    code: 'r := 2 + 3 * 4\nk := (2 + 3) * 4\nm := 17 div 5 + 17 mod 5\np := -r + k / 4' },
+  { name: 'Введення і виведення', input: '4 7',
+    code: '// Периметр і площа прямокутника\nввести a, b\np := 2 * (a + b)\ns := a * b\nвивести "Периметр: ", p\nвивести "Площа: ", s' },
+  { name: 'Рядкові величини', input: '',
+    code: 'слово := "інформатика"\nфраза := "Я вивчаю " + слово\nвивести фраза' }
+];
+
+const TYPE_NAME = { int: 'ціле', real: 'дійсне', str: 'рядок' };
+const IDENT = /^[A-Za-zА-ЯҐЄІЇа-яґєії_][A-Za-zА-ЯҐЄІЇа-яґєії_0-9]*/;
+
+/* ==================================================================
+   1. РОЗБІР ВИРАЗУ (лексичний аналіз → дерево виразу)
+   ================================================================== */
+function tokenize(s) {
+  const toks = [];
+  let i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (/\s/.test(c)) { i++; continue; }
+    let m;
+    if ((m = /^\d+(\.\d+)?/.exec(s.slice(i)))) {
+      toks.push({ k: 'num', v: parseFloat(m[0]), real: !!m[1] }); i += m[0].length; continue;
+    }
+    if (c === '"' || c === '«') {
+      const close = c === '"' ? '"' : '»';
+      const j = s.indexOf(close, i + 1);
+      if (j < 0) throw 'Рядок не закрито лапками';
+      toks.push({ k: 'str', v: s.slice(i + 1, j) }); i = j + 1; continue;
+    }
+    if ((m = IDENT.exec(s.slice(i)))) {
+      const w = m[0].toLowerCase();
+      if (w === 'div' || w === 'mod') toks.push({ k: 'op', v: w });
+      else toks.push({ k: 'id', v: m[0] });
+      i += m[0].length; continue;
+    }
+    if ('+-*/(),'.includes(c)) { toks.push({ k: 'op', v: c }); i++; continue; }
+    throw `Незрозумілий символ «${c}»`;
+  }
+  return toks;
+}
+
+/** Синтаксичний аналіз з урахуванням пріоритету: спочатку * / div mod, потім + −. */
+function parseExpr(text) {
+  const t = tokenize(text);
+  let p = 0;
+  const peek = () => t[p];
+  const isOp = v => t[p] && t[p].k === 'op' && t[p].v === v;
+  function expr() {
+    let n = term();
+    while (isOp('+') || isOp('-')) { const op = t[p++].v; n = { k: 'bin', op, l: n, r: term() }; }
+    return n;
+  }
+  function term() {
+    let n = unary();
+    while (isOp('*') || isOp('/') || isOp('div') || isOp('mod')) { const op = t[p++].v; n = { k: 'bin', op, l: n, r: unary() }; }
+    return n;
+  }
+  function unary() {
+    if (isOp('-')) { p++; return { k: 'neg', e: unary() }; }
+    return primary();
+  }
+  function primary() {
+    const tk = peek();
+    if (!tk) throw 'Вираз обірвано — бракує операнда';
+    if (tk.k === 'num') { p++; return { k: 'lit', v: tk.v, t: tk.real ? 'real' : 'int' }; }
+    if (tk.k === 'str') { p++; return { k: 'lit', v: tk.v, t: 'str' }; }
+    if (tk.k === 'id') {
+      p++;
+      const f = tk.v.toLowerCase();
+      if ((f === 'abs' || f === 'sqrt') && isOp('(')) {
+        p++; const a = expr();
+        if (!isOp(')')) throw 'Бракує закривної дужки «)»';
+        p++; return { k: 'call', f, a };
+      }
+      return { k: 'var', name: tk.v };
+    }
+    if (isOp('(')) {
+      p++; const e = expr();
+      if (!isOp(')')) throw 'Бракує закривної дужки «)»';
+      p++; return { k: 'grp', e };
+    }
+    throw `Неочікуваний знак «${tk.v}»`;
+  }
+  const root = expr();
+  if (p < t.length) throw `Зайвий фрагмент після виразу: «${t[p].v}»`;
+  return root;
+}
+
+/** Розбити список «вивести a, "текст", b» за комами поза лапками й дужками. */
+function splitArgs(s) {
+  const parts = []; let depth = 0, q = null, cur = '';
+  for (const c of s) {
+    if (q) { cur += c; if (c === q) q = null; continue; }
+    if (c === '"') q = '"'; else if (c === '«') q = '»';
+    if (c === '(') depth++; if (c === ')') depth--;
+    if (c === ',' && depth === 0) { parts.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  parts.push(cur);
+  return parts.map(x => x.trim());
+}
+
+/** Прибрати коментар «//» (поза лапками). */
+function stripComment(line) {
+  let q = null;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (q) { if (c === q) q = null; continue; }
+    if (c === '"') q = '"'; else if (c === '«') q = '»';
+    else if (c === '/' && line[i + 1] === '/') return line.slice(0, i);
+  }
+  return line;
+}
+
+/** Розібрати всю програму. Повертає список команд або кидає помилку з номером рядка. */
+function parseProgram(src) {
+  const lines = src.replace(/\r/g, '').split('\n');
+  const cmds = [];
+  lines.forEach((raw, idx) => {
+    const line = stripComment(raw).trim();
+    if (!line) return;
+    const no = idx + 1;
+    try {
+      let m;
+      if ((m = /^ввести\s+(.+)$/i.exec(line))) {
+        const names = m[1].split(',').map(s => s.trim());
+        names.forEach(nm => { if (!IDENT.test(nm) || IDENT.exec(nm)[0] !== nm) throw `«${nm}» не може бути іменем змінної`; });
+        cmds.push({ k: 'in', no, names });
+      } else if ((m = /^вивести\s+(.+)$/i.exec(line))) {
+        cmds.push({ k: 'out', no, args: splitArgs(m[1]).map(a => ({ text: a, ast: parseExpr(a) })) });
+      } else if ((m = /^([A-Za-zА-ЯҐЄІЇа-яґєії_][A-Za-zА-ЯҐЄІЇа-яґєії_0-9]*)\s*(:=|=)\s*(.+)$/.exec(line))) {
+        cmds.push({ k: 'set', no, name: m[1], text: m[3].trim(), ast: parseExpr(m[3]) });
+      } else {
+        throw 'Незрозуміла команда. Очікується присвоювання «змінна := вираз», «ввести …» або «вивести …»';
+      }
+    } catch (e) {
+      throw `Рядок ${no}: ${e}`;
+    }
+  });
+  if (!cmds.length) throw 'Програма порожня — напишіть хоча б одну команду.';
+  return { lines, cmds };
+}
+
+/* ==================================================================
+   2. ОБЧИСЛЕННЯ ЗНАЧЕНЬ
+   ================================================================== */
+function fmtVal(x) {
+  if (!x) return '—';
+  if (x.t === 'str') return '"' + x.v + '"';
+  if (x.t === 'real') return Number.isInteger(x.v) ? x.v.toFixed(1) : fmtNum(x.v);
+  return String(x.v);
+}
+const isNum = x => x.t === 'int' || x.t === 'real';
+
+/** Виконати одну операцію над двома значеннями. */
+function applyOp(op, a, b) {
+  const both = isNum(a) && isNum(b);
+  const numT = (a.t === 'real' || b.t === 'real') ? 'real' : 'int';
+  switch (op) {
+    case '+':
+      if (a.t === 'str' && b.t === 'str') return { v: a.v + b.v, t: 'str' };
+      if (both) return { v: a.v + b.v, t: numT };
+      throw 'Не можна додати рядок і число. Рядки можна додавати лише до рядків.';
+    case '-': if (both) return { v: a.v - b.v, t: numT }; break;
+    case '*': if (both) return { v: a.v * b.v, t: numT }; break;
+    case '/':
+      if (both) { if (b.v === 0) throw 'Ділення на нуль неможливе!'; return { v: a.v / b.v, t: 'real' }; }
+      break;
+    case 'div': case 'mod':
+      if (a.t === 'int' && b.t === 'int') {
+        if (b.v === 0) throw 'Ділення на нуль неможливе!';
+        const q = Math.trunc(a.v / b.v);
+        return op === 'div' ? { v: q, t: 'int' } : { v: a.v - q * b.v, t: 'int' };
+      }
+      throw `Операція ${op} виконується лише над цілими числами.`;
+  }
+  throw `Операція «${op}» не застосовується до рядків.`;
+}
+const OP_NAME = { '+': 'додавання', '-': 'віднімання', '*': 'множення', '/': 'ділення', div: 'ділення націло (div)', mod: 'остача від ділення (mod)' };
+
+/** Подати дерево виразу як HTML; вузол hl підсвічується. */
+function exprHtml(n, hl) {
+  let s;
+  switch (n.k) {
+    case 'lit': s = esc(fmtVal(n)); if (n.fresh) s = `<span class="fresh">${s}</span>`; else if (n.subst) s = `<span class="subst">${s}</span>`; break;
+    case 'var': s = esc(n.name); break;
+    case 'bin': s = `${exprHtml(n.l, hl)} ${n.op} ${exprHtml(n.r, hl)}`; break;
+    case 'neg': s = `-${exprHtml(n.e, hl)}`; break;
+    case 'grp': s = `(${exprHtml(n.e, hl)})`; break;
+    case 'call': s = `${n.f}(${exprHtml(n.a, hl)})`; break;
+  }
+  return n === hl ? `<span class="hl">${s}</span>` : s;
+}
+const isLit = n => n.k === 'lit';
+/** Замінити вузол на значення (змінюємо об'єкт «на місці»). */
+function becomeLit(n, val, flag) {
+  for (const k of Object.keys(n)) delete n[k];
+  Object.assign(n, { k: 'lit', v: val.v, t: val.t }, flag);
+}
+function clearFlags(n) {
+  delete n.fresh; delete n.subst;
+  ['l', 'r', 'e', 'a'].forEach(k => n[k] && clearFlags(n[k]));
+}
+/** Прибрати дужки навколо вже обчисленого значення. */
+function dropGroups(n) {
+  ['l', 'r', 'e', 'a'].forEach(k => n[k] && dropGroups(n[k]));
+  if (n.k === 'grp' && isLit(n.e)) { const e = n.e; becomeLit(n, e, e.fresh ? { fresh: true } : {}); }
+}
+/** Знайти наступну операцію для обчислення: обхід «ліве — праве — корінь». */
+function findNext(n, inParen = false) {
+  for (const k of ['l', 'r', 'e', 'a']) {
+    if (n[k]) { const r = findNext(n[k], inParen || n.k === 'grp'); if (r) return r; }
+  }
+  if (n.k === 'bin' && isLit(n.l) && isLit(n.r)) return { node: n, inParen };
+  if (n.k === 'neg' && isLit(n.e)) return { node: n, inParen };
+  if (n.k === 'call' && isLit(n.a)) return { node: n, inParen };
+  return null;
+}
+function hasLowOp(n) {
+  if (!n) return false;
+  if (n.k === 'bin' && (n.op === '+' || n.op === '-')) return true;
+  return ['l', 'r', 'e', 'a'].some(k => n[k] && n[k].k !== 'grp' && hasLowOp(n[k]));
+}
+
+/* ==================================================================
+   3. ПОБУДОВА КРОКІВ ВИКОНАННЯ
+   ================================================================== */
+let PROGRAM = null;      // розібрана програма
+let TRACE = [];          // рядки трасувальної таблиці
+let VAR_ORDER = [];      // порядок появи змінних
+
+function buildSteps(prog, inputText) {
+  const steps = [];
+  const mem = {};                     // пам'ять: ім'я → {v, t}
+  const out = [];
+  TRACE = []; VAR_ORDER = [];
+  const queue = inputText.trim() ? inputText.trim().split(/[\s,;]+/) : [];
+  const snapMem = () => JSON.parse(JSON.stringify(mem));
+  const push = (s) => steps.push({ mem: snapMem(), out: [...out], traceLen: TRACE.length, ...s });
+  const addVar = nm => { if (!VAR_ORDER.includes(nm)) VAR_ORDER.push(nm); };
+  const addTrace = (no, action, changed) => TRACE.push({ no, action, mem: snapMem(), out: out.join(''), changed });
+
+  push({ kind: 'start', line: 0, exprHtml: '', explain: 'Програма готова до виконання. Натисніть «Крок» — і виконавець почне виконувати команди по черзі, згори донизу.' });
+
+  /** Покрокове обчислення виразу. Повертає значення. */
+  function evalSteps(ast, no, prefix, quiet) {
+    const tree = JSON.parse(JSON.stringify(ast));
+    // а) підставляємо значення змінних
+    const used = [];
+    (function sub(n) {
+      ['l', 'r', 'e', 'a'].forEach(k => n[k] && sub(n[k]));
+      if (n.k === 'var') {
+        if (!(n.name in mem)) throw `Змінна «${n.name}» ще не має значення! Спочатку їй треба щось присвоїти або ввести.`;
+        used.push(`${n.name} = ${fmtVal(mem[n.name])}`);
+        becomeLit(n, mem[n.name], { subst: true });
+      }
+    })(tree);
+    if (used.length && !quiet) {
+      push({ kind: 'subst', line: no, exprHtml: prefix + exprHtml(tree),
+        explain: `Підставляємо замість змінних їхні поточні значення з пам'яті: ${[...new Set(used)].join(', ')}.` });
+    }
+    // б) виконуємо операції по одній з урахуванням пріоритету
+    for (;;) {
+      clearFlags(tree); dropGroups(tree);
+      const f = findNext(tree);
+      if (!f) break;
+      const n = f.node;
+      const before = prefix + exprHtml(tree, n);
+      let val, what;
+      if (n.k === 'bin') { val = applyOp(n.op, n.l, n.r); what = `${fmtVal(n.l)} ${n.op} ${fmtVal(n.r)} = ${fmtVal(val)}`; }
+      else if (n.k === 'neg') { if (!isNum(n.e)) throw 'Знак «−» не можна застосувати до рядка.'; val = { v: -n.e.v, t: n.e.t }; what = `−(${fmtVal(n.e)}) = ${fmtVal(val)}`; }
+      else {
+        if (!isNum(n.a)) throw `Функція ${n.f} працює лише з числами.`;
+        if (n.f === 'sqrt' && n.a.v < 0) throw 'Корінь з від\'ємного числа не існує.';
+        val = n.f === 'abs' ? { v: Math.abs(n.a.v), t: n.a.t } : { v: Math.sqrt(n.a.v), t: 'real' };
+        what = `${n.f}(${fmtVal(n.a)}) = ${fmtVal(val)}`;
+      }
+      let why;
+      if (n.k === 'bin') {
+        const high = ['*', '/', 'div', 'mod'].includes(n.op);
+        if (f.inParen) why = 'Спочатку обчислюємо вираз у дужках.';
+        else if (high && hasLowOp(tree)) why = `${OP_NAME[n.op][0].toUpperCase() + OP_NAME[n.op].slice(1)} має вищий пріоритет, ніж додавання і віднімання.`;
+        else why = 'Операції однакового пріоритету виконуються зліва направо.';
+      } else why = n.k === 'neg' ? 'Обчислюємо зміну знака.' : `Обчислюємо значення функції ${n.f}.`;
+      becomeLit(n, val, { fresh: true });
+      if (!quiet) {
+        push({ kind: 'op', line: no,
+          exprHtml: `<div><span class="row-lbl">Було:</span>${before}</div><div><span class="row-lbl">Стало:</span>${prefix}${exprHtml(tree)}</div>`,
+          explain: `${why} ${what}.` });
+      }
+    }
+    return { v: tree.v, t: tree.t };
+  }
+
+  try {
+    for (const c of prog.cmds) {
+      if (c.k === 'set') {
+        const prefix = `<span class="target">${esc(c.name)}</span> := `;
+        const simple = c.ast.k === 'lit';
+        if (!simple) {
+          push({ kind: 'line', line: c.no, exprHtml: prefix + esc(c.text),
+            explain: `Рядок ${c.no}. Спочатку обчислюємо вираз праворуч від знака «:=», а потім результат записуємо в змінну ${c.name}.` });
+        }
+        const val = evalSteps(c.ast, c.no, prefix);
+        const old = mem[c.name];
+        mem[c.name] = val; addVar(c.name);
+        addTrace(c.no, `${c.name} := ${c.text}`, [c.name]);
+        let msg = old
+          ? `Записуємо ${fmtVal(val)} у змінну ${c.name}. Старе значення ${fmtVal(old)} стирається — змінна зберігає лише останнє значення.`
+          : `Створюємо змінну ${c.name} (тип: ${TYPE_NAME[val.t]}) і записуємо в неї ${fmtVal(val)}.`;
+        if (simple) msg = `Рядок ${c.no}. ` + msg;
+        if (old && old.t !== val.t) msg += ` Увага: тип змінився з «${TYPE_NAME[old.t]}» на «${TYPE_NAME[val.t]}».`;
+        push({ kind: 'assign', line: c.no, name: c.name, val, old,
+          exprHtml: `${prefix}<span class="val" id="flysrc">${esc(fmtVal(val))}</span>`, explain: msg });
+      } else if (c.k === 'in') {
+        for (const nm of c.names) {
+          if (!queue.length) throw `Не вистачає вхідних даних для змінної ${nm}. Допишіть значення в поле «Вхідні дані».`;
+          const raw = queue.shift();
+          const num = /^-?\d+(\.\d+)?$/.test(raw);
+          const val = num ? { v: parseFloat(raw), t: raw.includes('.') ? 'real' : 'int' } : { v: raw, t: 'str' };
+          const old = mem[nm];
+          mem[nm] = val; addVar(nm);
+          addTrace(c.no, `ввести ${nm} (${fmtVal(val)})`, [nm]);
+          push({ kind: 'assign', fromInput: true, line: c.no, name: nm, val, old,
+            exprHtml: `<span class="kw">ввести</span> <span class="target">${esc(nm)}</span> ← <span class="val" id="flysrc">${esc(fmtVal(val))}</span>`,
+            explain: `Рядок ${c.no}. Користувач вводить значення ${fmtVal(val)}, і воно записується в змінну ${nm}.` });
+        }
+      } else if (c.k === 'out') {
+        const parts = c.args.map(a => evalSteps(a.ast, c.no, '', true));
+        const text = parts.map(p => p.t === 'str' ? p.v : fmtVal(p)).join('');
+        out.push(text + '\n');
+        addTrace(c.no, 'вивести ' + c.args.map(a => a.text).join(', '), []);
+        push({ kind: 'out', line: c.no, exprHtml: `<span class="kw">вивести</span> → <span class="val">${esc(text)}</span>`,
+          explain: `Рядок ${c.no}. Виводимо на екран: «${text}». Значення змінних при цьому не змінюються.` });
+      }
+    }
+    push({ kind: 'end', line: 0, exprHtml: '', explain: '✔ Програму виконано. Перегляньте трасувальну таблицю: у ній видно, як змінювалися значення змінних на кожному кроці.' });
+  } catch (e) {
+    push({ kind: 'error', line: steps[steps.length - 1].line, exprHtml: '', err: true, explain: '⚠ Помилка виконання: ' + e });
+  }
+  return steps;
+}
+
+/* ==================================================================
+   4. ВІДОБРАЖЕННЯ КРОКУ
+   ================================================================== */
+const ui = {
+  code: $('#codeView'), src: $('#src'), expr: $('#expr'), mem: $('#mem'), out: $('#out'),
+  explain: $('#explain'), trace: $('#trace'), predictBox: $('#predictBox'), predictMode: $('#predictMode'),
+  inputData: $('#inputData'), parseErr: $('#parseErr')
+};
+let predict = { score: 0, total: 0, results: {} };   // результати прогнозів за індексами кроків
+
+function renderCode(lines, cur) {
+  ui.code.innerHTML = lines.map((l, i) =>
+    `<span class="ln${i + 1 === cur ? ' cur' : ''}"><span class="no">${i + 1}</span>${esc(l) || ' '}</span>`).join('');
+}
+
+function renderMemory(step) {
+  ui.mem.innerHTML = VAR_ORDER.filter(nm => nm in step.mem).map(nm => {
+    const x = step.mem[nm];
+    const changed = step.kind === 'assign' && step.name === nm;
+    const old = changed && step.old ? `<span class="old">${esc(fmtVal(step.old))}</span>` : '';
+    return `<div class="var${changed ? ' changed' : ''}" data-name="${esc(nm)}">
+      <div class="nm">${esc(nm)}</div><div class="vl">${old}<span class="now">${esc(fmtVal(x))}</span></div>
+      <div class="tp">${TYPE_NAME[x.t]}</div></div>`;
+  }).join('') || '<span class="hint">Пам\'ять порожня: жодній змінній ще не присвоєно значення.</span>';
+}
+
+function renderTrace(step) {
+  const head = `<tr><th>№</th><th>Рядок</th><th>Команда</th>${VAR_ORDER.map(v => `<th>${esc(v)}</th>`).join('')}<th>Виведено</th></tr>`;
+  const rows = TRACE.slice(0, step.traceLen).map((r, i) => {
+    const cur = i === step.traceLen - 1 && ['assign', 'out'].includes(step.kind);
+    const cells = VAR_ORDER.map(v => `<td class="${r.changed.includes(v) ? 'chg' : ''}">${v in r.mem ? esc(fmtVal(r.mem[v])) : ''}</td>`).join('');
+    return `<tr class="${cur ? 'cur' : ''}"><td>${i + 1}</td><td>${r.no}</td><td>${esc(r.action)}</td>${cells}<td>${esc(r.out.replace(/\n/g, ' ⏎ '))}</td></tr>`;
+  }).join('');
+  ui.trace.innerHTML = head + (rows || `<tr><td colspan="${VAR_ORDER.length + 4}" class="hint">Рядки з'являтимуться після виконання кожної команди.</td></tr>`);
+}
+
+/** Анімація «значення перелітає в коробку змінної». */
+function flyValue(step) {
+  const src = $('#flysrc');
+  const box = $(`.var[data-name="${CSS.escape(step.name)}"]`);
+  if (!src || !box) return;
+  const target = $('.now', box);
+  const a = src.getBoundingClientRect(), b = target.getBoundingClientRect();
+  const f = document.createElement('div');
+  f.className = 'flyer'; f.textContent = fmtVal(step.val);
+  f.style.left = a.left + 'px'; f.style.top = a.top + 'px';
+  document.body.appendChild(f);
+  box.classList.add('pending');
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    f.style.transform = `translate(${b.left - a.left}px, ${b.top - a.top}px)`;
+  }));
+  setTimeout(() => { f.remove(); box.classList.remove('pending'); box.classList.add('landed'); }, 620);
+}
+
+function render(step, i, n, dir) {
+  renderCode(PROGRAM.lines, step.line);
+  ui.expr.innerHTML = step.exprHtml || '<span class="hint" style="font-size:1rem">Тут покроково обчислюватиметься вираз поточного рядка.</span>';
+  renderMemory(step);
+  ui.out.textContent = step.out.join('');
+  renderTrace(step);
+  let text = step.explain;
+  const pr = predict.results[i];
+  if (pr) text = `<span class="${pr.ok ? 'fb-ok' : 'fb-bad'}">${pr.ok ? '✓ Прогноз правильний!' : `✗ Прогноз «${esc(pr.guess)}» неправильний.`}</span> ` + text;
+  ui.explain.innerHTML = text;
+  ui.explain.classList.toggle('err', !!step.err);
+  if (dir === 1 && step.kind === 'assign') flyValue(step);
+  renderPredict(i);
+}
+
+/* ---------- Режим «Передбач значення» ---------- */
+function renderPredict(i) {
+  const next = player.steps[i + 1];
+  if (!ui.predictMode.checked || !next || next.kind !== 'assign' || next.fromInput || predict.results[i + 1]) {
+    ui.predictBox.innerHTML = ui.predictMode.checked ? `<div class="hint mt">Правильних прогнозів: <b>${predict.score}</b> з ${predict.total}</div>` : '';
+    return;
+  }
+  ui.predictBox.innerHTML = `<div class="predict">
+    <b>Передбач:</b> яке значення отримає змінна <b>${esc(next.name)}</b>?
+    <input type="text" id="guess" aria-label="Ваш прогноз"> <span class="hint">(Enter або «Крок» — перевірити)</span>
+    <div class="msg-error" id="guessErr"></div>
+    <div class="hint">Правильних прогнозів: <b>${predict.score}</b> з ${predict.total}</div></div>`;
+  const g = $('#guess');
+  g.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); player.next(); } });
+}
+function checkPrediction(next, idx) {
+  if (!ui.predictMode.checked || next.kind !== 'assign' || next.fromInput || predict.results[idx]) return true;
+  const g = $('#guess');
+  const guess = g ? g.value.trim() : '';
+  if (!guess) { const e = $('#guessErr'); if (e) e.textContent = 'Спочатку впишіть свій прогноз.'; if (g) g.focus(); return false; }
+  const val = next.val;
+  let ok;
+  if (val.t === 'str') ok = guess.replace(/^["«]|["»]$/g, '') === val.v;
+  else { const n = parseFloat(guess.replace(',', '.')); ok = !isNaN(n) && Math.abs(n - val.v) < 1e-6; }
+  predict.total++; if (ok) predict.score++;
+  predict.results[idx] = { ok, guess };
+  return true;
+}
+
+/* ==================================================================
+   5. КЕРУВАННЯ
+   ================================================================== */
+const player = new StepPlayer($('#controls'), render, { beforeStep: checkPrediction });
+
+function loadProgram(src, input) {
+  try {
+    PROGRAM = parseProgram(src);
+    ui.parseErr.textContent = '';
+    ui.src.classList.remove('invalid');
+  } catch (e) {
+    ui.parseErr.textContent = '⚠ ' + e;
+    ui.src.classList.add('invalid');
+    return false;
+  }
+  predict = { score: 0, total: 0, results: {} };
+  player.load(buildSteps(PROGRAM, input));
+  return true;
+}
+
+function choosePreset(k) {
+  const p = PRESETS[k];
+  ui.src.value = p.code; ui.inputData.value = p.input;
+  $$('#presets .chip').forEach((b, j) => b.classList.toggle('active', j === k));
+  setEditing(false);
+  loadProgram(p.code, p.input);
+}
+function setEditing(on) {
+  ui.src.hidden = !on; ui.code.hidden = on;
+  $('#btnEdit').hidden = on; $('#btnApply').hidden = !on;
+  if (on) { player.pause(); ui.src.focus(); }
+}
+
+$('#presets').innerHTML = PRESETS.map((p, k) => `<button type="button" class="chip" data-k="${k}">${esc(p.name)}</button>`).join('');
+$$('#presets .chip').forEach(b => (b.onclick = () => choosePreset(+b.dataset.k)));
+$('#btnEdit').onclick = () => setEditing(true);
+$('#btnApply').onclick = () => {
+  if (loadProgram(ui.src.value, ui.inputData.value)) {
+    setEditing(false);
+    $$('#presets .chip').forEach(b => b.classList.remove('active'));
+  }
+};
+ui.inputData.onchange = () => { if (ui.src.hidden) loadProgram(ui.src.value, ui.inputData.value); };
+ui.predictMode.onchange = () => { predict = { score: 0, total: 0, results: {} }; player.show(0); };
+
+choosePreset(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Виконавець «Робот на клітковому полі» — 10 клас, тема 4.1</title>
+<style>
+/* =========================================================
+   ЗАГАЛЬНІ СТИЛІ: кольори, шрифти, панелі
+   Кольори винесено в змінні, щоб їх легко було змінити.
+   ========================================================= */
+:root{
+  --bg:#eef2f7; --panel:#ffffff; --ink:#111827; --muted:#475569; --line:#cbd5e1;
+  --accent:#1d4ed8; --accent-soft:#dbeafe;
+  --ok:#166534; --ok-soft:#dcfce7;
+  --err:#b91c1c; --err-soft:#fee2e2;
+  --warn:#92400e; --warn-soft:#fef3c7;
+  --hl:#fde047;          /* підсвітка поточного рядка програми */
+  --paint:#f97316;       /* зафарбована клітинка */
+  --target:#fff1c2;      /* клітинка, яку потрібно зафарбувати */
+  --wall:#7c2d12;        /* стіна */
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:"Segoe UI",Roboto,Arial,sans-serif;font-size:18px;line-height:1.45;color:var(--ink);background:var(--bg)}
+header{background:#0f172a;color:#fff;padding:12px 24px}
+header h1{margin:0 0 6px;font-size:28px}
+.meta{display:flex;flex-wrap:wrap;gap:8px}
+.meta span{background:#1e3a8a;padding:3px 12px;border-radius:999px;font-size:16px}
+main{max-width:1500px;margin:0 auto;padding:16px}
+footer{text-align:center;color:var(--muted);padding:14px;border-top:1px solid var(--line);margin-top:8px}
+.layout{display:grid;grid-template-columns:minmax(360px,5fr) minmax(440px,6fr);gap:16px;align-items:start}
+@media (max-width:1000px){.layout{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:16px}
+.panel h2{margin:0 0 10px;font-size:21px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.small{font-size:16px;color:var(--muted)}
+
+/* Кнопки — великі, з чіткою рамкою, щоб їх було видно на проєкторі */
+button,select,input{font:inherit}
+button{font-size:17px;font-weight:600;padding:8px 14px;border-radius:9px;border:2px solid var(--accent);background:#fff;color:var(--accent);cursor:pointer}
+button:hover:not(:disabled){background:var(--accent-soft)}
+button.primary{background:var(--accent);color:#fff}
+button.primary:hover:not(:disabled){background:#1e40af}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #f59e0b;outline-offset:2px}
+button.cmd{border-color:#334155;color:#0f172a;min-width:120px}
+button.struct{border-color:#7c3aed;color:#5b21b6}
+select,input[type=number]{padding:7px 10px;border-radius:8px;border:2px solid #94a3b8;background:#fff}
+input[type=number]{width:80px}
+
+/* Вибір рівня і опис завдання */
+.task{background:var(--accent-soft);border-left:6px solid var(--accent);padding:10px 14px;border-radius:8px;margin-top:10px}
+.task .kind{display:inline-block;background:var(--accent);color:#fff;font-size:15px;padding:2px 10px;border-radius:999px;margin-bottom:4px}
+
+/* Редактор програми та лістинг з підсвіткою поточного рядка */
+textarea{width:100%;min-height:300px;font-family:Consolas,"Courier New",monospace;font-size:19px;line-height:1.5;padding:10px 12px;border:2px solid #94a3b8;border-radius:10px;resize:vertical;tab-size:2}
+.code{font-family:Consolas,"Courier New",monospace;font-size:19px;line-height:1.5;border:2px solid #94a3b8;border-radius:10px;min-height:300px;max-height:460px;overflow:auto;padding:6px 0;background:#f8fafc}
+.code .ln{display:flex;white-space:pre;padding:0 10px}
+.code .ln .no{width:2.6em;color:#94a3b8;text-align:right;padding-right:12px;user-select:none;flex:none}
+.code .ln.cur{background:var(--hl);font-weight:700}
+.code .ln.bad{background:var(--err-soft);color:var(--err);font-weight:700}
+.hidden{display:none!important}
+
+/* Поле виконавця */
+.field-wrap{display:flex;justify-content:center}
+#field{width:100%;max-width:560px;height:auto;display:block;touch-action:manipulation}
+#field .robot{transition:transform .3s ease-in-out}
+#field .robot-body.bump{animation:bump .45s}
+@keyframes bump{0%,100%{transform:translate(0,0)}20%{transform:translate(-5px,0)}40%{transform:translate(5px,0)}60%{transform:translate(-4px,0)}80%{transform:translate(4px,0)}}
+
+/* Панель керування виконанням */
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px}
+.speed{display:flex;align-items:center;gap:8px;font-size:16px}
+.speed input{width:150px;accent-color:var(--accent)}
+
+/* Пояснення під візуалізацією */
+.explain{border-radius:10px;padding:12px 14px;font-size:19px;min-height:64px;border:2px solid var(--line);background:#f8fafc}
+.explain.ok{background:var(--ok-soft);border-color:#16a34a;color:var(--ok)}
+.explain.err{background:var(--err-soft);border-color:#dc2626;color:var(--err)}
+.explain.warn{background:var(--warn-soft);border-color:#d97706;color:var(--warn)}
+.counters{display:flex;flex-wrap:wrap;gap:18px;margin-top:8px;font-size:17px}
+.counters b{font-size:19px}
+
+/* Властивості алгоритму, які «загоряються» під час виконання */
+.props{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.prop{border:2px solid #94a3b8;border-radius:999px;padding:3px 12px;font-size:16px;color:var(--muted);transition:all .2s}
+.prop.on{background:#0f172a;color:#fff;border-color:#0f172a}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:16px;margin-top:10px}
+.legend i{display:inline-block;width:20px;height:20px;border-radius:4px;vertical-align:-4px;margin-right:6px;border:2px solid #94a3b8}
+details summary{cursor:pointer;font-weight:600}
+details{margin-top:10px}
+.help-table{border-collapse:collapse;width:100%;font-size:16px;margin-top:8px}
+.help-table td{border:1px solid var(--line);padding:4px 8px;vertical-align:top}
+.help-table td:first-child{font-family:Consolas,monospace;white-space:nowrap;font-weight:700}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Виконавець «Робот на клітковому полі»</h1>
+  <div class="meta">
+    <span>10 клас</span>
+    <span>Тема 4.1. Основні поняття алгоритмізації</span>
+    <span>Розділ 4. Основи алгоритмізації та програмування</span>
+  </div>
+</header>
+
+<main>
+<div class="layout">
+
+  <!-- ======================= ЛІВА КОЛОНКА: завдання і програма ======================= -->
+  <section>
+    <div class="panel">
+      <h2>1. Оберіть рівень</h2>
+      <select id="levelSelect" aria-label="Рівень"></select>
+      <div class="task">
+        <span class="kind" id="taskKind"></span>
+        <div id="taskText"></div>
+      </div>
+      <!-- Інструменти для власного поля (видно лише у вільному режимі) -->
+      <div id="customTools" class="hidden" style="margin-top:10px">
+        <div class="row">
+          <b>Клацання по полю:</b>
+          <label><input type="radio" name="clickMode" value="target" checked> ціль</label>
+          <label><input type="radio" name="clickMode" value="wall"> стіна (біля краю клітинки)</label>
+          <label><input type="radio" name="clickMode" value="robot"> робот</label>
+          <button id="clearField">Очистити поле</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>2. Система команд виконавця (СКВ)</h2>
+      <div class="row" id="cmdButtons"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="struct" id="btnRepeat">повторити</button>
+        <input type="number" id="repeatN" min="1" max="100" value="3" aria-label="Кількість повторень">
+        <span class="small">разів</span>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <select id="condSelect" aria-label="Умова"></select>
+        <button class="struct" id="btnWhile">поки</button>
+        <button class="struct" id="btnIf">якщо … то</button>
+        <button class="struct" id="btnIfElse">якщо … інакше</button>
+      </div>
+      <details>
+        <summary>Довідка: як записувати команди</summary>
+        <table class="help-table">
+          <tr><td>вгору, вниз, вліво, вправо</td><td>перемістити робота на одну клітинку</td></tr>
+          <tr><td>зафарбувати</td><td>зафарбувати клітинку, у якій стоїть робот</td></tr>
+          <tr><td>повторити 5 разів<br>&nbsp;&nbsp;…<br>кінець</td><td>виконати команди всередині задану кількість разів</td></tr>
+          <tr><td>поки справа вільно<br>&nbsp;&nbsp;…<br>кінець</td><td>повторювати, доки умова істинна</td></tr>
+          <tr><td>якщо зверху стіна то<br>&nbsp;&nbsp;…<br>інакше<br>&nbsp;&nbsp;…<br>кінець</td><td>виконати одну з гілок залежно від умови («інакше» можна не писати)</td></tr>
+          <tr><td>умови</td><td>зверху / знизу / зліва / справа + вільно / стіна; клітинка зафарбована / клітинка чиста; перед умовою можна писати «не»</td></tr>
+          <tr><td>// коментар</td><td>текст після // виконавець не читає</td></tr>
+        </table>
+      </details>
+    </div>
+
+    <div class="panel">
+      <h2>3. Програма</h2>
+      <textarea id="editor" spellcheck="false" placeholder="Натискайте кнопки СКВ або пишіть команди тут, по одній у рядку"></textarea>
+      <div id="listing" class="code hidden" aria-live="polite"></div>
+      <div class="row" style="margin-top:10px">
+        <button id="btnSolution">Показати зразок розв'язку</button>
+        <button id="btnClear">Очистити програму</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= ПРАВА КОЛОНКА: поле і виконання ======================= -->
+  <section>
+    <div class="panel">
+      <div class="controls">
+        <button class="primary" id="btnStep">⏭ Крок</button>
+        <button class="primary" id="btnPlay">▶ Старт</button>
+        <button id="btnReset">⟲ Скинути</button>
+        <label class="speed">Швидкість
+          <input type="range" id="speed" min="1" max="10" value="5">
+        </label>
+      </div>
+      <div class="field-wrap">
+        <svg id="field" role="img" aria-label="Кліткове поле з роботом"></svg>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--target);border-style:dashed;border-color:var(--paint)"></i>треба зафарбувати</span>
+        <span><i style="background:var(--paint);border-color:var(--paint)"></i>зафарбовано</span>
+        <span><i style="background:#dc2626;border-color:#dc2626"></i>зафарбовано зайве</span>
+        <span><i style="background:var(--wall);border-color:var(--wall);height:6px;vertical-align:2px"></i>стіна</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Що відбувається</h2>
+      <div id="explain" class="explain">Складіть програму й натисніть «Крок» або «Старт».</div>
+      <div class="counters">
+        <span>Виконано кроків: <b id="cntSteps">0</b></span>
+        <span>Зафарбовано: <b id="cntPaint">0</b></span>
+        <span id="cntTargetWrap">Потрібно: <b id="cntTarget">0</b></span>
+      </div>
+      <div class="props">
+        <span class="prop" id="propDiscrete" title="Алгоритм виконується окремими кроками, один за одним">Дискретність</span>
+        <span class="prop" id="propFormal" title="Виконавець виконує команди буквально, не розмірковуючи над їхнім змістом">Формальність</span>
+        <span class="prop" id="propFinite" title="Виконання алгоритму має завершитися за скінченну кількість кроків">Скінченність</span>
+        <span class="prop" id="propResult" title="Алгоритм приводить до потрібного результату">Результативність</span>
+      </div>
+      <details>
+        <summary>Властивості алгоритму</summary>
+        <p class="small"><b>Дискретність</b> — алгоритм складається з окремих команд, які виконуються по черзі (кнопка «Крок» виконує одну команду).<br>
+        <b>Формальність</b> — виконавець виконує команди буквально й не «здогадується», що мав на увазі автор: невідома команда чи удар у стіну спричиняють відмову.<br>
+        <b>Скінченність</b> — виконання має завершитися. Якщо цикл ніколи не закінчується, виконання буде зупинено після 500 кроків.<br>
+        <b>Результативність</b> — після виконання отримано потрібний результат (усі позначені клітинки зафарбовано).</p>
+      </details>
+    </div>
+  </section>
+</div>
+</main>
+
+<footer>Розроблено автором</footer>
+
+<script>
+"use strict";
+/* =========================================================
+   1. ПАРАМЕТРИ ПОЛЯ
+   ========================================================= */
+const N = 10;            // розмір поля: N×N клітинок
+const CELL = 48;         // розмір клітинки в координатах SVG
+const PAD = 14;          // відступ навколо поля
+const STEP_LIMIT = 500;  // запобіжник від нескінченних циклів
+const SVGNS = "http://www.w3.org/2000/svg";
+
+const key = (r, c) => r + "," + c;
+const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+
+/* Стіни зберігаються рядками:
+   "h:r:c" — горизонтальна стіна під клітинкою (r, c), тобто між рядками r і r+1;
+   "v:r:c" — вертикальна стіна праворуч від клітинки (r, c), тобто між стовпцями c і c+1.
+   Нумерація рядків і стовпців у коді починається з 0, а учням показується з 1. */
+function H(r, c1, c2) { const a = []; for (let c = c1; c <= c2; c++) a.push(`h:${r}:${c}`); return a; }
+function V(c, r1, r2) { const a = []; for (let r = r1; r <= r2; r++) a.push(`v:${r}:${c}`); return a; }
+
+/* Українські форми слова після числа: 1 раз, 2 рази, 5 разів */
+function plural(n, one, few, many) {
+  const n10 = n % 10, n100 = n % 100;
+  if (n10 === 1 && n100 !== 11) return one;
+  if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return few;
+  return many;
+}
+const razy = n => plural(n, "раз", "рази", "разів");
+
+/* =========================================================
+   2. РІВНІ-ЗАВДАННЯ
+   build() повертає поле: старт робота, список стін і клітинки-цілі.
+   Для рівнів 5 і 6 поле щоразу генерується випадково,
+   щоб учні не могли просто порахувати кроки.
+   ========================================================= */
+const LEVELS = [
+  {
+    title: "Рівень 1. Перші кроки",
+    kind: "Лінійний алгоритм",
+    task: "Зафарбуйте чотири клітинки праворуч від робота.",
+    build: () => ({ start: { r: 4, c: 1 }, walls: [], targets: [[4, 2], [4, 3], [4, 4], [4, 5]] }),
+    solution: "вправо\nзафарбувати\nвправо\nзафарбувати\nвправо\nзафарбувати\nвправо\nзафарбувати"
+  },
+  {
+    title: "Рівень 2. Обхід стіни",
+    kind: "Лінійний алгоритм",
+    task: "Зафарбуйте дві позначені клітинки. Пряму дорогу праворуч закриває стіна, тому її треба обійти зверху.",
+    build: () => ({ start: { r: 6, c: 2 }, walls: [...V(4, 4, 7)], targets: [[3, 4], [6, 6]] }),
+    solution: "вгору\nвгору\nвгору\nвправо\nвправо\nзафарбувати\nвправо\nвправо\nвниз\nвниз\nвниз\nзафарбувати"
+  },
+  {
+    title: "Рівень 3. Смужка",
+    kind: "Повторення (цикл із лічильником)",
+    task: "Зафарбуйте вісім клітинок праворуч від робота. Спробуйте вкластися в 4 рядки програми.",
+    build: () => {
+      const t = []; for (let c = 1; c <= 8; c++) t.push([2, c]);
+      return { start: { r: 2, c: 0 }, walls: [], targets: t };
+    },
+    solution: "повторити 8 разів\n  вправо\n  зафарбувати\nкінець"
+  },
+  {
+    title: "Рівень 4. Сходинки",
+    kind: "Повторення кількох команд",
+    task: "Зафарбуйте сходинки, що піднімаються вгору праворуч.",
+    build: () => {
+      const t = []; for (let k = 1; k <= 6; k++) t.push([8 - k, k]);
+      // стіни-«сходинки» під кожною ціллю та праворуч від неї
+      const walls = t.flatMap(([r, c]) => [...H(r, c, c), ...V(c, r, r)]);
+      return { start: { r: 8, c: 0 }, walls, targets: t };
+    },
+    solution: "повторити 6 разів\n  вгору\n  вправо\n  зафарбувати\nкінець"
+  },
+  {
+    title: "Рівень 5. Коридор",
+    kind: "Цикл з умовою «поки»",
+    task: "Зафарбуйте весь коридор до стіни. Після кожного «Скинути» довжина коридору змінюється, тож кількість кроків заздалегідь невідома.",
+    build: () => {
+      const L = randInt(3, 8), t = [];
+      for (let c = 1; c <= L; c++) t.push([5, c]);
+      return { start: { r: 5, c: 0 }, walls: [...H(4, 0, L), ...H(5, 0, L), ...V(L, 5, 5)], targets: t };
+    },
+    solution: "поки справа вільно\n  вправо\n  зафарбувати\nкінець"
+  },
+  {
+    title: "Рівень 6. Під стіною",
+    kind: "Розгалуження всередині циклу",
+    task: "Пройдіть праворуч до краю поля й зафарбуйте лише ті клітинки, над якими є стіна. Стіни щоразу розташовуються інакше.",
+    build: () => {
+      // випадково обираємо 3–5 стовпців, над якими буде стіна
+      const cols = [1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => Math.random() - 0.5).slice(0, randInt(3, 5)).sort((a, b) => a - b);
+      return { start: { r: 6, c: 0 }, walls: cols.flatMap(c => H(5, c, c)), targets: cols.map(c => [6, c]) };
+    },
+    solution: "повторити 9 разів\n  вправо\n  якщо зверху стіна то\n    зафарбувати\n  кінець\nкінець"
+  },
+  {
+    title: "Власне поле (вільний режим)",
+    kind: "Вільний режим",
+    task: "Клацайте по полю, щоб розставити клітинки-цілі, стіни та робота. Потім складіть програму для свого завдання.",
+    custom: true,
+    build: () => ({
+      start: { ...customField.start },
+      walls: [...customField.walls],
+      targets: [...customField.targets].map(k => k.split(",").map(Number))
+    }),
+    solution: ""
+  }
+];
+
+/* Власне поле вчителя/учня (зберігається, поки відкрита сторінка) */
+const customField = { start: { r: 0, c: 0 }, walls: new Set(), targets: new Set() };
+
+/* =========================================================
+   3. СТАН ПРОГРАМИ
+   ========================================================= */
+let levelIdx = 0;
+let field = null;            // { start, walls:Set, targets:Set }
+const robot = { r: 0, c: 0 };
+let painted = new Set();     // зафарбовані клітинки
+const savedPrograms = {};    // програми, збережені окремо для кожного рівня
+
+let program = null;          // розібрана програма (дерево команд)
+let gen = null;              // генератор, що виконує програму по кроках
+let stepNo = 0;
+let finished = false;
+let timer = null;            // таймер автоматичного виконання
+let auto = false;
+
+/* =========================================================
+   4. МАЛЮВАННЯ ПОЛЯ (SVG)
+   ========================================================= */
+const svg = document.getElementById("field");
+const SIZE = N * CELL + PAD * 2;
+svg.setAttribute("viewBox", `0 0 ${SIZE} ${SIZE}`);
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const cx = c => PAD + c * CELL;   // ліва межа стовпця c
+const cy = r => PAD + r * CELL;   // верхня межа рядка r
+
+// Шари малюються в такому порядку: сітка → зафарбування → стіни → робот
+const gGrid = el("g", {}, svg);
+const gPaint = el("g", {}, svg);
+const gWalls = el("g", {}, svg);
+const gRobot = el("g", { class: "robot" }, svg);
+const gRobotBody = el("g", { class: "robot-body" }, gRobot);
+
+// Сам робот: антена, «голова» з очима та усмішкою
+el("line", { x1: 0, y1: -14, x2: 0, y2: -22, stroke: "#0f172a", "stroke-width": 3 }, gRobotBody);
+el("circle", { cx: 0, cy: -24, r: 4.5, fill: "#ef4444", stroke: "#0f172a", "stroke-width": 1.5 }, gRobotBody);
+el("rect", { x: -17, y: -14, width: 34, height: 30, rx: 8, fill: "#1d4ed8", stroke: "#0f172a", "stroke-width": 2.5 }, gRobotBody);
+el("circle", { cx: -7, cy: -3, r: 5, fill: "#fff" }, gRobotBody);
+el("circle", { cx: 7, cy: -3, r: 5, fill: "#fff" }, gRobotBody);
+el("circle", { cx: -7, cy: -3, r: 2.2, fill: "#0f172a" }, gRobotBody);
+el("circle", { cx: 7, cy: -3, r: 2.2, fill: "#0f172a" }, gRobotBody);
+el("rect", { x: -8, y: 7, width: 16, height: 4, rx: 2, fill: "#fff" }, gRobotBody);
+
+function drawGrid() {
+  gGrid.textContent = "";
+  el("rect", { x: PAD, y: PAD, width: N * CELL, height: N * CELL, fill: "#fff" }, gGrid);
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    el("rect", { x: cx(c), y: cy(r), width: CELL, height: CELL, fill: "none", stroke: "#cbd5e1", "stroke-width": 1 }, gGrid);
+    if (field.targets.has(key(r, c))) {
+      el("rect", { x: cx(c) + 4, y: cy(r) + 4, width: CELL - 8, height: CELL - 8, rx: 5,
+        fill: "var(--target)", stroke: "var(--paint)", "stroke-width": 2.5, "stroke-dasharray": "6 4" }, gGrid);
+    }
+  }
+}
+
+function drawWalls() {
+  gWalls.textContent = "";
+  for (const w of field.walls) {
+    const [t, rs, cs] = w.split(":"); const r = +rs, c = +cs;
+    if (t === "h") el("line", { x1: cx(c), y1: cy(r + 1), x2: cx(c + 1), y2: cy(r + 1), stroke: "var(--wall)", "stroke-width": 7, "stroke-linecap": "round" }, gWalls);
+    else el("line", { x1: cx(c + 1), y1: cy(r), x2: cx(c + 1), y2: cy(r + 1), stroke: "var(--wall)", "stroke-width": 7, "stroke-linecap": "round" }, gWalls);
+  }
+  // межа поля — теж стіна
+  el("rect", { x: PAD, y: PAD, width: N * CELL, height: N * CELL, fill: "none", stroke: "var(--wall)", "stroke-width": 6 }, gWalls);
+}
+
+function drawPaint() {
+  gPaint.textContent = "";
+  const taskMode = field.targets.size > 0;
+  for (const k of painted) {
+    const [r, c] = k.split(",").map(Number);
+    const wrong = taskMode && !field.targets.has(k);
+    el("rect", { x: cx(c) + 3, y: cy(r) + 3, width: CELL - 6, height: CELL - 6, rx: 5, fill: wrong ? "#dc2626" : "var(--paint)" }, gPaint);
+    if (wrong) {
+      const t = el("text", { x: cx(c) + CELL / 2, y: cy(r) + CELL / 2 + 9, "text-anchor": "middle", "font-size": 26, "font-weight": 700, fill: "#fff" }, gPaint);
+      t.textContent = "✕";
+    }
+  }
+}
+
+/* Тривалість анімації залежить від повзунка швидкості */
+const DELAYS = [1500, 1200, 950, 750, 600, 470, 360, 270, 190, 120];
+const delay = () => DELAYS[+document.getElementById("speed").value - 1];
+
+function placeRobot(animate) {
+  const x = cx(robot.c) + CELL / 2, y = cy(robot.r) + CELL / 2 + 4;
+  gRobot.style.transition = animate ? `transform ${Math.min(450, delay() * 0.7)}ms ease-in-out` : "none";
+  gRobot.style.transform = `translate(${x}px, ${y}px)`;
+}
+
+function bumpRobot() {
+  gRobotBody.classList.remove("bump");
+  gRobotBody.getBoundingClientRect();      // перезапуск CSS-анімації
+  gRobotBody.classList.add("bump");
+}
+
+function redrawAll(animateRobot) {
+  drawGrid(); drawPaint(); drawWalls(); placeRobot(animateRobot); updateCounters();
+}
+
+/* =========================================================
+   5. РОЗБІР ПРОГРАМИ (текст → дерево команд)
+   Структурні помилки (немає «кінець», зайве «інакше») виявляються
+   до запуску. А невідома команда потрапляє в дерево як є:
+   виконавець «відмовиться» від неї тільки тоді, коли до неї дійде.
+   Так видно формальність виконання.
+   ========================================================= */
+function ParseError(line, msg) { const e = new Error(`Рядок ${line}: ${msg}`); e.line = line; return e; }
+
+function parseCond(text) {
+  let m = text.match(/^(не\s+)?(зверху|знизу|зліва|справа)\s+(вільно|стіна)$/);
+  if (m) return { ok: true, text, neg: !!m[1], dir: { "зверху": "up", "знизу": "down", "зліва": "left", "справа": "right" }[m[2]], free: m[3] === "вільно" };
+  m = text.match(/^(не\s+)?клітинка\s+(зафарбована|чиста)$/);
+  if (m) return { ok: true, text, neg: !!m[1], cellPainted: m[2] === "зафарбована" };
+  return { ok: false, text };
+}
+
+function parseProgram(src) {
+  const lines = src.split("\n");
+  const root = [];
+  const stack = [{ kind: "root", list: root }];
+  for (let i = 0; i < lines.length; i++) {
+    const ln = i + 1;
+    const raw = lines[i].replace(/\/\/.*$/, "").trim();
+    const s = raw.toLowerCase().replace(/\s+/g, " ");
+    if (!s) continue;
+    const top = stack[stack.length - 1];
+    let m;
+    if (s === "кінець") {
+      if (stack.length === 1) throw ParseError(ln, "зайве слово «кінець»: немає відкритого повторення чи розгалуження.");
+      top.node.endLine = ln;
+      stack.pop();
+      continue;
+    }
+    if (s === "інакше") {
+      if (top.kind !== "if") throw ParseError(ln, "«інакше» можна писати лише всередині «якщо … то».");
+      if (top.node.elseBody) throw ParseError(ln, "у розгалуженні може бути лише одне «інакше».");
+      top.node.elseBody = []; top.list = top.node.elseBody;
+      continue;
+    }
+    if (s.startsWith("повтор")) {
+      m = s.match(/^повтор(?:ити|и) (\d+)(?: раз(?:и|ів)?)?$/);
+      if (!m) throw ParseError(ln, "повторення записується так: «повторити 5 разів».");
+      const n = +m[1];
+      if (n < 1 || n > 100) throw ParseError(ln, "кількість повторень має бути від 1 до 100.");
+      const node = { type: "repeat", line: ln, count: n, body: [] };
+      top.list.push(node); stack.push({ kind: "repeat", node, list: node.body });
+      continue;
+    }
+    if ((m = s.match(/^поки (.+?)(?: робити)?$/))) {
+      const node = { type: "while", line: ln, cond: parseCond(m[1]), body: [] };
+      top.list.push(node); stack.push({ kind: "while", node, list: node.body });
+      continue;
+    }
+    if ((m = s.match(/^якщо (.+?)(?: то)?$/))) {
+      const node = { type: "if", line: ln, cond: parseCond(m[1]), thenBody: [], elseBody: null };
+      top.list.push(node); stack.push({ kind: "if", node, list: node.thenBody });
+      continue;
+    }
+    top.list.push({ type: "cmd", line: ln, name: s, raw });
+  }
+  if (stack.length > 1) {
+    const open = stack[stack.length - 1].node;
+    throw ParseError(open.line, "конструкцію не закрито: бракує слова «кінець».");
+  }
+  return root;
+}
+
+/* =========================================================
+   6. ВИКОНАННЯ ПО КРОКАХ
+   Генератор виконує одну дію і «завмирає» (yield), повертаючи
+   опис кроку. Кнопка «Крок» просто викликає gen.next().
+   ========================================================= */
+const MOVES = {
+  "вгору": { dir: "up", dr: -1, dc: 0, side: "зверху" },
+  "вниз": { dir: "down", dr: 1, dc: 0, side: "знизу" },
+  "вліво": { dir: "left", dr: 0, dc: -1, side: "зліва" },
+  "вправо": { dir: "right", dr: 0, dc: 1, side: "справа" }
+};
+
+function isEdge(r, c, dir) {
+  return (dir === "up" && r === 0) || (dir === "down" && r === N - 1) || (dir === "left" && c === 0) || (dir === "right" && c === N - 1);
+}
+function isBlocked(r, c, dir) {
+  if (isEdge(r, c, dir)) return true;
+  switch (dir) {
+    case "up": return field.walls.has(`h:${r - 1}:${c}`);
+    case "down": return field.walls.has(`h:${r}:${c}`);
+    case "left": return field.walls.has(`v:${r}:${c - 1}`);
+    case "right": return field.walls.has(`v:${r}:${c}`);
+  }
+}
+function evalCond(cond) {
+  let v;
+  if (cond.dir) { const blocked = isBlocked(robot.r, robot.c, cond.dir); v = cond.free ? !blocked : blocked; }
+  else v = painted.has(key(robot.r, robot.c)) === cond.cellPainted;
+  return cond.neg ? !v : v;
+}
+const pos = () => `(рядок ${robot.r + 1}, стовпець ${robot.c + 1})`;
+const condError = (n) => ({ line: n.line, error: `Відмова виконавця: умова «${n.cond.text}» не входить до системи команд виконавця. Доступні умови: «справа вільно», «зверху стіна», «клітинка зафарбована» тощо.` });
+
+function* runList(list) {
+  for (const node of list) {
+    const res = yield* runNode(node);
+    if (res === "stop") return "stop";
+  }
+}
+
+function* runNode(n) {
+  // ---- проста команда ----
+  if (n.type === "cmd") {
+    const mv = MOVES[n.name];
+    if (mv) {
+      if (isBlocked(robot.r, robot.c, mv.dir)) {
+        const what = isEdge(robot.r, robot.c, mv.dir) ? "край поля" : "стіна";
+        yield { line: n.line, bump: true, error: `Відмова виконавця: ${mv.side} ${what}, тому команду «${n.name}» виконати неможливо. Виконання програми зупинено.` };
+        return "stop";
+      }
+      const from = pos();
+      robot.r += mv.dr; robot.c += mv.dc;
+      yield { line: n.line, msg: `Команда «${n.name}»: робот переходить із клітинки ${from} у клітинку ${pos()}.` };
+      return;
+    }
+    if (n.name === "зафарбувати") {
+      const k = key(robot.r, robot.c), was = painted.has(k);
+      painted.add(k);
+      yield { line: n.line, msg: was ? `Команда «зафарбувати»: клітинка ${pos()} уже зафарбована й такою і лишається.` : `Команда «зафарбувати»: робот зафарбовує клітинку ${pos()}.` };
+      return;
+    }
+    yield { line: n.line, error: `Відмова виконавця: команда «${n.raw}» не входить до СКВ. Виконавець не здогадується, що мав на увазі автор, а лише формально виконує відомі йому команди.` };
+    return "stop";
+  }
+  // ---- повторення з лічильником ----
+  if (n.type === "repeat") {
+    for (let i = 1; i <= n.count; i++) {
+      yield { line: n.line, msg: `«повторити ${n.count} ${razy(n.count)}»: починається повторення № ${i} з ${n.count}.` };
+      const res = yield* runList(n.body);
+      if (res === "stop") return "stop";
+    }
+    yield { line: n.endLine, msg: `Повторення завершено: команди всередині виконано ${n.count} ${razy(n.count)}. Виконавець переходить до наступної команди.` };
+    return;
+  }
+  // ---- цикл з передумовою ----
+  if (n.type === "while") {
+    let it = 0;
+    while (true) {
+      if (!n.cond.ok) { yield condError(n); return "stop"; }
+      const v = evalCond(n.cond);
+      if (v) yield { line: n.line, msg: `Перевірка умови «${n.cond.text}»: ТАК (істина). Виконується тіло циклу, ітерація № ${it + 1}.` };
+      else yield { line: n.line, msg: `Перевірка умови «${n.cond.text}»: НІ (хиба). Цикл завершено ${it ? `після ${it} ${plural(it, "ітерації", "ітерацій", "ітерацій")}` : "— тіло не виконалося жодного разу"}.` };
+      if (!v) return;
+      it++;
+      const res = yield* runList(n.body);
+      if (res === "stop") return "stop";
+    }
+  }
+  // ---- розгалуження ----
+  if (n.type === "if") {
+    if (!n.cond.ok) { yield condError(n); return "stop"; }
+    const v = evalCond(n.cond);
+    let msg;
+    if (v) msg = `Умова «${n.cond.text}»: ТАК (істина). Виконуються команди після «то».`;
+    else if (n.elseBody) msg = `Умова «${n.cond.text}»: НІ (хиба). Виконуються команди після «інакше».`;
+    else msg = `Умова «${n.cond.text}»: НІ (хиба). Команди всередині розгалуження пропускаються.`;
+    yield { line: n.line, msg };
+    const res = yield* runList(v ? n.thenBody : (n.elseBody || []));
+    if (res === "stop") return "stop";
+  }
+}
+
+/* =========================================================
+   7. КЕРУВАННЯ ВИКОНАННЯМ (Крок / Старт-Пауза / Скинути)
+   ========================================================= */
+const editor = document.getElementById("editor");
+const listing = document.getElementById("listing");
+const explain = document.getElementById("explain");
+const btnPlay = document.getElementById("btnPlay");
+
+function setExplain(kind, html) {
+  explain.className = "explain" + (kind ? " " + kind : "");
+  explain.innerHTML = html;
+}
+
+function flashProp(id) {
+  const p = document.getElementById(id);
+  p.classList.add("on");
+  clearTimeout(p._t);
+  p._t = setTimeout(() => p.classList.remove("on"), Math.max(400, delay()));
+}
+function lockProp(id, on) { document.getElementById(id).classList.toggle("on", on); }
+
+function updateCounters() {
+  document.getElementById("cntSteps").textContent = stepNo;
+  document.getElementById("cntPaint").textContent = painted.size;
+  document.getElementById("cntTarget").textContent = field.targets.size;
+  document.getElementById("cntTargetWrap").classList.toggle("hidden", field.targets.size === 0);
+}
+
+/* Лістинг програми з номерами рядків (показується під час виконання) */
+function renderListing() {
+  listing.textContent = "";
+  editor.value.split("\n").forEach((t, i) => {
+    const d = document.createElement("div");
+    d.className = "ln"; d.dataset.line = i + 1;
+    const no = document.createElement("span"); no.className = "no"; no.textContent = i + 1;
+    const tx = document.createElement("span"); tx.textContent = t || " ";
+    d.append(no, tx); listing.appendChild(d);
+  });
+}
+function highlightLine(line, cls) {
+  listing.querySelectorAll(".ln").forEach(d => d.classList.remove("cur", "bad"));
+  if (!line) return;
+  const d = listing.querySelector(`.ln[data-line="${line}"]`);
+  if (d) { d.classList.add(cls || "cur"); d.scrollIntoView({ block: "nearest" }); }
+}
+function setRunMode(on) {
+  editor.classList.toggle("hidden", on);
+  listing.classList.toggle("hidden", !on);
+  document.querySelectorAll("#cmdButtons button, .struct, #btnSolution, #btnClear, #condSelect, #repeatN")
+    .forEach(b => b.disabled = on);
+}
+
+/* Підготовка до запуску: розбираємо текст і створюємо генератор */
+function prepare() {
+  try { program = parseProgram(editor.value); }
+  catch (e) {
+    setExplain("err", "Синтаксична помилка. " + e.message + " Рядок з помилкою виділено в редакторі.");
+    selectEditorLine(e.line);
+    return false;
+  }
+  if (program.length === 0) { setExplain("warn", "Програма порожня. Додайте команди кнопками СКВ або введіть їх текстом."); return false; }
+  loadField(false);          // поле не змінюємо, лише повертаємо робота на старт
+  stepNo = 0; finished = false;
+  gen = runList(program);
+  renderListing(); setRunMode(true);
+  ["propFinite", "propResult", "propFormal"].forEach(p => lockProp(p, false));
+  return true;
+}
+
+/* Виділити рядок із синтаксичною помилкою прямо в редакторі */
+function selectEditorLine(line) {
+  const lines = editor.value.split("\n");
+  let s = 0;
+  for (let i = 0; i < line - 1; i++) s += lines[i].length + 1;
+  editor.focus();
+  editor.setSelectionRange(s, s + (lines[line - 1] || "").length);
+}
+
+function stepOnce() {
+  if (finished) return;
+  if (!gen && !prepare()) { stopAuto(); return; }
+  const { value, done } = gen.next();
+  if (done) { finish(); return; }
+  stepNo++;
+  drawPaint(); placeRobot(true); updateCounters();
+  if (value.error) {
+    highlightLine(value.line, "bad");
+    setExplain("err", `<b>Крок ${stepNo}, рядок ${value.line}.</b> ${value.error}`);
+    if (value.bump) bumpRobot();
+    lockProp("propFormal", true);
+    finished = true; stopAuto();
+    return;
+  }
+  highlightLine(value.line);
+  setExplain("", `<b>Крок ${stepNo}, рядок ${value.line}.</b> ${value.msg}`);
+  flashProp("propDiscrete");
+  if (stepNo >= STEP_LIMIT) {
+    finished = true; stopAuto();
+    setExplain("err", `Виконання зупинено після ${STEP_LIMIT} кроків. Імовірно, цикл ніколи не завершиться — порушено властивість <b>скінченності</b> алгоритму.`);
+    lockProp("propFinite", true);
+  }
+}
+
+function finish() {
+  finished = true; stopAuto(); highlightLine(null);
+  lockProp("propFinite", true);
+  const targets = [...field.targets];
+  if (targets.length === 0) {
+    setExplain("ok", `Програму виконано повністю за ${stepNo} ${plural(stepNo, "крок", "кроки", "кроків")}. Виконавець зупинився, отже алгоритм скінченний.`);
+    return;
+  }
+  const missing = targets.filter(k => !painted.has(k)).length;
+  const extra = [...painted].filter(k => !field.targets.has(k)).length;
+  if (!missing && !extra) {
+    setExplain("ok", `🎉 Завдання виконано! Програма завершилася за ${stepNo} ${plural(stepNo, "крок", "кроки", "кроків")}, і всі потрібні клітинки зафарбовано.`);
+    lockProp("propResult", true);
+  } else {
+    const parts = [];
+    if (missing) parts.push(`не зафарбовано ${missing} ${plural(missing, "клітинку", "клітинки", "клітинок")}`);
+    if (extra) parts.push(`зафарбовано ${extra} ${plural(extra, "зайву клітинку", "зайві клітинки", "зайвих клітинок")}`);
+    setExplain("warn", `Програма завершилася, але завдання не виконано: ${parts.join(", ")}. Змініть програму й спробуйте ще раз.`);
+  }
+}
+
+function startAuto() {
+  if (finished) resetAll();         // повторний «Старт» після завершення запускає програму спочатку
+  if (!gen && !prepare()) return;
+  auto = true; btnPlay.textContent = "⏸ Пауза";
+  const tick = () => {
+    if (!auto) return;
+    stepOnce();
+    if (auto && !finished) timer = setTimeout(tick, delay());
+  };
+  tick();
+}
+function stopAuto() { auto = false; clearTimeout(timer); btnPlay.textContent = "▶ Старт"; }
+
+function resetAll() {
+  stopAuto();
+  gen = null; program = null; finished = false; stepNo = 0;
+  loadField(true);
+  setRunMode(false);
+  ["propFinite", "propResult", "propFormal", "propDiscrete"].forEach(p => lockProp(p, false));
+  setExplain("", "Складіть програму й натисніть «Крок» або «Старт».");
+}
+
+/* Завантажити поле поточного рівня; robot і painted повертаються в початковий стан */
+function loadField(regenerate) {
+  if (regenerate || !field) {
+    const f = LEVELS[levelIdx].build();
+    field = { start: { ...f.start }, walls: new Set(f.walls), targets: new Set(f.targets.map(([r, c]) => key(r, c))) };
+  }
+  robot.r = field.start.r; robot.c = field.start.c;
+  painted = new Set();
+  redrawAll(false);
+}
+
+/* =========================================================
+   8. ВИБІР РІВНЯ ТА РЕДАГУВАННЯ ПРОГРАМИ
+   ========================================================= */
+const levelSelect = document.getElementById("levelSelect");
+LEVELS.forEach((l, i) => levelSelect.add(new Option(l.title, i)));
+
+function selectLevel(i) {
+  savedPrograms[levelIdx] = editor.value;
+  levelIdx = i;
+  const L = LEVELS[i];
+  document.getElementById("taskKind").textContent = L.kind;
+  document.getElementById("taskText").textContent = L.task;
+  document.getElementById("customTools").classList.toggle("hidden", !L.custom);
+  document.getElementById("btnSolution").classList.toggle("hidden", !L.solution);
+  editor.value = savedPrograms[i] || "";
+  resetAll();
+}
+levelSelect.addEventListener("change", () => selectLevel(+levelSelect.value));
+
+/* Вставка команд кнопками: з урахуванням відступу поточного рядка */
+function insertCode(lines, caretLine) {
+  const v = editor.value, p = editor.selectionStart;
+  const ls = v.lastIndexOf("\n", p - 1) + 1;
+  let le = v.indexOf("\n", p); if (le < 0) le = v.length;
+  const cur = v.slice(ls, le);
+  let indent = cur.match(/^\s*/)[0];
+  if (/^(повтор|поки|якщо|інакше)/i.test(cur.trim())) indent += "  ";
+  const blockLines = lines.map(l => indent + l);
+  const block = blockLines.join("\n");
+  let start;
+  if (cur.trim() === "") { editor.value = v.slice(0, ls) + block + v.slice(le); start = ls; }
+  else { editor.value = v.slice(0, le) + "\n" + block + v.slice(le); start = le + 1; }
+  const k = caretLine == null ? blockLines.length - 1 : caretLine;
+  let caret = start;
+  for (let i = 0; i < k; i++) caret += blockLines[i].length + 1;
+  caret += blockLines[k].length;
+  editor.focus(); editor.setSelectionRange(caret, caret);
+}
+
+const cmdBox = document.getElementById("cmdButtons");
+[["⬆ вгору", "вгору"], ["⬇ вниз", "вниз"], ["⬅ вліво", "вліво"], ["➡ вправо", "вправо"], ["🖌 зафарбувати", "зафарбувати"]]
+  .forEach(([label, cmd]) => {
+    const b = document.createElement("button");
+    b.className = "cmd"; b.textContent = label;
+    b.addEventListener("click", () => insertCode([cmd]));
+    cmdBox.appendChild(b);
+  });
+
+const CONDS = ["справа вільно", "зліва вільно", "зверху вільно", "знизу вільно",
+  "справа стіна", "зліва стіна", "зверху стіна", "знизу стіна", "клітинка чиста", "клітинка зафарбована"];
+const condSelect = document.getElementById("condSelect");
+CONDS.forEach(c => condSelect.add(new Option(c, c)));
+
+document.getElementById("btnRepeat").addEventListener("click", () => {
+  let n = parseInt(document.getElementById("repeatN").value, 10);
+  if (!(n >= 1 && n <= 100)) { setExplain("warn", "Кількість повторень має бути цілим числом від 1 до 100."); return; }
+  insertCode([`повторити ${n} ${razy(n)}`, "  ", "кінець"], 1);
+});
+document.getElementById("btnWhile").addEventListener("click", () => insertCode([`поки ${condSelect.value}`, "  ", "кінець"], 1));
+document.getElementById("btnIf").addEventListener("click", () => insertCode([`якщо ${condSelect.value} то`, "  ", "кінець"], 1));
+document.getElementById("btnIfElse").addEventListener("click", () => insertCode([`якщо ${condSelect.value} то`, "  ", "інакше", "  ", "кінець"], 1));
+
+document.getElementById("btnSolution").addEventListener("click", () => {
+  if (editor.value.trim() && !confirmReplace()) return;
+  editor.value = LEVELS[levelIdx].solution;
+});
+document.getElementById("btnClear").addEventListener("click", () => { editor.value = ""; editor.focus(); });
+// Без модальних вікон: замість confirm() друге натискання протягом 3 с підтверджує заміну
+let replaceArmed = 0;
+function confirmReplace() {
+  if (Date.now() - replaceArmed < 3000) return true;
+  replaceArmed = Date.now();
+  setExplain("warn", "У редакторі вже є програма. Натисніть «Показати зразок розв'язку» ще раз, щоб замінити її.");
+  return false;
+}
+
+// Клавіша Tab у редакторі вставляє два пробіли замість переходу до наступного елемента
+editor.addEventListener("keydown", e => {
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const s = editor.selectionStart;
+    editor.setRangeText("  ", s, editor.selectionEnd, "end");
+  }
+});
+
+/* =========================================================
+   9. РЕДАГУВАННЯ ВЛАСНОГО ПОЛЯ (клацання мишею/пальцем)
+   ========================================================= */
+svg.addEventListener("click", e => {
+  if (!LEVELS[levelIdx].custom || gen) return;
+  const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  const c = Math.floor((p.x - PAD) / CELL), r = Math.floor((p.y - PAD) / CELL);
+  if (r < 0 || r >= N || c < 0 || c >= N) return;
+  const mode = document.querySelector("input[name=clickMode]:checked").value;
+  if (mode === "target") {
+    const k = key(r, c);
+    customField.targets.has(k) ? customField.targets.delete(k) : customField.targets.add(k);
+  } else if (mode === "robot") {
+    customField.start = { r, c };
+  } else {
+    // стіна: шукаємо найближчий до точки клацання край клітинки
+    const dx = p.x - cx(c), dy = p.y - cy(r);
+    const d = [["up", dy], ["down", CELL - dy], ["left", dx], ["right", CELL - dx]].sort((a, b) => a[1] - b[1])[0][0];
+    let w = null;
+    if (d === "up" && r > 0) w = `h:${r - 1}:${c}`;
+    if (d === "down" && r < N - 1) w = `h:${r}:${c}`;
+    if (d === "left" && c > 0) w = `v:${r}:${c - 1}`;
+    if (d === "right" && c < N - 1) w = `v:${r}:${c}`;
+    if (!w) { setExplain("warn", "Край поля вже є стіною."); return; }
+    customField.walls.has(w) ? customField.walls.delete(w) : customField.walls.add(w);
+  }
+  loadField(true);
+});
+document.getElementById("clearField").addEventListener("click", () => {
+  customField.walls.clear(); customField.targets.clear(); customField.start = { r: 0, c: 0 };
+  loadField(true);
+});
+
+/* =========================================================
+   10. КНОПКИ КЕРУВАННЯ
+   ========================================================= */
+document.getElementById("btnStep").addEventListener("click", () => { stopAuto(); if (finished) resetAll(); stepOnce(); });
+btnPlay.addEventListener("click", () => auto ? stopAuto() : startAuto());
+document.getElementById("btnReset").addEventListener("click", resetAll);
+
+// Старт: перший рівень
+selectLevel(0);
+</script>
+</body>
+</html>
