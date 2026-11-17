@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Засоби візуалізації алгоритмів — Обробка інформації та ПЗ</title>
+<meta name="description" content="Інтерактивні засоби візуалізації алгоритмів для уроків технологій профільного рівня за спеціалізацією «Обробка інформації та програмне забезпечення», 10 клас.">
+<style>
+:root{
+  --bg:#eef2f7; --panel:#fff; --ink:#111827; --muted:#475569; --line:#cbd5e1;
+  --accent:#1d4ed8; --accent-soft:#dbeafe; --head:#0f172a; --chip:#1e3a8a;
+  --c1:#7c3aed; --c4:#0f766e;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1220; --panel:#131c2e; --ink:#e5e9f2; --muted:#a3b0c5; --line:#2a3750;
+    --accent:#6ea0ff; --accent-soft:#1c2a4a; --head:#050a14; --chip:#23407f;
+    --c1:#b794f6; --c4:#4fd1c5;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1220; --panel:#131c2e; --ink:#e5e9f2; --muted:#a3b0c5; --line:#2a3750;
+  --accent:#6ea0ff; --accent-soft:#1c2a4a; --head:#050a14; --chip:#23407f;
+  --c1:#b794f6; --c4:#4fd1c5;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:"Segoe UI",Roboto,Arial,sans-serif;font-size:18px;line-height:1.55;color:var(--ink);background:var(--bg)}
+a{color:var(--accent)}
+:focus-visible{outline:3px solid #f59e0b;outline-offset:2px}
+
+header.top{background:var(--head);color:#fff;position:sticky;top:0;z-index:10}
+.bar{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center}
+.brand{font-weight:700;font-size:19px;color:#fff;text-decoration:none;margin-right:auto}
+nav{display:flex;flex-wrap:wrap;gap:4px}
+nav a{color:#e2e8f0;text-decoration:none;padding:6px 12px;border-radius:8px;font-size:16px}
+nav a:hover{background:rgba(255,255,255,.14)}
+
+.hero{background:linear-gradient(135deg,#0f172a,#1e3a8a);color:#fff;padding:48px 16px 56px}
+.wrap{max-width:1200px;margin:0 auto}
+.hero h1{margin:0 0 14px;font-size:clamp(28px,4.5vw,44px);line-height:1.2;max-width:900px}
+.hero p{margin:0 0 18px;max-width:780px;font-size:20px;color:#dbe4f5}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips span{background:rgba(255,255,255,.14);padding:4px 14px;border-radius:999px;font-size:16px}
+.cta{display:inline-block;margin-top:22px;background:#fff;color:#1e3a8a;font-weight:700;padding:12px 24px;border-radius:10px;text-decoration:none}
+.cta:hover{background:var(--accent-soft)}
+
+main{max-width:1200px;margin:0 auto;padding:32px 16px}
+section{margin-bottom:44px;scroll-margin-top:70px}
+h2{font-size:28px;margin:0 0 6px}
+.lead{color:var(--muted);margin:0 0 18px;max-width:820px}
+
+.grid{display:grid;gap:16px}
+.about{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.box h3{margin:0 0 6px;font-size:20px}
+.box p{margin:0;color:var(--muted);font-size:17px}
+.ico{font-size:30px;line-height:1;margin-bottom:8px}
+
+.group{margin-bottom:26px}
+.group h3{font-size:21px;margin:0 0 12px;padding-left:12px;border-left:6px solid var(--g)}
+.g1{--g:var(--c1)} .g4{--g:var(--c4)}
+.cards{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.card{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-top:6px solid var(--g);border-radius:14px;padding:16px 18px;text-decoration:none;color:var(--ink);transition:transform .15s,box-shadow .15s}
+.card:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(15,23,42,.18)}
+.card .tag{font-size:14px;font-weight:700;color:var(--g);text-transform:uppercase;letter-spacing:.03em}
+.card h4{margin:4px 0 8px;font-size:21px;line-height:1.3}
+.card p{margin:0 0 14px;color:var(--muted);font-size:17px;flex:1}
+.card ul{margin:0 0 14px;padding-left:20px;font-size:16px;color:var(--muted)}
+.card .go{font-weight:700;color:var(--accent)}
+.card.soon{border-style:dashed;border-top-style:dashed;background:transparent;color:var(--muted);justify-content:center;text-align:center;min-height:120px}
+.card.soon:hover{transform:none;box-shadow:none}
+
+ol.how{margin:0;padding-left:22px}
+ol.how li{margin-bottom:6px}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.ctl span{border:2px solid var(--accent);color:var(--accent);border-radius:9px;padding:2px 12px;font-weight:600;font-size:16px}
+
+footer{text-align:center;color:var(--muted);padding:20px 16px;border-top:1px solid var(--line)}
+@media (max-width:640px){body{font-size:17px}.brand{width:100%}.hero{padding:32px 16px 40px}.hero p{font-size:18px}}
+@media (prefers-reduced-motion:reduce){.card{transition:none}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="bar">
+    <a class="brand" href="#top">Засоби візуалізації алгоритмів</a>
+    <nav aria-label="Меню">
+      <a href="#about">Про роботу</a>
+      <a href="#tools">Засоби</a>
+      <a href="#how">Як користуватися</a>
+    </nav>
+  </div>
+</header>
+
+<div class="hero" id="top">
+  <div class="wrap">
+    <h1>Використання засобів візуалізації алгоритмів на уроках технологій профільного рівня</h1>
+    <p>Спеціалізація «Обробка інформації та програмне забезпечення». Інтерактивні симулятори, у яких алгоритм можна виконати по кроках, побачити зміну даних і зрозуміти, чому він працює саме так.</p>
+    <div class="chips"><span>10 клас</span><span>Профільний рівень</span><span>Працює в браузері, без встановлення</span></div>
+    <a class="cta" href="#tools">Перейти до засобів ↓</a>
+  </div>
+</div>
+
+<main>
+  <section id="about">
+    <h2>Про роботу</h2>
+    <p class="lead">Алгоритм складно «побачити» у статичному підручнику. Кожен засіб на цій сторінці показує виконання алгоритму крок за кроком: яка дія виконується, що змінюється в даних, який результат.</p>
+    <div class="grid about">
+      <div class="box"><div class="ico" aria-hidden="true">👣</div><h3>Покроково</h3><p>Кнопка «Крок» дає розглянути кожну дію окремо, а «Старт» запускає автоматичне виконання з регульованою швидкістю.</p></div>
+      <div class="box"><div class="ico" aria-hidden="true">💬</div><h3>З поясненням</h3><p>Кожен крок супроводжується текстом: що робить алгоритм і чому. Помилки введення пояснюються зрозумілою мовою.</p></div>
+      <div class="box"><div class="ico" aria-hidden="true">🧪</div><h3>Власні дані</h3><p>Учень вводить свій текст, числа чи програму й одразу перевіряє припущення, а не лише переглядає готовий приклад.</p></div>
+      <div class="box"><div class="ico" aria-hidden="true">📴</div><h3>Без інтернету</h3><p>Кожен засіб — окремий самодостатній файл HTML. Його можна відкрити на будь-якому комп'ютері з браузером, навіть із флешки.</p></div>
+    </div>
+  </section>
+
+  <section id="tools">
+    <h2>Засоби візуалізації</h2>
+    <p class="lead">Оберіть тему. Кожен засіб відкривається в тому самому вікні.</p>
+
+    <div class="group g1">
+      <h3>Розділ 1. Основи комп'ютерної безпеки</h3>
+      <div class="grid cards">
+        <a class="card g1" href="01_shyfruvannia.html">
+          <span class="tag">Тема 1.2</span>
+          <h4>Шифрування: від Цезаря до Віженера</h4>
+          <p>Алфавітне кільце, що повертається на величину зсуву, і трасувальна таблиця для кожної літери.</p>
+          <ul><li>шифри Цезаря та Віженера</li><li>шифрування й розшифрування</li><li>злам перебором усіх ключів</li></ul>
+          <span class="go">Відкрити →</span>
+        </a>
+        <a class="card g1" href="02_avtentyfikatsiia.html">
+          <span class="tag">Тема 1.4</span>
+          <h4>Автентифікація та стійкість пароля</h4>
+          <p>Як перевіряється особа користувача і чому від довжини й складу пароля залежить стійкість до підбору.</p>
+          <span class="go">Відкрити →</span>
+        </a>
+        <a class="card g1" href="03_rezervne_kopiiuvannia.html">
+          <span class="tag">Тема 1.6</span>
+          <h4>Стратегії резервного копіювання</h4>
+          <p>Стрічка часу на 7–14 днів: повне, інкрементне й диференціальне копіювання на однаковому сценарії змін.</p>
+          <ul><li>режим «Аварія і відновлення»</li><li>порівняння обсягу копій</li></ul>
+          <span class="go">Відкрити →</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="group g4">
+      <h3>Розділ 4. Основи алгоритмізації та програмування</h3>
+      <div class="grid cards">
+        <a class="card g4" href="05_blok_skhema_konstruktor.html">
+          <span class="tag">Тема 4.1</span>
+          <h4>Конструктор «Блок-схема ↔ псевдокод»</h4>
+          <p>Пишете псевдокод, а блок-схема за ISO 5807 будується автоматично. Алгоритм виконується по кроках зі зміною змінних.</p>
+          <ul><li>слідування, розгалуження, повторення</li><li>таблиця змінних і виведення</li></ul>
+          <span class="go">Відкрити →</span>
+        </a>
+        <a class="card g4" href="06_movy_prohramuvannia.html">
+          <span class="tag">Тема 4.3</span>
+          <h4>Один алгоритм — різні мови</h4>
+          <p>Блок-схема, псевдокод, Python, Pascal і C++ виконуються синхронно. Друга вкладка порівнює компілятор та інтерпретатор.</p>
+          <ul><li>4 алгоритми, 5 способів запису</li><li>компілятор чи інтерпретатор</li></ul>
+          <span class="go">Відкрити →</span>
+        </a>
+        <div class="card g4 soon" aria-label="Нові засоби з'являться згодом">
+          <strong>Невдовзі</strong>
+          <span>Нові засоби з'являтимуться тут</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <h2>Як користуватися</h2>
+    <div class="box">
+      <ol class="how">
+        <li>Оберіть засіб і приклад (або введіть власні дані).</li>
+        <li>Натискайте «Крок», щоб виконувати алгоритм по одній дії, і читайте пояснення.</li>
+        <li>Для швидкого перегляду скористайтеся «Старт» і повзунком швидкості.</li>
+        <li>«Скинути» повертає засіб до початкового стану.</li>
+      </ol>
+      <div class="ctl" aria-hidden="true"><span>⏭ Крок</span><span>▶ Старт</span><span>⟲ Скинути</span><span>Швидкість</span></div>
+      <p style="margin-top:12px">У засобах, де дозволено введення, неправильні дані не ламають роботу: поруч з'являється повідомлення про те, що слід виправити.</p>
+    </div>
+  </section>
+</main>
+
+<footer>Розроблено автором</footer>
+</body>
+</html>

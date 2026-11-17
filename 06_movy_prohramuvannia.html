@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Порівняльник «Один алгоритм — різні мови» — 10 клас, тема 4.3</title>
+<style>
+/* =========================================================
+   ЗАГАЛЬНІ СТИЛІ
+   ========================================================= */
+:root{
+  --bg:#eef2f7; --panel:#fff; --ink:#111827; --muted:#475569; --line:#cbd5e1;
+  --accent:#1d4ed8; --accent-soft:#dbeafe;
+  --ok:#166534; --ok-soft:#dcfce7; --err:#b91c1c; --err-soft:#fee2e2; --warn:#92400e; --warn-soft:#fef3c7;
+  --hl:#fde047; --active:#ea580c;
+  --b-term:#e0e7ff; --b-io:#dcfce7; --b-proc:#ffffff; --b-dec:#fef3c7;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:"Segoe UI",Roboto,Arial,sans-serif;font-size:18px;line-height:1.45;color:var(--ink);background:var(--bg)}
+header{background:#0f172a;color:#fff;padding:12px 24px}
+header h1{margin:0 0 6px;font-size:28px}
+.meta{display:flex;flex-wrap:wrap;gap:8px}
+.meta span{background:#1e3a8a;padding:3px 12px;border-radius:999px;font-size:16px}
+main{max-width:1700px;margin:0 auto;padding:16px}
+footer{text-align:center;color:var(--muted);padding:14px;border-top:1px solid var(--line);margin-top:8px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:16px}
+.panel h2{margin:0 0 10px;font-size:21px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.small{font-size:16px;color:var(--muted)}
+.hidden{display:none!important}
+
+button,input{font:inherit}
+button{font-size:17px;font-weight:600;padding:8px 14px;border-radius:9px;border:2px solid var(--accent);background:#fff;color:var(--accent);cursor:pointer}
+button:hover:not(:disabled){background:var(--accent-soft)}
+button.primary{background:var(--accent);color:#fff}
+button.primary:hover:not(:disabled){background:#1e40af}
+button.on{background:var(--accent);color:#fff}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,input:focus-visible{outline:3px solid #f59e0b;outline-offset:2px}
+input[type=text]{padding:7px 10px;border-radius:8px;border:2px solid #94a3b8;font-family:Consolas,monospace;font-size:18px;min-width:240px}
+label.chk{display:inline-flex;align-items:center;gap:6px;border:2px solid var(--line);border-radius:8px;padding:4px 10px;cursor:pointer;font-size:17px}
+label.chk input{width:20px;height:20px;accent-color:var(--accent)}
+
+/* Вкладки */
+.tabs{display:flex;gap:6px;margin-bottom:-2px;flex-wrap:wrap}
+.tabs button{border-radius:12px 12px 0 0;border-width:2px 2px 0;font-size:19px;padding:10px 20px}
+.tabs button.on{background:#fff;color:var(--accent);border-color:var(--line);box-shadow:inset 0 4px 0 var(--accent)}
+.tabs button:not(.on){background:#e2e8f0;color:#334155;border-color:#e2e8f0}
+
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.speed{display:flex;align-items:center;gap:8px;font-size:16px}
+.speed input{width:150px;accent-color:var(--accent)}
+.explain{border-radius:10px;padding:12px 14px;font-size:19px;min-height:60px;border:2px solid var(--line);background:#f8fafc;margin-top:12px}
+.explain.ok{background:var(--ok-soft);border-color:#16a34a;color:var(--ok)}
+.explain.err{background:var(--err-soft);border-color:#dc2626;color:var(--err)}
+.note{margin-top:8px;font-size:17px;background:var(--accent-soft);border-left:5px solid var(--accent);padding:8px 12px;border-radius:6px}
+.note:empty{display:none}
+
+/* ===== Вкладка 1: колонки мов ===== */
+.cols{display:grid;gap:12px;align-items:start}
+.col{background:#fff;border:2px solid var(--line);border-radius:12px;overflow:hidden;min-width:0}
+.col h3{margin:0;padding:8px 12px;font-size:19px;color:#fff}
+.col .body{max-height:560px;overflow:auto}
+.code{font-family:Consolas,"Courier New",monospace;font-size:16px;line-height:1.55;padding:6px 0}
+.code .ln{display:flex;white-space:pre;padding:0 8px;border-left:5px solid transparent}
+.code .ln .no{width:2em;color:#94a3b8;text-align:right;padding-right:10px;flex:none;user-select:none}
+.code .ln.cur{background:var(--hl);border-left-color:var(--active);font-weight:700}
+.code .kw{color:#7c3aed;font-weight:700}
+.code .str{color:#047857}
+.code .cm{color:#94a3b8;font-style:italic}
+.chart-wrap{padding:6px}
+.chart{display:block;margin:0 auto;max-width:100%;height:auto}
+.chart .blk .sh{stroke:#1e293b;stroke-width:2}
+.chart .blk text{font-family:"Segoe UI",Arial,sans-serif;font-size:16px;fill:#0f172a}
+.chart .blk.active .sh{fill:#fde68a!important;stroke:var(--active);stroke-width:4.5}
+.chart .edge{fill:none;stroke:#334155;stroke-width:2}
+.chart .edge.active{stroke:var(--active);stroke-width:4}
+.chart .lbl{font-size:15px;font-weight:700;fill:#334155;font-family:"Segoe UI",Arial,sans-serif}
+
+.state{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+@media (max-width:900px){.state{grid-template-columns:1fr}}
+table.vars{border-collapse:collapse;font-size:19px}
+table.vars th,table.vars td{border:1px solid var(--line);padding:5px 12px;text-align:left}
+table.vars th{background:#f1f5f9}
+table.vars td.val{font-family:Consolas,monospace;font-weight:700}
+table.vars tr.changed td{background:#fde68a}
+.arr{display:inline-flex;gap:3px;flex-wrap:wrap}
+.arr span{display:inline-flex;flex-direction:column;align-items:center;border:2px solid #94a3b8;border-radius:6px;min-width:40px;padding:0 4px;font-family:Consolas,monospace}
+.arr span small{font-size:12px;color:#64748b;font-weight:400}
+.arr span.cur{border-color:var(--active);background:#fde68a}
+.console{font-family:Consolas,monospace;font-size:19px;background:#0f172a;color:#e2e8f0;border-radius:10px;padding:10px 12px;min-height:80px;white-space:pre-wrap}
+
+/* ===== Вкладка 2: компілятор і інтерпретатор ===== */
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:1000px){.duo{grid-template-columns:1fr}}
+.lane{border:3px solid var(--line);border-radius:14px;padding:12px 14px;background:#fff}
+.lane.comp{border-color:#7c3aed}
+.lane.interp{border-color:#0891b2}
+.lane h3{margin:0 0 8px;font-size:22px}
+.lane.comp h3{color:#6d28d9}
+.lane.interp h3{color:#0e7490}
+.stage{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
+.box{border:2px solid var(--line);border-radius:10px;padding:8px 10px;min-height:150px;background:#f8fafc}
+.box h4{margin:0 0 6px;font-size:16px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.src .ln{font-family:Consolas,monospace;font-size:17px;padding:1px 6px;border-radius:5px;white-space:pre}
+.src .ln.cur{background:var(--hl);font-weight:700}
+.src .ln.exec{background:#bbf7d0;font-weight:700}
+.src .ln.done::after{content:" ✓";color:var(--ok);font-weight:700}
+.src .ln.bad{background:var(--err-soft);color:var(--err);font-weight:700}
+.translator{width:150px;text-align:center;border:3px solid currentColor;border-radius:14px;padding:12px 6px;font-weight:700;font-size:17px}
+.comp .translator{color:#6d28d9}
+.interp .translator{color:#0e7490}
+.translator .tstate{display:block;font-weight:400;font-size:15px;color:var(--ink);margin-top:6px;min-height:42px}
+.translator.pulse{animation:pulse .5s}
+@keyframes pulse{0%{transform:scale(1)}40%{transform:scale(1.08);background:#fef9c3}100%{transform:scale(1)}}
+.mcode div{font-family:Consolas,monospace;font-size:15px;padding:1px 6px;border-radius:5px}
+.mcode div.new{animation:appear .4s}
+.mcode div.cur{background:#bbf7d0;font-weight:700}
+@keyframes appear{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+.exe{display:inline-block;margin-top:6px;background:#6d28d9;color:#fff;border-radius:8px;padding:3px 10px;font-weight:700;animation:appear .4s}
+.screen{margin-top:10px}
+.screen .console{min-height:70px}
+.lane .msg{margin-top:10px;font-size:17px;min-height:78px;border-radius:8px;padding:8px 10px;background:#f1f5f9}
+.lane .msg.err{background:var(--err-soft);color:var(--err);font-weight:600}
+.lane .msg.ok{background:var(--ok-soft);color:var(--ok)}
+.cnt{display:flex;gap:16px;flex-wrap:wrap;font-size:16px;margin-top:6px}
+table.cmp{border-collapse:collapse;width:100%;font-size:17px}
+table.cmp th,table.cmp td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+table.cmp th{background:#f1f5f9}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Порівняльник «Один алгоритм — різні мови»</h1>
+  <div class="meta">
+    <span>10 клас</span>
+    <span>Тема 4.3. Мови програмування</span>
+    <span>Розділ 4. Основи алгоритмізації та програмування</span>
+  </div>
+</header>
+
+<main>
+  <div class="tabs" role="tablist">
+    <button class="on" data-tab="langs" role="tab">Один алгоритм — різні мови</button>
+    <button data-tab="trans" role="tab">Компілятор чи інтерпретатор</button>
+  </div>
+
+  <!-- Спільна панель керування для обох вкладок -->
+  <div class="panel">
+    <div class="controls">
+      <button class="primary" id="btnStep">⏭ Крок</button>
+      <button class="primary" id="btnPlay">▶ Старт</button>
+      <button id="btnReset">⟲ Скинути</button>
+      <label class="speed">Швидкість <input type="range" id="speed" min="1" max="10" value="5"></label>
+    </div>
+
+    <!-- ============ ВКЛАДКА 1 ============ -->
+    <div id="tab-langs">
+      <div class="row" style="margin-top:12px"><b>Алгоритм:</b> <span id="algoBtns" class="row"></span></div>
+      <div class="row" style="margin-top:10px">
+        <label for="algoInput"><b id="inputLabel">Вхідні дані:</b></label>
+        <input type="text" id="algoInput">
+        <button id="btnApply">Застосувати</button>
+        <span class="small" id="inputHint"></span>
+      </div>
+      <div class="row" style="margin-top:10px"><b>Показувати:</b> <span id="colToggles" class="row"></span></div>
+      <div id="explain1" class="explain"></div>
+      <div id="note1" class="note"></div>
+    </div>
+
+    <!-- ============ ВКЛАДКА 2 (керування) ============ -->
+    <div id="tab-trans-ctl" class="hidden">
+      <div class="row" style="margin-top:12px">
+        <label class="chk"><input type="checkbox" id="withError"> Додати помилку в рядок 4</label>
+        <label class="chk"><input type="checkbox" id="rerun"> Повторний запуск (програму вже запускали раніше)</label>
+      </div>
+      <p class="small" style="margin:8px 0 0">Обидва перекладачі працюють одночасно: кожне натискання «Крок» робить одну дію в кожному з них.</p>
+    </div>
+  </div>
+
+  <!-- Колонки мов та стан змінних -->
+  <section id="tab-langs-body">
+    <div class="cols" id="cols"></div>
+    <div class="panel state" style="margin-top:16px">
+      <div>
+        <h2>Змінні (однакові для всіх мов)</h2>
+        <table class="vars"><thead><tr><th>Змінна</th><th>Значення</th></tr></thead><tbody id="varsBody"></tbody></table>
+        <p class="small">Кроків: <b id="cntSteps">0</b></p>
+      </div>
+      <div>
+        <h2>Виведення</h2>
+        <div class="console" id="console1"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Вкладка 2: компіляція та інтерпретація -->
+  <section id="tab-trans" class="hidden">
+    <div class="duo">
+      <div class="lane comp" id="laneC"></div>
+      <div class="lane interp" id="laneI"></div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <h2>Порівняння</h2>
+      <table class="cmp">
+        <tr><th></th><th>Компілятор</th><th>Інтерпретатор</th></tr>
+        <tr><td><b>Як перекладає</b></td><td>увесь текст програми одразу, до запуску</td><td>по одному рядку (команді) під час виконання</td></tr>
+        <tr><td><b>Що створює</b></td><td>файл із машинним кодом (наприклад, program.exe)</td><td>файл не створює; перекладене не зберігається</td></tr>
+        <tr><td><b>Коли видно помилку</b></td><td>ще до запуску; програма не виконується, доки є помилки</td><td>лише коли виконання дійде до рядка з помилкою</td></tr>
+        <tr><td><b>Повторний запуск</b></td><td>швидкий, перекладати не треба</td><td>кожного разу перекладає знову</td></tr>
+        <tr><td><b>Що потрібно для запуску</b></td><td>лише готовий файл програми</td><td>текст програми і сам інтерпретатор</td></tr>
+        <tr><td><b>Приклади мов</b></td><td>C, C++, Pascal</td><td>Python, JavaScript</td></tr>
+      </table>
+      <p class="small" style="margin-bottom:0">Примітка: сучасні мови часто поєднують обидва підходи. Наприклад, Python спочатку перетворює програму на проміжний байт-код, а потім інтерпретує його.</p>
+    </div>
+  </section>
+</main>
+
+<footer>Розроблено автором</footer>
+
+<script>
+"use strict";
+/* =========================================================
+   1. ДОПОМІЖНІ ФУНКЦІЇ
+   ========================================================= */
+const SVGNS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function plural(n, one, few, many) {
+  const a = n % 10, b = n % 100;
+  if (a === 1 && b !== 11) return one;
+  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return few;
+  return many;
+}
+const DELAYS = [1600, 1300, 1050, 850, 680, 540, 420, 310, 210, 130];
+const delay = () => DELAYS[+$("speed").value - 1];
+
+/* =========================================================
+   2. ОПИС АЛГОРИТМІВ
+   Кожен алгоритм має:
+   • flow — дерево блок-схеми (id кожного блока = «крок алгоритму»);
+   • code — тексти програм: кожен рядок L(текст, ...id), тобто рядок
+     знає, які кроки алгоритму він записує. Так і працює синхронна
+     підсвітка: на кроці «add» підсвічуються всі рядки з id «add».
+   • run — генератор, що виконує алгоритм і повертає кроки.
+   ========================================================= */
+const L = (t, ...ids) => ({ t, ids });
+const P = (id, text) => ({ type: "assign", id, text });
+const IN = (id, text) => ({ type: "input", id, text });
+const OUT = (id, text) => ({ type: "output", id, text });
+const IF = (id, text, thenBody, elseBody) => ({ type: "if", id, text, thenBody, elseBody });
+const WH = (id, text, body) => ({ type: "while", id, text, body });
+
+/* Мови та кольори заголовків колонок */
+const LANGS = [
+  { key: "flow", name: "Блок-схема", color: "#0f172a" },
+  { key: "pseudo", name: "Псевдокод", color: "#475569" },
+  { key: "py", name: "Python", color: "#1d4ed8" },
+  { key: "pas", name: "Pascal", color: "#b45309" },
+  { key: "cpp", name: "C++", color: "#be123c" }
+];
+
+const ALGOS = [
+  /* ---------------- Сума чисел від 1 до N ---------------- */
+  {
+    name: "Сума від 1 до N",
+    inputLabel: "N =", def: "5", hint: "ціле число від 1 до 30",
+    parse(t) {
+      if (!/^\s*\d+\s*$/.test(t)) return { error: "Введіть одне ціле додатне число." };
+      const n = +t; if (n < 1 || n > 30) return { error: "N має бути від 1 до 30." };
+      return { value: n };
+    },
+    flow: [IN("in", "Ввести n"), P("s0", "s := 0"), P("i0", "i := 1"),
+      WH("c", "i <= n", [P("add", "s := s + i"), P("inc", "i := i + 1")]), OUT("out", "Вивести s")],
+    code: {
+      pseudo: [L("ввести n", "in"), L("s := 0", "s0"), L("i := 1", "i0"), L("поки i <= n", "c"),
+        L("  s := s + i", "add"), L("  i := i + 1", "inc"), L("кінець"), L("вивести s", "out")],
+      py: [L("n = int(input())", "in"), L("s = 0", "s0"), L("for i in range(1, n + 1):", "i0", "c", "inc"),
+        L("    s = s + i", "add"), L("print(s)", "out")],
+      pas: [L("program Suma;"), L("var n, i, s: integer;"), L("begin"), L("  readln(n);", "in"), L("  s := 0;", "s0"),
+        L("  for i := 1 to n do", "i0", "c", "inc"), L("    s := s + i;", "add"), L("  writeln(s);", "out"), L("end.")],
+      cpp: [L("#include <iostream>"), L("using namespace std;"), L("int main() {"), L("    int n;"), L("    cin >> n;", "in"),
+        L("    int s = 0;", "s0"), L("    for (int i = 1; i <= n; i++)", "i0", "c", "inc"), L("        s = s + i;", "add"),
+        L("    cout << s << endl;", "out"), L("    return 0;"), L("}")]
+    },
+    notes: {
+      in: "Введення: Python — input() (і перетворення int), Pascal — readln, C++ — cin >>.",
+      i0: "У Python, Pascal і C++ присвоєння i := 1, перевірку i <= n та збільшення i записано в одному рядку — заголовку циклу for.",
+      c: "Цикл for сам перевіряє умову: у Python range(1, n + 1) не включає n + 1, у Pascal «1 to n», у C++ «i <= n».",
+      inc: "Збільшення лічильника: у Python і Pascal його робить сам for, у C++ — частина i++ у заголовку.",
+      add: "Присвоювання: у псевдокоді й Pascal — «:=», у Python і C++ — «=». Крапка з комою потрібна в Pascal і C++.",
+      out: "Виведення: Python — print, Pascal — writeln, C++ — cout <<."
+    },
+    *run(n, S) {
+      S.v.n = n; yield { id: "in", ch: ["n"], msg: `Вводимо n = ${n}.` };
+      S.v.s = 0; yield { id: "s0", ch: ["s"], msg: "Сума спочатку дорівнює нулю: s := 0." };
+      S.v.i = 1; yield { id: "i0", ch: ["i"], msg: "Лічильник i починає з 1." };
+      let it = 0;
+      while (true) {
+        const ok = S.v.i <= S.v.n;
+        yield { id: "c", edges: ["c:" + (ok ? "yes" : "no"), ...(it ? ["c:back"] : [])], msg: `Перевіряємо умову i <= n: ${S.v.i} <= ${S.v.n} — <b>${ok ? "так" : "ні"}</b>. ${ok ? "Виконуємо тіло циклу." : "Цикл завершено."}` };
+        if (!ok) break;
+        const old = S.v.s; S.v.s += S.v.i;
+        yield { id: "add", ch: ["s"], msg: `s := s + i = ${old} + ${S.v.i} = ${S.v.s}.` };
+        S.v.i++; it++;
+        yield { id: "inc", ch: ["i"], msg: `Збільшуємо лічильник: i = ${S.v.i}.` };
+      }
+      S.out.push(String(S.v.s));
+      yield { id: "out", msg: `Виводимо результат: ${S.v.s}.` };
+    }
+  },
+
+  /* ---------------- Пошук максимуму в масиві ---------------- */
+  {
+    name: "Максимум у масиві",
+    inputLabel: "Масив a:", def: "4 9 2 11 7 5", hint: "від 2 до 12 цілих чисел через пробіл",
+    parse(t) {
+      const p = t.trim().split(/[\s,;]+/).filter(Boolean);
+      if (p.length < 2 || p.length > 12) return { error: "Потрібно від 2 до 12 чисел." };
+      if (!p.every(x => /^-?\d+$/.test(x))) return { error: "Усі елементи мають бути цілими числами." };
+      const a = p.map(Number); if (a.some(x => Math.abs(x) > 9999)) return { error: "Числа мають бути від −9999 до 9999." };
+      return { value: a };
+    },
+    flow: [IN("in", "Ввести n, a[0..n-1]"), P("m0", "max := a[0]"), P("i0", "i := 1"),
+      WH("c", "i < n", [IF("cmp", "a[i] > max", [P("set", "max := a[i]")], []), P("inc", "i := i + 1")]), OUT("out", "Вивести max")],
+    code: {
+      pseudo: [L("ввести n, a[0..n-1]", "in"), L("max := a[0]", "m0"), L("i := 1", "i0"), L("поки i < n", "c"),
+        L("  якщо a[i] > max то", "cmp"), L("    max := a[i]", "set"), L("  кінець"), L("  i := i + 1", "inc"), L("кінець"), L("вивести max", "out")],
+      py: [L("a = list(map(int, input().split()))", "in"), L("n = len(a)", "in"), L("mx = a[0]  # max — вбудована функція", "m0"),
+        L("for i in range(1, n):", "i0", "c", "inc"), L("    if a[i] > mx:", "cmp"), L("        mx = a[i]", "set"), L("print(mx)", "out")],
+      pas: [L("program MaxElement;"), L("var a: array[0..19] of integer;"), L("    n, i, max: integer;"), L("begin"),
+        L("  readln(n);", "in"), L("  for i := 0 to n - 1 do read(a[i]);", "in"), L("  max := a[0];", "m0"),
+        L("  for i := 1 to n - 1 do", "i0", "c", "inc"), L("    if a[i] > max then", "cmp"), L("      max := a[i];", "set"),
+        L("  writeln(max);", "out"), L("end.")],
+      cpp: [L("#include <iostream>"), L("using namespace std;"), L("int main() {"), L("    int n, a[20];"), L("    cin >> n;", "in"),
+        L("    for (int i = 0; i < n; i++) cin >> a[i];", "in"), L("    int mx = a[0];", "m0"),
+        L("    for (int i = 1; i < n; i++)", "i0", "c", "inc"), L("        if (a[i] > mx)", "cmp"), L("            mx = a[i];", "set"),
+        L("    cout << mx << endl;", "out"), L("    return 0;"), L("}")]
+    },
+    notes: {
+      in: "Python читає весь рядок і сам визначає довжину масиву (len). У Pascal і C++ масив оголошують заздалегідь із запасом місця й заповнюють циклом.",
+      m0: "У Python і C++ змінну названо mx, бо max у Python — уже готова функція. Нумерація елементів у всіх трьох мовах тут починається з 0.",
+      cmp: "Умова розгалуження: Python — if …:, Pascal — if … then, C++ — if (…). Відступи в Python обов'язкові, у Pascal і C++ вони лише для зручності читання.",
+      set: "Присвоювання нового максимуму.",
+      c: "Перевірка «i < n» захована в заголовку for: range(1, n), «1 to n - 1», «i < n»."
+    },
+    *run(a, S) {
+      S.v.n = a.length; S.v.a = a.slice();
+      yield { id: "in", ch: ["n", "a"], msg: `Вводимо масив із ${a.length} елементів.` };
+      S.v.max = a[0]; yield { id: "m0", ch: ["max"], msg: `Вважаємо максимумом перший елемент: max = a[0] = ${a[0]}.` };
+      S.v.i = 1; yield { id: "i0", ch: ["i"], msg: "Починаємо перегляд з елемента з індексом 1." };
+      let it = 0;
+      while (true) {
+        const ok = S.v.i < S.v.n;
+        yield { id: "c", edges: ["c:" + (ok ? "yes" : "no"), ...(it ? ["c:back"] : [])], msg: `Умова циклу i < n: ${S.v.i} < ${S.v.n} — <b>${ok ? "так" : "ні"}</b>.` };
+        if (!ok) break;
+        const big = S.v.a[S.v.i] > S.v.max;
+        yield { id: "cmp", edges: ["cmp:" + (big ? "yes" : "no")], msg: `Порівнюємо: a[${S.v.i}] = ${S.v.a[S.v.i]} > max = ${S.v.max}? — <b>${big ? "так" : "ні"}</b>.` };
+        if (big) { S.v.max = S.v.a[S.v.i]; yield { id: "set", ch: ["max"], msg: `Знайдено більший елемент: max = ${S.v.max}.` }; }
+        S.v.i++; it++;
+        yield { id: "inc", ch: ["i"], msg: `Переходимо до наступного елемента: i = ${S.v.i}.` };
+      }
+      S.out.push(String(S.v.max));
+      yield { id: "out", msg: `Найбільший елемент масиву: ${S.v.max}.` };
+    }
+  },
+
+  /* ---------------- Перевірка парності ---------------- */
+  {
+    name: "Перевірка парності",
+    inputLabel: "n =", def: "14", hint: "ціле число",
+    parse(t) {
+      if (!/^\s*-?\d+\s*$/.test(t)) return { error: "Введіть одне ціле число." };
+      const n = +t; if (Math.abs(n) > 1e9) return { error: "Число завелике (до мільярда)." };
+      return { value: n };
+    },
+    flow: [IN("in", "Ввести n"), IF("c", "n mod 2 = 0", [OUT("y", 'Вивести "парне"')], [OUT("no", 'Вивести "непарне"')])],
+    code: {
+      pseudo: [L("ввести n", "in"), L("якщо n mod 2 = 0 то", "c"), L('  вивести "парне"', "y"), L("інакше", "no"), L('  вивести "непарне"', "no"), L("кінець")],
+      py: [L("n = int(input())", "in"), L("if n % 2 == 0:", "c"), L('    print("парне")', "y"), L("else:", "no"), L('    print("непарне")', "no")],
+      pas: [L("program Parnist;"), L("var n: integer;"), L("begin"), L("  readln(n);", "in"), L("  if n mod 2 = 0 then", "c"),
+        L("    writeln('парне')", "y"), L("  else", "no"), L("    writeln('непарне');", "no"), L("end.")],
+      cpp: [L("#include <iostream>"), L("using namespace std;"), L("int main() {"), L("    int n;"), L("    cin >> n;", "in"),
+        L("    if (n % 2 == 0)", "c"), L('        cout << "парне" << endl;', "y"), L("    else", "no"), L('        cout << "непарне" << endl;', "no"),
+        L("    return 0;"), L("}")]
+    },
+    notes: {
+      c: "Остача від ділення: у псевдокоді й Pascal — mod, у Python і C++ — %. Порівняння: «=» у Pascal, «==» у Python і C++.",
+      y: "Рядки: у Pascal беруть в одинарні лапки, у Python — в одинарні або подвійні, у C++ — у подвійні.",
+      no: "Гілка «інакше»: Python — else:, Pascal — else, C++ — else. У Pascal перед else крапку з комою не ставлять."
+    },
+    *run(n, S) {
+      S.v.n = n; yield { id: "in", ch: ["n"], msg: `Вводимо n = ${n}.` };
+      const r = ((n % 2) + 2) % 2, even = r === 0;
+      yield { id: "c", edges: ["c:" + (even ? "yes" : "no")], msg: `Обчислюємо остачу: ${n} mod 2 = ${r}. Умова «остача = 0» — <b>${even ? "так" : "ні"}</b>.` };
+      S.out.push(even ? "парне" : "непарне");
+      yield { id: even ? "y" : "no", msg: `Виводимо «${even ? "парне" : "непарне"}».` };
+    }
+  },
+
+  /* ---------------- НСД (алгоритм Евкліда) ---------------- */
+  {
+    name: "НСД (алгоритм Евкліда)",
+    inputLabel: "a, b =", def: "48 18", hint: "два цілі числа від 1 до 100000",
+    parse(t) {
+      const p = t.trim().split(/[\s,;]+/).filter(Boolean);
+      if (p.length !== 2 || !p.every(x => /^\d+$/.test(x))) return { error: "Введіть два цілі додатні числа через пробіл." };
+      const [a, b] = p.map(Number);
+      if (a < 1 || b < 1 || a > 100000 || b > 100000) return { error: "Числа мають бути від 1 до 100000." };
+      return { value: [a, b] };
+    },
+    flow: [IN("in", "Ввести a, b"), WH("c", "b <> 0", [P("r", "r := a mod b"), P("sa", "a := b"), P("sb", "b := r")]), OUT("out", "Вивести a")],
+    code: {
+      pseudo: [L("ввести a, b", "in"), L("поки b <> 0", "c"), L("  r := a mod b", "r"), L("  a := b", "sa"), L("  b := r", "sb"), L("кінець"), L("вивести a", "out")],
+      py: [L("a = int(input())", "in"), L("b = int(input())", "in"), L("while b != 0:", "c"), L("    r = a % b", "r"), L("    a = b", "sa"), L("    b = r", "sb"), L("print(a)", "out")],
+      pas: [L("program Evklid;"), L("var a, b, r: integer;"), L("begin"), L("  readln(a, b);", "in"), L("  while b <> 0 do", "c"), L("  begin"),
+        L("    r := a mod b;", "r"), L("    a := b;", "sa"), L("    b := r;", "sb"), L("  end;"), L("  writeln(a);", "out"), L("end.")],
+      cpp: [L("#include <iostream>"), L("using namespace std;"), L("int main() {"), L("    int a, b, r;"), L("    cin >> a >> b;", "in"),
+        L("    while (b != 0) {", "c"), L("        r = a % b;", "r"), L("        a = b;", "sa"), L("        b = r;", "sb"), L("    }"),
+        L("    cout << a << endl;", "out"), L("    return 0;"), L("}")]
+    },
+    notes: {
+      c: "Тут у всіх мовах цикл while (поки). «Не дорівнює»: <> у псевдокоді й Pascal, != у Python і C++. Тіло циклу: відступ у Python, begin … end у Pascal, { … } у C++.",
+      r: "Остача від ділення: mod або %.",
+      sa: "Числа «зсуваються»: a отримує значення b, а b — остачу."
+    },
+    *run([a, b], S) {
+      S.v.a = a; S.v.b = b; yield { id: "in", ch: ["a", "b"], msg: `Вводимо a = ${a}, b = ${b}.` };
+      let it = 0;
+      while (true) {
+        const ok = S.v.b !== 0;
+        yield { id: "c", edges: ["c:" + (ok ? "yes" : "no"), ...(it ? ["c:back"] : [])], msg: `Умова b <> 0: ${S.v.b} <> 0 — <b>${ok ? "так" : "ні"}</b>.` };
+        if (!ok) break;
+        S.v.r = S.v.a % S.v.b; yield { id: "r", ch: ["r"], msg: `r := a mod b = ${S.v.a} mod ${S.v.b} = ${S.v.r}.` };
+        S.v.a = S.v.b; yield { id: "sa", ch: ["a"], msg: `a := b, тепер a = ${S.v.a}.` };
+        S.v.b = S.v.r; it++; yield { id: "sb", ch: ["b"], msg: `b := r, тепер b = ${S.v.b}.` };
+      }
+      S.out.push(String(S.v.a));
+      yield { id: "out", msg: `НСД = ${S.v.a}.` };
+    }
+  }
+];
+
+/* =========================================================
+   3. ПОБУДОВА БЛОК-СХЕМИ (та сама схема розміщення, що й у
+   конструкторі блок-схем: вимірювання → рекурсивне малювання)
+   ========================================================= */
+const CH = 9.4, BH = 44, VG = 28, HG = 36, DH = 62, MARGIN = 18;
+const textW = t => t.length * CH;
+const diamondW = t => Math.max(62, textW(t) / 1.35 + 14);
+
+function measure(n) {
+  switch (n.type) {
+    case "term": case "assign": { const w = Math.max(100, textW(n.text) + 32); return { l: w / 2, r: w / 2, h: BH }; }
+    case "input": case "output": { const w = Math.max(130, textW(n.text) + 56); return { l: w / 2, r: w / 2, h: BH }; }
+    case "if": {
+      const dw = diamondW(n.text), T = measureSeq(n.thenBody), E = measureSeq(n.elseBody || []);
+      const xT = -Math.max(dw + 28, T.r + HG / 2), xE = Math.max(dw + 28, E.l + HG / 2);
+      const yB = DH + 20, yM = yB + Math.max(T.h, E.h) + 24;
+      return { l: Math.max(-xT + T.l, dw) + 4, r: Math.max(xE + E.r, dw) + 4, h: yM, dw, T, E, xT, xE, yB, yM };
+    }
+    case "while": {
+      const dw = diamondW(n.text), B = measureSeq(n.body);
+      const yJ = 12, yD = 26, yBt = yD + DH + 28, yBe = yBt + B.h, yBack = yBe + 18, yExit = yBe + 36;
+      const xL = -(Math.max(B.l, dw) + 26), xR = Math.max(B.r, dw) + 34;
+      return { l: -xL + 6, r: xR + 6, h: yExit, dw, B, yJ, yD, yBt, yBe, yBack, yExit, xL, xR };
+    }
+  }
+}
+function measureSeq(list) {
+  if (!list.length) return { l: 0, r: 0, h: 0 };
+  let l = 0, r = 0, h = 0;
+  list.forEach((n, i) => { const m = measure(n); l = Math.max(l, m.l); r = Math.max(r, m.r); h += m.h + (i ? VG : 0); });
+  return { l, r, h };
+}
+function edge(g, pts, arrow, edgeId) {
+  const a = { class: "edge", points: pts.map(p => p.join(",")).join(" ") };
+  if (arrow) { a["marker-end"] = "url(#arr)"; a["data-arrow"] = "1"; }
+  if (edgeId) a["data-edge"] = edgeId;
+  return el("polyline", a, g);
+}
+function label(g, x, y, txt, anchor) { const t = el("text", { x, y, class: "lbl", "text-anchor": anchor }, g); t.textContent = txt; }
+function blockText(g, x, y, txt) { const t = el("text", { x, y, "text-anchor": "middle", "dominant-baseline": "central" }, g); t.textContent = txt; }
+const needsArrow = list => list.length && list[0].type !== "while";
+
+function drawSeq(list, g, x, y) {
+  list.forEach((n, i) => {
+    const m = measure(n); drawNode(n, m, g, x, y); y += m.h;
+    if (i < list.length - 1) { edge(g, [[x, y], [x, y + VG]], list[i + 1].type !== "while"); y += VG; }
+  });
+}
+function drawDiamond(grp, x, y, dw, txt) {
+  el("polygon", { class: "sh", fill: "var(--b-dec)", points: `${x},${y} ${x + dw},${y + DH / 2} ${x},${y + DH} ${x - dw},${y + DH / 2}` }, grp);
+  blockText(grp, x, y + DH / 2, txt);
+}
+function drawNode(n, m, g, x, y) {
+  const grp = el("g", { class: "blk", "data-id": n.id }, g);
+  if (n.type === "term") {
+    el("rect", { class: "sh", x: x - m.l, y, width: m.l * 2, height: BH, rx: BH / 2, fill: "var(--b-term)" }, grp); blockText(grp, x, y + BH / 2, n.text);
+  } else if (n.type === "assign") {
+    el("rect", { class: "sh", x: x - m.l, y, width: m.l * 2, height: BH, fill: "var(--b-proc)" }, grp); blockText(grp, x, y + BH / 2, n.text);
+  } else if (n.type === "input" || n.type === "output") {
+    const k = 15;
+    el("polygon", { class: "sh", fill: "var(--b-io)", points: `${x - m.l + k},${y} ${x + m.r},${y} ${x + m.r - k},${y + BH} ${x - m.l},${y + BH}` }, grp);
+    blockText(grp, x, y + BH / 2, n.text);
+  } else if (n.type === "if") {
+    const { dw, T, E, xT, xE, yB, yM } = m;
+    drawDiamond(grp, x, y, dw, n.text);
+    edge(g, [[x - dw, y + DH / 2], [x + xT, y + DH / 2], [x + xT, y + (T.h ? yB : yM)]], needsArrow(n.thenBody), n.id + ":yes");
+    label(g, x - dw - 8, y + DH / 2 - 8, "так", "end");
+    if (T.h) { drawSeq(n.thenBody, g, x + xT, y + yB); edge(g, [[x + xT, y + yB + T.h], [x + xT, y + yM]], false, n.id + ":yes"); }
+    const eb = n.elseBody || [];
+    edge(g, [[x + dw, y + DH / 2], [x + xE, y + DH / 2], [x + xE, y + (E.h ? yB : yM)]], needsArrow(eb), n.id + ":no");
+    label(g, x + dw + 8, y + DH / 2 - 8, "ні", "start");
+    if (E.h) { drawSeq(eb, g, x + xE, y + yB); edge(g, [[x + xE, y + yB + E.h], [x + xE, y + yM]], false, n.id + ":no"); }
+    edge(g, [[x + xT, y + yM], [x + xE, y + yM]], false);
+    el("circle", { cx: x, cy: y + yM, r: 4, fill: "#334155" }, g);
+  } else if (n.type === "while") {
+    const { dw, B, yJ, yD, yBt, yBe, yBack, yExit, xL, xR } = m;
+    edge(g, [[x, y], [x, y + yD]], true);
+    el("circle", { cx: x, cy: y + yJ, r: 4, fill: "#334155" }, g);
+    drawDiamond(grp, x, y + yD, dw, n.text);
+    edge(g, [[x, y + yD + DH], [x, y + yBt]], needsArrow(n.body), n.id + ":yes");
+    label(g, x + 10, y + yD + DH + 17, "так", "start");
+    drawSeq(n.body, g, x, y + yBt);
+    edge(g, [[x, y + yBe], [x, y + yBack], [x + xL, y + yBack], [x + xL, y + yJ], [x, y + yJ]], true, n.id + ":back");
+    edge(g, [[x + dw, y + yD + DH / 2], [x + xR, y + yD + DH / 2], [x + xR, y + yExit], [x, y + yExit]], false, n.id + ":no");
+    label(g, x + dw + 8, y + yD + DH / 2 - 8, "ні", "start");
+  }
+}
+function buildChart(svg, flow) {
+  svg.textContent = "";
+  const defs = el("defs", {}, svg);
+  for (const [id, color] of [["arr", "#334155"], ["arrA", "#ea580c"]]) {
+    const mk = el("marker", { id, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs);
+    el("path", { d: "M0,0 L10,5 L0,10 z", fill: color }, mk);
+  }
+  const items = [{ type: "term", id: "start", text: "Початок" }, ...flow, { type: "term", id: "end", text: "Кінець" }];
+  const m = measureSeq(items);
+  const W = m.l + m.r + MARGIN * 2;
+  svg.setAttribute("viewBox", `0 0 ${W} ${m.h + MARGIN * 2}`);
+  svg.setAttribute("width", W);
+  drawSeq(items, el("g", {}, svg), MARGIN + m.l, MARGIN);
+}
+
+/* =========================================================
+   4. ВКЛАДКА 1: колонки мов і синхронне виконання
+   ========================================================= */
+let algoIdx = 0, algoInput = null;
+const visible = { flow: true, pseudo: true, py: true, pas: true, cpp: true };
+const S1 = { v: {}, out: [] };       // стан: змінні та виведення
+let gen1 = null, steps1 = 0, done1 = false, lastStep = null, changed1 = [];
+
+/* Просте підсвічування синтаксису: ключові слова, рядки, коментарі */
+const KW = {
+  pseudo: ["ввести", "вивести", "поки", "кінець", "якщо", "то", "інакше", "mod"],
+  py: ["for", "in", "if", "else", "while", "print", "input", "int", "range", "len", "list", "map"],
+  pas: ["program", "var", "begin", "end", "for", "to", "do", "if", "then", "else", "while", "integer", "array", "of", "readln", "read", "writeln", "mod"],
+  cpp: ["include", "using", "namespace", "int", "main", "for", "if", "else", "while", "return", "cin", "cout", "endl"]
+};
+function colorize(text, lang) {
+  // 1) коментар у кінці рядка Python (« # …») відокремлюємо, щоб не фарбувати його як код
+  let tail = "";
+  const cm = lang === "py" ? text.match(/\s+#.*$/) : null;
+  if (cm) { tail = `<span class="cm">${esc(cm[0])}</span>`; text = text.slice(0, cm.index); }
+  // 2) ділимо рядок на шматки «рядок у лапках» / «решта коду»
+  const words = KW[lang] || [];
+  return text.split(/("[^"]*"|'[^']*')/).map((part, i) => {
+    if (i % 2) return `<span class="str">${esc(part)}</span>`;
+    // 3) у коді фарбуємо ключові слова
+    return esc(part).replace(/[A-Za-zА-Яа-яІіЇїЄєҐґ_]+/g, w => words.includes(w) ? `<span class="kw">${w}</span>` : w);
+  }).join("") + tail;
+}
+
+function renderCols() {
+  const A = ALGOS[algoIdx], box = $("cols"); box.textContent = "";
+  const shown = LANGS.filter(l => visible[l.key]);
+  box.style.gridTemplateColumns = shown.map(l => l.key === "flow" ? "minmax(0,1.25fr)" : "minmax(0,1fr)").join(" ");
+  for (const lang of shown) {
+    const col = document.createElement("div"); col.className = "col";
+    const h = document.createElement("h3"); h.textContent = lang.name; h.style.background = lang.color;
+    const body = document.createElement("div"); body.className = "body";
+    if (lang.key === "flow") {
+      const wrap = document.createElement("div"); wrap.className = "chart-wrap";
+      const svg = document.createElementNS(SVGNS, "svg"); svg.setAttribute("class", "chart"); svg.id = "flowSvg";
+      wrap.appendChild(svg); body.appendChild(wrap);
+      buildChart(svg, A.flow);
+    } else {
+      const code = document.createElement("div"); code.className = "code";
+      A.code[lang.key].forEach((ln, i) => {
+        const d = document.createElement("div"); d.className = "ln"; d.dataset.ids = ln.ids.join(" ");
+        d.innerHTML = `<span class="no">${i + 1}</span><span>${colorize(ln.t, lang.key) || " "}</span>`;
+        code.appendChild(d);
+      });
+      body.appendChild(code);
+    }
+    col.append(h, body); box.appendChild(col);
+  }
+  highlight1(lastStep);
+}
+
+function highlight1(st) {
+  document.querySelectorAll("#cols .ln.cur").forEach(d => d.classList.remove("cur"));
+  const svg = $("flowSvg");
+  if (svg) {
+    svg.querySelectorAll(".blk.active").forEach(b => b.classList.remove("active"));
+    svg.querySelectorAll(".edge.active").forEach(e => { e.classList.remove("active"); if (e.dataset.arrow) e.setAttribute("marker-end", "url(#arr)"); });
+  }
+  if (!st) return;
+  document.querySelectorAll("#cols .ln").forEach(d => {
+    if (d.dataset.ids.split(" ").includes(st.id)) { d.classList.add("cur"); d.scrollIntoView({ block: "nearest" }); }
+  });
+  if (svg) {
+    const b = svg.querySelector(`.blk[data-id="${st.id}"]`); if (b) { b.classList.add("active"); b.scrollIntoView({ block: "nearest" }); }
+    (st.edges || []).forEach(eid => svg.querySelectorAll(`[data-edge="${eid}"]`).forEach(e => {
+      e.classList.add("active"); if (e.dataset.arrow) e.setAttribute("marker-end", "url(#arrA)");
+    }));
+  }
+}
+
+function renderState1() {
+  const body = $("varsBody"); body.textContent = "";
+  for (const k in S1.v) {
+    const tr = document.createElement("tr"); if (changed1.includes(k)) tr.className = "changed";
+    const a = document.createElement("td"); a.textContent = k;
+    const b = document.createElement("td"); b.className = "val";
+    const v = S1.v[k];
+    if (Array.isArray(v)) {
+      b.innerHTML = `<span class="arr">${v.map((x, i) => `<span class="${i === S1.v.i ? "cur" : ""}"><small>[${i}]</small>${x}</span>`).join("")}</span>`;
+    } else b.textContent = v;
+    tr.append(a, b); body.appendChild(tr);
+  }
+  $("console1").textContent = S1.out.join("\n");
+  $("cntSteps").textContent = steps1;
+}
+
+function setExplain1(kind, html) { const e = $("explain1"); e.className = "explain" + (kind ? " " + kind : ""); e.innerHTML = html; }
+
+const tab1 = {
+  reset() {
+    S1.v = {}; S1.out = []; gen1 = null; steps1 = 0; done1 = false; lastStep = null; changed1 = [];
+    highlight1(null); renderState1(); $("note1").textContent = "";
+    setExplain1("", "Натисніть «Крок»: у всіх колонках одночасно підсвітяться рядки, що записують одну й ту саму дію алгоритму.");
+  },
+  step() {
+    if (done1) return true;
+    if (!gen1) {
+      const r = ALGOS[algoIdx].parse($("algoInput").value);
+      if (r.error) { setExplain1("err", "Некоректні вхідні дані: " + esc(r.error)); return true; }
+      algoInput = r.value;
+      gen1 = (function* (A, inp) {
+        yield { id: "start", msg: "Початок виконання. У блок-схемі — овал «Початок»; у мовах програмування цьому відповідає початок програми." };
+        yield* A.run(inp, S1);
+        yield { id: "end", msg: "Кінець. Усі п'ять записів описали той самий алгоритм і дали однаковий результат: мова — лише форма запису." };
+      })(ALGOS[algoIdx], algoInput);
+    }
+    const { value, done } = gen1.next();
+    if (done) { done1 = true; return true; }
+    steps1++; lastStep = value; changed1 = value.ch || [];
+    highlight1(value); renderState1();
+    const note = ALGOS[algoIdx].notes[value.id];
+    $("note1").textContent = note ? "Як це записано в мовах: " + note : "";
+    if (value.id === "end") { done1 = true; setExplain1("ok", value.msg); return true; }
+    setExplain1("", `<b>Крок ${steps1}.</b> ${value.msg}`);
+    return false;
+  },
+  done: () => done1
+};
+
+/* Кнопки вибору алгоритму та колонок */
+ALGOS.forEach((A, i) => {
+  const b = document.createElement("button"); b.textContent = A.name;
+  b.addEventListener("click", () => selectAlgo(i)); $("algoBtns").appendChild(b);
+});
+function selectAlgo(i) {
+  stopAuto();
+  algoIdx = i;
+  [...$("algoBtns").children].forEach((b, k) => b.classList.toggle("on", k === i));
+  const A = ALGOS[i];
+  $("inputLabel").textContent = A.inputLabel; $("algoInput").value = A.def; $("inputHint").textContent = "(" + A.hint + ")";
+  tab1.reset(); renderCols();
+}
+$("btnApply").addEventListener("click", () => {
+  stopAuto();
+  const r = ALGOS[algoIdx].parse($("algoInput").value);
+  if (r.error) { setExplain1("err", "Некоректні вхідні дані: " + esc(r.error)); return; }
+  tab1.reset();
+});
+$("algoInput").addEventListener("keydown", e => { if (e.key === "Enter") $("btnApply").click(); });
+
+LANGS.forEach(l => {
+  const lab = document.createElement("label"); lab.className = "chk";
+  const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = true;
+  cb.addEventListener("change", () => {
+    if (!cb.checked && Object.values(visible).filter(Boolean).length === 1) { cb.checked = true; return; } // хоча б одна колонка
+    visible[l.key] = cb.checked; renderCols();
+  });
+  lab.append(cb, document.createTextNode(l.name)); $("colToggles").appendChild(lab);
+});
+
+/* =========================================================
+   5. ВКЛАДКА 2: компілятор vs інтерпретатор
+   Обидва «конвеєри» описано списками кроків; кожен крок —
+   функція, що змінює стан, і текст пояснення.
+   ========================================================= */
+const SRC = [
+  { text: 'вивести "Привіт!"', out: "Привіт!", mc: "10110100 00001001 11001101" },
+  { text: "a := 7", mc: "10111000 00000111" },
+  { text: "b := a * 6", mc: "01101011 11000000 00000110" },
+  { text: "вивести b", out: "42", mc: "10001011 11011000 11001101" },
+  { text: 'вивести "Готово"', out: "Готово", mc: "10110100 00001001 11001101" }
+];
+const BAD_LINE = 3; // рядок 4 (нумерація з 0)
+const BAD = { text: "вивести b +", error: "вираз обірвано після «+»" };
+
+function srcLines() { return SRC.map((s, i) => (i === BAD_LINE && $("withError").checked) ? { ...s, ...BAD } : s); }
+
+function newLaneState() { return { cur: -1, exec: -1, done: new Set(), bad: -1, mc: [], exe: false, out: [], tstate: "очікує", translated: 0, executed: 0, msg: "", kind: "" }; }
+
+function buildCompilerSteps(src, rerun) {
+  const st = [];
+  if (rerun && !src.some(s => s.error)) {
+    st.push({ f: s => { s.exe = true; s.mc = src.map((_, i) => i); s.tstate = "не потрібен"; },
+      msg: "Файл program.exe уже створено під час першого запуску. Компілювати повторно не потрібно — одразу запускаємо машинний код." });
+  } else {
+    for (let k = 0; k < src.length; k++) {
+      if (src[k].error) {
+        st.push({ f: s => { s.cur = k; s.bad = k; s.mc = []; s.tstate = "знайдено помилку"; }, kind: "err",
+          msg: `Компілятор знайшов помилку в рядку ${k + 1}: ${src[k].error}. Машинний код не створено, тому програма не виконала <b>жодного</b> рядка. Помилку треба виправити й компілювати знову.` });
+        return st;
+      }
+      st.push({ f: s => { s.cur = k; s.done.add(k); s.mc.push(k); s.fresh = k; s.translated++; s.tstate = `перекладає рядок ${k + 1}`; },
+        msg: `Компілятор перекладає рядок ${k + 1} у машинний код. Програма ще <b>не виконується</b> — спершу перекладається весь текст.` });
+    }
+    st.push({ f: s => { s.cur = -1; s.exe = true; s.tstate = "роботу завершено"; },
+      msg: "Увесь текст програми перекладено. Створено файл <b>program.exe</b>. Для запуску компілятор більше не потрібен." });
+  }
+  for (let k = 0; k < src.length; k++) {
+    st.push({ f: s => { s.exec = k; s.executed++; if (src[k].out) s.out.push(src[k].out); },
+      msg: `Процесор виконує машинний код рядка ${k + 1} з файлу program.exe${src[k].out ? `: на екран виводиться «${src[k].out}»` : ""}.` });
+  }
+  st.push({ f: s => { s.exec = -1; }, kind: "ok", msg: "Програму виконано. Наступний запуск буде швидким: файл program.exe уже готовий." });
+  return st;
+}
+
+function buildInterpreterSteps(src, rerun) {
+  const st = [];
+  for (let k = 0; k < src.length; k++) {
+    if (src[k].error) {
+      st.push({ f: s => { s.cur = k; s.exec = -1; s.bad = k; s.mc = []; s.tstate = "знайдено помилку"; }, kind: "err",
+        msg: `Інтерпретатор дійшов до рядка ${k + 1} і знайшов помилку: ${src[k].error}. Виконання зупинено, але рядки 1–${k} уже встигли виконатися — їхній результат є на екрані.` });
+      return st;
+    }
+    st.push({ f: s => { s.cur = k; s.exec = -1; s.done.add(k); s.mc = [k]; s.fresh = k; s.translated++; s.tstate = `перекладає рядок ${k + 1}`; },
+      msg: `Інтерпретатор читає рядок ${k + 1} і перекладає <b>лише його</b>${rerun ? " (навіть під час повторного запуску переклад виконується знову)" : ""}.` });
+    st.push({ f: s => { s.cur = -1; s.exec = k; s.executed++; s.tstate = `виконує рядок ${k + 1}`; if (src[k].out) s.out.push(src[k].out); },
+      msg: `Інтерпретатор одразу виконує рядок ${k + 1}${src[k].out ? `: на екран виводиться «${src[k].out}»` : ""}. Перекладений код не зберігається у файл.` });
+  }
+  st.push({ f: s => { s.exec = -1; s.mc = []; s.tstate = "роботу завершено"; }, kind: "ok",
+    msg: "Програму виконано. Під час наступного запуску інтерпретатор знову перекладатиме кожен рядок." });
+  return st;
+}
+
+const lanes = {
+  C: { el: $("laneC"), title: "Компілятор", cls: "comp", build: buildCompilerSteps },
+  I: { el: $("laneI"), title: "Інтерпретатор", cls: "interp", build: buildInterpreterSteps }
+};
+let src2 = srcLines();
+
+function renderLane(L) {
+  const s = L.state;
+  const srcHtml = src2.map((x, i) => {
+    const c = [i === s.bad ? "bad" : i === s.cur ? "cur" : (L.cls === "interp" && i === s.exec) ? "exec" : "", (L.cls === "comp" && s.done.has(i)) ? "done" : ""].join(" ");
+    return `<div class="ln ${c}">${i + 1}  ${esc(x.text)}</div>`;
+  }).join("");
+  let mcHtml = s.mc.map(k => `<div class="${k === s.exec ? "cur" : ""} ${k === s.fresh ? "new" : ""}">${k + 1}: ${src2[k].mc}</div>`).join("");
+  if (L.cls === "interp" && s.mc.length) mcHtml += `<p class="small" style="margin:4px 0 0">тимчасово в пам'яті, не зберігається</p>`;
+  if (L.cls === "comp" && s.exe) mcHtml += `<span class="exe">💾 program.exe</span>`;
+  L.el.innerHTML = `
+    <h3>${L.title}</h3>
+    <div class="stage">
+      <div class="box src"><h4>Текст програми</h4>${srcHtml}</div>
+      <div class="translator" id="tr${L.cls}">${L.title}<span class="tstate">${esc(s.tstate)}</span></div>
+      <div class="box mcode"><h4>Машинний код</h4>${mcHtml || '<span class="small">поки що порожньо</span>'}</div>
+    </div>
+    <div class="screen"><b>Екран:</b><div class="console">${esc(s.out.join("\n"))}</div></div>
+    <div class="cnt"><span>Перекладено рядків: <b>${s.translated}</b></span><span>Виконано рядків: <b>${s.executed}</b></span><span>Кроків: <b>${L.pos}</b> з ${L.steps.length}</span></div>
+    <div class="msg ${s.kind}">${s.msg || "Натисніть «Крок»."}</div>`;
+}
+
+const tab2 = {
+  reset() {
+    src2 = srcLines();
+    const rerun = $("rerun").checked && !$("withError").checked;
+    for (const L of Object.values(lanes)) { L.steps = L.build(src2, rerun); L.pos = 0; L.state = newLaneState(); renderLane(L); }
+  },
+  step() {
+    for (const L of Object.values(lanes)) {
+      if (L.pos >= L.steps.length) continue;
+      const stp = L.steps[L.pos++];
+      L.state.fresh = -1;            // анімуємо лише щойно перекладений рядок
+      stp.f(L.state); L.state.msg = stp.msg; L.state.kind = stp.kind || "";
+      renderLane(L);
+      const tr = document.getElementById("tr" + L.cls); if (tr) tr.classList.add("pulse");
+    }
+    return tab2.done();
+  },
+  done: () => Object.values(lanes).every(L => L.pos >= L.steps.length)
+};
+$("withError").addEventListener("change", () => { $("rerun").disabled = $("withError").checked; stopAuto(); tab2.reset(); });
+$("rerun").addEventListener("change", () => { stopAuto(); tab2.reset(); });
+
+/* =========================================================
+   6. СПІЛЬНЕ КЕРУВАННЯ ТА ВКЛАДКИ
+   ========================================================= */
+let active = tab1, auto = false, timer = null;
+const btnPlay = $("btnPlay");
+function stopAuto() { auto = false; clearTimeout(timer); btnPlay.textContent = "▶ Старт"; }
+function startAuto() {
+  if (active.done()) active.reset();
+  auto = true; btnPlay.textContent = "⏸ Пауза";
+  const tick = () => { if (!auto) return; const fin = active.step(); if (fin) stopAuto(); else timer = setTimeout(tick, delay()); };
+  tick();
+}
+$("btnStep").addEventListener("click", () => { stopAuto(); if (active.done()) active.reset(); active.step(); });
+btnPlay.addEventListener("click", () => auto ? stopAuto() : startAuto());
+$("btnReset").addEventListener("click", () => { stopAuto(); active.reset(); });
+
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+  stopAuto();
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
+  const t = b.dataset.tab;
+  $("tab-langs").classList.toggle("hidden", t !== "langs");
+  $("tab-langs-body").classList.toggle("hidden", t !== "langs");
+  $("tab-trans-ctl").classList.toggle("hidden", t !== "trans");
+  $("tab-trans").classList.toggle("hidden", t !== "trans");
+  active = t === "langs" ? tab1 : tab2;
+}));
+
+selectAlgo(0);
+tab2.reset();
+</script>
+</body>
+</html>

@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Стратегії резервного копіювання — 10 клас, тема 1.6</title>
+<!--
+  Симулятор «Стратегії резервного копіювання»
+  10 клас, Розділ 1. Основи комп'ютерної безпеки, тема 1.6 «Резервне копіювання та відновлення даних».
+
+  Файл повністю самодостатній: HTML + CSS + JavaScript, без бібліотек та інтернету.
+
+  Що показує:
+   - стрічку часу на 7–14 днів; щодня частина файлів змінюється (випадково або вручну);
+   - три стратегії: повне, інкрементне та диференціальне копіювання на ОДНАКОВОМУ сценарії змін;
+   - режим «Аварія»: покроковий алгоритм відновлення (які копії і в якому порядку застосувати);
+   - підсумкову таблицю «обсяг копій / кроки відновлення».
+
+  Як змінити під себе:
+   - перелік файлів і розміри — масив FILES (розділ 1 скрипта);
+   - готові сценарії — масив SCENARIOS;
+   - кольори — CSS-змінні в блоці :root.
+-->
+<style>
+  :root {
+    --bg: #f3f5fa;
+    --card: #ffffff;
+    --ink: #13203b;
+    --muted: #46557a;
+    --line: #c5cfe2;
+    --accent: #1d4ab8;
+    --accent-soft: #e2e9ff;
+    --cur: #ffd23f;
+    --cur-soft: #fff3c4;
+    --ok: #13803a;
+    --ok-soft: #daf3e2;
+    --bad: #c1121f;
+    --bad-soft: #ffe1e3;
+    --full: #1d4ab8;     /* повна копія */
+    --inc: #13803a;      /* інкрементна */
+    --diff: #7a2bbf;     /* диференціальна */
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html { font-size: 18px; }
+  body { margin: 0; font-family: "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.4; }
+
+  header { background: var(--accent); color: #fff; padding: 12px 24px; }
+  header .meta { font-size: 0.9rem; opacity: 0.92; }
+  header h1 { margin: 2px 0 0; font-size: 1.55rem; }
+  footer { text-align: center; color: var(--muted); padding: 10px 0 18px; font-size: 0.95rem; }
+
+  .layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; padding: 16px; max-width: 1720px; margin: 0 auto; }
+  .card { background: var(--card); border: 2px solid var(--line); border-radius: var(--radius); padding: 12px 16px; min-width: 0; }
+  .cardTitle { font-weight: 700; font-size: 1.05rem; margin-bottom: 8px; }
+  .stage { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .hint { font-size: 0.85rem; color: var(--muted); margin-top: 5px; }
+
+  /* ====== Ліва панель ====== */
+  .panel h2 { margin: 0 0 10px; font-size: 1.2rem; }
+  .field { margin-bottom: 14px; }
+  .label { display: block; font-weight: 700; margin-bottom: 6px; }
+  select { width: 100%; font: inherit; font-size: 1.05rem; padding: 7px 8px; border: 2px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); }
+  select:disabled { color: #9aa4ba; background: #f4f5f8; }
+  .seg { display: grid; gap: 6px; }
+  .seg button {
+    font: inherit; font-size: 1rem; text-align: left;
+    padding: 8px 10px; border: 2px solid var(--accent);
+    background: #fff; color: var(--accent); border-radius: 10px; cursor: pointer; font-weight: 600;
+  }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .seg button .bdg { margin-right: 6px; }
+  .presets { display: flex; flex-direction: column; gap: 6px; }
+  .presets button {
+    font: inherit; font-size: 0.97rem; text-align: left;
+    padding: 7px 10px; border-radius: 10px; cursor: pointer;
+    border: 2px solid var(--line); background: #f8f9fd; color: var(--ink);
+  }
+  .presets button:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .error { display: none; color: var(--bad); background: #fff0f0; border: 2px solid var(--bad); border-radius: 10px; padding: 8px 10px; margin-bottom: 12px; font-weight: 600; }
+  .error.show { display: block; }
+
+  /* ====== Панель керування ====== */
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .btn {
+    font: inherit; font-size: 1.05rem; font-weight: 700;
+    padding: 10px 16px; border-radius: 10px; cursor: pointer;
+    border: 2px solid var(--accent); background: #fff; color: var(--accent);
+  }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn:focus-visible, .seg button:focus-visible, .presets button:focus-visible { outline: 3px solid var(--cur); outline-offset: 2px; }
+  .speed { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-left: 6px; }
+  .speed input { width: 150px; accent-color: var(--accent); }
+  .progress { margin-left: auto; font-weight: 700; color: var(--muted); }
+
+  /* ====== Значки типів копій ====== */
+  .bdg { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 5px; border-radius: 7px; color: #fff; font-weight: 800; font-size: 0.9rem; }
+  .t-full { background: var(--full); }
+  .t-inc { background: var(--inc); }
+  .t-diff { background: var(--diff); }
+
+  /* ====== Робочий диск (комп'ютер) ====== */
+  .diskRow { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 18px; }
+  .files { display: flex; flex-wrap: wrap; gap: 8px; }
+  .file { width: 62px; text-align: center; }
+  .file .sq {
+    width: 58px; height: 58px; margin: 0 auto; border-radius: 10px;
+    background: var(--c); color: #fff; font-size: 1.5rem; font-weight: 800;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1;
+    border: 3px solid transparent; transition: background 0.3s, transform 0.3s;
+  }
+  .file .sq small { font-size: 0.75rem; font-weight: 700; margin-top: 3px; }
+  .file .nm { font-size: 0.72rem; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file.changed .sq { border-color: var(--ink); box-shadow: 0 0 0 4px var(--cur); transform: scale(1.06); }
+  .file.lost .sq { background: #d9dde6; color: #8b96b0; }
+  .file.restored .sq { border-color: var(--ink); box-shadow: 0 0 0 4px var(--ok); }
+  .volBox { flex: 1; min-width: 240px; }
+  .volBig { font-size: 1.35rem; font-weight: 800; }
+  .bar { height: 16px; background: #e6eaf3; border-radius: 8px; overflow: hidden; margin: 6px 0; }
+  .bar > div { height: 100%; background: var(--accent); transition: width 0.4s; }
+
+  /* ====== Сховище копій: стрічка часу ====== */
+  .tlWrap { overflow-x: auto; }
+  .timeline { display: grid; gap: 6px; }
+  .day {
+    border: 2px dashed var(--line); border-radius: 10px; padding: 5px 4px 6px;
+    text-align: center; min-height: 168px; display: flex; flex-direction: column; gap: 3px;
+    background: #fafbfe; position: relative;
+  }
+  .day .dh { font-weight: 800; font-size: 0.92rem; }
+  .day .dc { font-size: 0.72rem; color: var(--muted); }
+  .day.made { border-style: solid; border-color: #9aa8c6; background: #fff; }
+  .day.cur { border-color: var(--ink); border-width: 3px; background: var(--cur-soft); }
+  .day.future { opacity: 0.45; }
+  .day.crash { border: 3px solid var(--bad); background: var(--bad-soft); color: var(--bad); }
+  .day.crash .boom { font-size: 1.6rem; margin-top: 10px; }
+  .day.inChain { border: 3px solid var(--ok); background: var(--ok-soft); }
+  .day.applying { box-shadow: 0 0 0 4px var(--cur); }
+  .mini { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; min-height: 20px; }
+  .mini span { width: 17px; height: 17px; border-radius: 4px; background: var(--c); color: #fff; font-size: 0.66rem; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .day .sz { font-weight: 800; font-size: 0.95rem; margin-top: auto; }
+  .day .ord {
+    position: absolute; top: -12px; right: -6px; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--ok); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center;
+    border: 2px solid #fff;
+  }
+  .tlLegend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.88rem; color: var(--muted); margin-top: 8px; align-items: center; }
+
+  /* ====== Пояснення ====== */
+  .explain { font-size: 1.12rem; min-height: 4.2rem; border-left: 8px solid var(--accent); }
+  .explain b.full { color: var(--full); } .explain b.inc { color: var(--inc); } .explain b.diff { color: var(--diff); }
+  .explain .bad { color: var(--bad); font-weight: 700; }
+  .explain .good { color: var(--ok); font-weight: 700; }
+  .explain small { display: block; color: var(--muted); font-size: 0.95rem; margin-top: 5px; }
+
+  /* ====== Сценарій змін ====== */
+  .scWrap { overflow-x: auto; }
+  table.sc { border-collapse: collapse; }
+  .sc th, .sc td { border: 1px solid var(--line); text-align: center; padding: 3px 4px; }
+  .sc th { background: #f4f6fb; font-size: 0.82rem; }
+  .sc td.fn { text-align: left; white-space: nowrap; font-size: 0.95rem; padding-right: 10px; }
+  .sc td.fn .dot { display: inline-block; width: 20px; height: 20px; border-radius: 5px; background: var(--c); color: #fff; font-size: 0.75rem; font-weight: 800; text-align: center; line-height: 20px; margin-right: 6px; }
+  .sc input { width: 54px; font: inherit; font-size: 0.95rem; padding: 2px 4px; border: 2px solid var(--line); border-radius: 6px; text-align: center; }
+  .sc input.invalid { border-color: var(--bad); background: #fff4f4; }
+  .sc td.cell { width: 40px; height: 34px; cursor: pointer; }
+  .sc td.cell:hover { background: var(--accent-soft); }
+  .sc td.cell.on::after { content: "●"; color: var(--c); font-size: 1.3rem; line-height: 1; }
+  .sc td.cell.first { cursor: default; color: var(--muted); font-size: 0.8rem; background: #f4f6fb; }
+  .sc .curCol { background: var(--cur-soft) !important; }
+  .sc .crashCol { background: var(--bad-soft) !important; }
+
+  /* ====== Порівняльна таблиця ====== */
+  table.cmp { border-collapse: collapse; width: 100%; }
+  .cmp th, .cmp td { border: 1px solid var(--line); padding: 6px 8px; text-align: center; }
+  .cmp th { background: #f4f6fb; font-size: 0.9rem; }
+  .cmp td { font-size: 1.02rem; }
+  .cmp td.l { text-align: left; }
+  .cmp tr.sel td { background: var(--cur-soft); }
+  .cmp .best { color: var(--ok); font-weight: 800; }
+  .cmp .worst { color: var(--bad); font-weight: 800; }
+  .cmp .mbar { height: 10px; background: #e6eaf3; border-radius: 5px; overflow: hidden; margin-top: 3px; }
+  .cmp .mbar div { height: 100%; }
+  .cmp td.note { font-size: 0.9rem; text-align: left; color: var(--muted); }
+
+  @media (max-width: 1180px) { .layout { grid-template-columns: 1fr; } }
+  @media (max-width: 820px) { html { font-size: 17px; } .progress { margin-left: 0; width: 100%; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="meta">10 клас · Розділ 1. Основи комп'ютерної безпеки · Тема 1.6 «Резервне копіювання та відновлення даних»</div>
+  <h1>Симулятор «Стратегії резервного копіювання»</h1>
+</header>
+
+<main class="layout">
+  <!-- ===================== ЛІВА ПАНЕЛЬ ===================== -->
+  <aside class="panel card">
+    <h2>Налаштування</h2>
+
+    <div class="field">
+      <span class="label">Стратегія копіювання</span>
+      <div class="seg" id="stratSeg">
+        <button data-v="full"><span class="bdg t-full">П</span>Повне</button>
+        <button data-v="inc"><span class="bdg t-inc">І</span>Інкрементне</button>
+        <button data-v="diff"><span class="bdg t-diff">Д</span>Диференціальне</button>
+      </div>
+      <div class="hint" id="stratHint"></div>
+    </div>
+
+    <div class="field">
+      <span class="label">Режим</span>
+      <div class="seg" id="modeSeg">
+        <button data-v="copy">1. Щоденне копіювання</button>
+        <button data-v="crash">2. Аварія і відновлення</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="label" for="daysSel">Кількість днів</label>
+      <select id="daysSel"></select>
+    </div>
+
+    <div class="field">
+      <label class="label" for="fullSel">Коли робити повну копію</label>
+      <select id="fullSel">
+        <option value="1">лише в день 1</option>
+        <option value="7" selected>кожні 7 днів</option>
+      </select>
+      <div class="hint">Для інкрементної та диференціальної стратегій.</div>
+    </div>
+
+    <div class="field">
+      <label class="label" for="crashSel">День збою диска</label>
+      <select id="crashSel"></select>
+      <div class="hint">Збій стається вдень, до створення вечірньої копії. Використовується в режимі «Аварія» та в підсумковій таблиці.</div>
+    </div>
+
+    <div class="error" id="error" role="alert"></div>
+
+    <div class="field">
+      <span class="label">Сценарій змін файлів</span>
+      <div class="presets" id="presets"></div>
+      <div class="hint">Або клацайте клітинки в таблиці «Сценарій змін», щоб задати зміни вручну.</div>
+    </div>
+  </aside>
+
+  <!-- ===================== ВІЗУАЛІЗАЦІЯ ===================== -->
+  <section class="stage">
+    <div class="controls card">
+      <button id="btnStep" class="btn primary" title="Клавіша →">Крок ▶|</button>
+      <button id="btnPlay" class="btn" title="Клавіша Пробіл">▶ Старт</button>
+      <button id="btnAll" class="btn">Виконати все ⏭</button>
+      <button id="btnReset" class="btn">⟲ Скинути</button>
+      <label class="speed">Швидкість
+        <input type="range" id="speed" min="1" max="10" value="5">
+        <span id="speedVal">5</span>
+      </label>
+      <div class="progress" id="progress"></div>
+    </div>
+
+    <div class="card">
+      <div class="cardTitle" id="diskTitle">Робочий диск комп'ютера</div>
+      <div class="diskRow">
+        <div class="files" id="files"></div>
+        <div class="volBox" id="volBox"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="cardTitle">Сховище резервних копій (стрічка часу)</div>
+      <div class="tlWrap"><div class="timeline" id="timeline"></div></div>
+      <div class="tlLegend">
+        <span><span class="bdg t-full">П</span> повна копія</span>
+        <span><span class="bdg t-inc">І</span> інкрементна</span>
+        <span><span class="bdg t-diff">Д</span> диференціальна</span>
+        <span>кольорові квадратики — файли, що потрапили в копію</span>
+      </div>
+    </div>
+
+    <div class="explain card" id="explain" aria-live="polite"></div>
+
+    <div class="card">
+      <div class="cardTitle">Сценарій змін (однаковий для всіх стратегій)</div>
+      <div class="scWrap"><table class="sc" id="scTable"></table></div>
+      <div class="hint">● — файл змінено цього дня. Клацніть клітинку, щоб додати або прибрати зміну. Розмір файлу можна змінити (ціле число від 1 до 999 МБ).</div>
+    </div>
+
+    <div class="card">
+      <div class="cardTitle" id="cmpTitle">Порівняння стратегій</div>
+      <table class="cmp" id="cmpTable"></table>
+    </div>
+  </section>
+</main>
+
+<footer>Розроблено автором</footer>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   1. ФАЙЛИ ТА СЦЕНАРІЇ
+   ===================================================================== */
+// id — літера на квадратику, name — ім'я файлу, size — розмір у МБ, rate — наскільки часто змінюється
+const FILES = [
+  { id: 'A', name: 'Реферат.docx',     size: 2,  rate: 1.2, color: '#1d4ab8' },
+  { id: 'B', name: 'Таблиця.xlsx',     size: 1,  rate: 1.0, color: '#13803a' },
+  { id: 'C', name: 'Фото.jpg',         size: 4,  rate: 0.5, color: '#c94a0c' },
+  { id: 'D', name: 'Презентація.pptx', size: 6,  rate: 0.8, color: '#a61e4d' },
+  { id: 'E', name: 'Програма.py',      size: 1,  rate: 1.4, color: '#0b7285' },
+  { id: 'F', name: 'Музика.mp3',       size: 5,  rate: 0.3, color: '#7a2bbf' },
+  { id: 'G', name: 'Нотатки.txt',      size: 1,  rate: 1.5, color: '#5c940d' },
+  { id: 'H', name: 'Відео.mp4',        size: 12, rate: 0.25, color: '#495057' },
+  { id: 'I', name: 'Лист.docx',        size: 1,  rate: 0.8, color: '#b35c00' },
+  { id: 'J', name: 'Сайт.html',        size: 2,  rate: 1.0, color: '#3b5bdb' },
+];
+const F = FILES.length;
+const MAX_DAYS = 14;
+
+// Готові сценарії: seed — «зерно» випадкових чисел (той самий сценарій щоразу), p — ймовірність зміни
+const SCENARIOS = [
+  { title: 'Звичайні навчальні дні', seed: 7, p: 0.25 },
+  { title: 'Мало змін', seed: 11, p: 0.1 },
+  { title: 'Інтенсивна робота (багато змін)', seed: 5, p: 0.55 },
+  { title: '🎲 Новий випадковий сценарій', seed: null, p: 0.25 },
+  { title: 'Очистити (задати зміни вручну)', clear: true },
+];
+
+const STRAT = {
+  full: { name: 'Повне', adj: 'повну', badge: 'П', cls: 'full' },
+  inc:  { name: 'Інкрементне', adj: 'інкрементну', badge: 'І', cls: 'inc' },
+  diff: { name: 'Диференціальне', adj: 'диференціальну', badge: 'Д', cls: 'diff' },
+};
+const TYPE_ADJ = { full: 'повну', inc: 'інкрементну', diff: 'диференціальну' };
+const TYPE_GEN = { full: 'повної', inc: 'інкрементної', diff: 'диференціальної' };
+
+/* =====================================================================
+   2. ДОПОМІЖНІ ФУНКЦІЇ
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+// Генератор псевдовипадкових чисел із «зерном» (mulberry32), щоб сценарій можна було повторити
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const fileList = ids => ids.map(f => FILES[f].id).join(', ');
+const sizeOf = ids => ids.reduce((s, f) => s + state.sizes[f], 0);
+function plural(n, forms) {
+  const a = Math.abs(n) % 100, b = a % 10;
+  if (a > 10 && a < 20) return forms[2];
+  if (b === 1) return forms[0];
+  if (b >= 2 && b <= 4) return forms[1];
+  return forms[2];
+}
+const copies = n => `${n} ${plural(n, ['копію', 'копії', 'копій'])}`;
+
+/* =====================================================================
+   3. СТАН
+   ===================================================================== */
+const state = {
+  strategy: 'inc',
+  mode: 'copy',
+  days: 7,
+  fullEvery: 7,
+  crash: 7,                 // номер дня збою (від 2 до days)
+  ch: [],                   // ch[d][f] — чи змінено файл f у день d (d від 0)
+  sizes: FILES.map(f => f.size),
+  valid: true,
+  sim: null,                // результат моделювання поточної стратегії
+  steps: [], cur: -1, timer: null,
+};
+
+function genScenario(seed, p) {
+  const r = rng(seed);
+  state.ch = [];
+  for (let d = 0; d < MAX_DAYS; d++) {
+    state.ch.push(FILES.map(f => d > 0 && r() < p * f.rate));
+  }
+}
+
+/* =====================================================================
+   4. МОДЕЛЮВАННЯ СТРАТЕГІЇ
+   Щодня: спочатку змінюються файли, увечері створюється копія.
+   Повна — усі файли; інкрементна — змінені з моменту ПОПЕРЕДНЬОЇ копії (тобто сьогодні);
+   диференціальна — змінені з моменту ОСТАННЬОЇ ПОВНОЇ копії.
+   ===================================================================== */
+function simulate(strategy) {
+  const ver = [];                         // ver[d][f] — версія файлу на кінець дня d
+  const cur = FILES.map(() => 0);
+  const backups = [];
+  let lastFull = 0;
+  let sinceFull = new Set();
+  for (let d = 0; d < state.days; d++) {
+    const changed = d === 0 ? FILES.map((_, f) => f) : FILES.map((_, f) => f).filter(f => state.ch[d][f]);
+    changed.forEach(f => cur[f]++);
+    ver.push(cur.slice());
+
+    const isFull = d === 0 || strategy === 'full' || (state.fullEvery === 7 && d % 7 === 0);
+    let type, files;
+    if (isFull) {
+      type = 'full'; files = FILES.map((_, f) => f); lastFull = d; sinceFull = new Set();
+    } else if (strategy === 'inc') {
+      type = 'inc'; files = changed;
+    } else {
+      changed.forEach(f => sinceFull.add(f));
+      type = 'diff'; files = [...sinceFull].sort((a, b) => a - b);
+    }
+    backups.push({ day: d, type, files: files.map(f => ({ f, v: cur[f] })), size: sizeOf(files), changed, lastFull });
+  }
+  return { ver, backups, total: backups.reduce((s, b) => s + b.size, 0) };
+}
+
+// Ланцюжок копій для відновлення стану на кінець дня target (індекс від 0)
+function restoreChain(sim, strategy, target) {
+  const f = sim.backups[target].lastFull;
+  if (strategy === 'full') return [target];
+  if (strategy === 'inc') { const c = []; for (let d = f; d <= target; d++) c.push(d); return c; }
+  return target > f ? [f, target] : [f];
+}
+
+/* =====================================================================
+   5. ПОБУДОВА КРОКІВ
+   ===================================================================== */
+function rebuild() {
+  stop();
+  state.cur = -1;
+  state.steps = [];
+  readSizes();
+  syncPanel();
+  renderScenario();
+  if (!state.valid) { render(); renderCompare(); return; }
+
+  state.sim = simulate(state.strategy);
+  if (state.mode === 'copy') {
+    for (let d = 0; d < state.days; d++) {
+      state.steps.push({ type: 'change', d });
+      state.steps.push({ type: 'backup', d });
+    }
+    state.steps.push({ type: 'sum' });
+  } else {
+    const c = state.crash - 1;   // індекс дня збою
+    const chain = restoreChain(state.sim, state.strategy, c - 1);
+    state.chain = chain;
+    state.steps.push({ type: 'crash' });
+    state.steps.push({ type: 'plan' });
+    chain.forEach((d, i) => state.steps.push({ type: 'apply', i, d }));
+    state.steps.push({ type: 'verify' });
+  }
+  render();
+  renderCompare();
+}
+
+// Зчитування та перевірка розмірів файлів із таблиці сценарію
+function readSizes() {
+  let ok = true;
+  document.querySelectorAll('#scTable input[data-size]').forEach(inp => {
+    const f = Number(inp.dataset.size);
+    const v = inp.value.trim();
+    const good = /^\d{1,3}$/.test(v) && Number(v) >= 1;
+    inp.classList.toggle('invalid', !good);
+    if (good) state.sizes[f] = Number(v); else ok = false;
+  });
+  state.valid = ok;
+  $('error').textContent = ok ? '' : 'Розмір файлу має бути цілим числом від 1 до 999 МБ. Виправте клітинки, виділені червоним.';
+  $('error').classList.toggle('show', !ok);
+}
+
+/* =====================================================================
+   6. КЕРУВАННЯ
+   ===================================================================== */
+const delay = () => 2300 - Number($('speed').value) * 200;
+function stepForward() {
+  if (!state.valid || state.cur >= state.steps.length - 1) { stop(); return; }
+  state.cur++;
+  render();
+  if (state.cur >= state.steps.length - 1) stop();
+}
+function play() {
+  if (!state.valid) return;
+  if (state.cur >= state.steps.length - 1) state.cur = -1;
+  stop();
+  state.timer = setInterval(stepForward, delay());
+  stepForward();
+  updateButtons();
+}
+function stop() { if (state.timer) clearInterval(state.timer); state.timer = null; updateButtons(); }
+function runAll() { if (!state.valid) return; stop(); state.cur = state.steps.length - 1; render(); }
+function updateButtons() {
+  const atEnd = state.cur >= state.steps.length - 1;
+  $('btnStep').disabled = !state.valid || atEnd;
+  $('btnAll').disabled = !state.valid || atEnd;
+  $('btnPlay').disabled = !state.valid;
+  $('btnReset').disabled = !state.valid;
+  $('btnPlay').textContent = state.timer ? '⏸ Пауза' : (atEnd && state.valid ? '▶ Ще раз' : '▶ Старт');
+  $('progress').textContent = state.valid ? `Крок ${state.cur + 1} з ${state.steps.length}` : '';
+}
+
+/* =====================================================================
+   7. ВІДОБРАЖЕННЯ
+   ===================================================================== */
+function render() {
+  if (!state.valid) {
+    $('files').innerHTML = ''; $('volBox').innerHTML = ''; $('timeline').innerHTML = '';
+    $('explain').innerHTML = '<b>Виправте введені дані</b> — повідомлення про помилку ліворуч.';
+    updateButtons(); return;
+  }
+  if (state.mode === 'copy') renderCopy(); else renderCrash();
+  updateButtons();
+}
+
+// Квадратики файлів на робочому диску. vers[f] = номер версії або null (файл утрачено)
+function renderFiles(vers, changedSet, restoredSet) {
+  $('files').innerHTML = FILES.map((fl, f) => {
+    const cls = ['file'];
+    if (vers[f] == null) cls.push('lost');
+    if (changedSet && changedSet.has(f)) cls.push('changed');
+    if (restoredSet && restoredSet.has(f)) cls.push('restored');
+    return `<div class="${cls.join(' ')}" style="--c:${fl.color}" title="${fl.name}, ${state.sizes[f]} МБ">` +
+      `<div class="sq">${fl.id}<small>${vers[f] == null ? '?' : 'v' + vers[f]}</small></div>` +
+      `<div class="nm">${fl.name}</div></div>`;
+  }).join('');
+}
+
+// Стрічка часу зі стовпчиком на кожен день
+function renderTimeline(shownUpTo, opts = {}) {
+  const tl = $('timeline');
+  tl.style.gridTemplateColumns = `repeat(${state.days}, minmax(56px, 1fr))`;
+  const sim = state.sim;
+  tl.innerHTML = sim.backups.map((b, d) => {
+    const cls = ['day'];
+    let inner = `<div class="dh">День ${d + 1}</div>`;
+    if (opts.crashDay === d) {
+      cls.push('crash');
+      inner += `<div class="boom">💥</div><div style="font-weight:800">збій диска</div><div class="dc">копію не створено</div>`;
+      return `<div class="${cls.join(' ')}">${inner}</div>`;
+    }
+    if (opts.crashDay != null && d > opts.crashDay) cls.push('future');
+    inner += `<div class="dc">${d === 0 ? 'створено файли' : 'змін: ' + b.changed.length}</div>`;
+    if (d <= shownUpTo) {
+      cls.push('made');
+      inner += `<div><span class="bdg t-${b.type}">${STRAT[b.type].badge}</span></div>` +
+        `<div class="mini">${b.files.map(x => `<span style="--c:${FILES[x.f].color}" title="${FILES[x.f].name} v${x.v}">${FILES[x.f].id}</span>`).join('')}</div>` +
+        `<div class="sz">${b.size} МБ</div>`;
+    } else {
+      inner += `<div class="dc" style="margin-top:auto">копії ще немає</div>`;
+    }
+    if (opts.cur === d) cls.push('cur');
+    const ci = opts.chain ? opts.chain.indexOf(d) : -1;
+    if (ci >= 0 && opts.showChain) { cls.push('inChain'); inner += `<div class="ord">${ci + 1}</div>`; }
+    if (opts.applying === d) cls.push('applying');
+    return `<div class="${cls.join(' ')}">${inner}</div>`;
+  }).join('');
+}
+
+// ---------- Режим «Щоденне копіювання» ----------
+function renderCopy() {
+  const step = state.cur >= 0 ? state.steps[state.cur] : null;
+  const sim = state.sim;
+  let day = -1, made = -1;
+  if (step) {
+    if (step.type === 'sum') { day = state.days - 1; made = state.days - 1; }
+    else { day = step.d; made = step.type === 'backup' ? step.d : step.d - 1; }
+  }
+  const vers = day < 0 ? FILES.map(() => null) : sim.ver[day];
+  const changedSet = step && step.type === 'change' ? new Set(sim.backups[step.d].changed) : null;
+  renderFiles(vers, changedSet, null);
+  $('diskTitle').textContent = day < 0 ? 'Робочий диск комп\'ютера (файлів ще немає)' : `Робочий диск комп'ютера: стан на день ${day + 1}`;
+
+  renderTimeline(made, { cur: step && step.type !== 'sum' ? step.d : null });
+
+  // Обсяг створених копій
+  const vol = sim.backups.slice(0, made + 1).reduce((s, b) => s + b.size, 0);
+  const fullTotal = simulate('full').total;
+  const disk = sizeOf(FILES.map((_, f) => f));
+  $('volBox').innerHTML =
+    `<div>Обсяг усіх створених копій:</div><div class="volBig">${vol} МБ</div>` +
+    `<div class="bar"><div style="width:${fullTotal ? vol / fullTotal * 100 : 0}%;background:var(--${STRAT[state.strategy].cls})"></div></div>` +
+    `<div class="hint">Шкала: ${fullTotal} МБ — стільки займуть повні копії за ${state.days} днів. Обсяг усіх файлів на диску: ${disk} МБ.</div>`;
+
+  $('explain').innerHTML = explainCopy(step);
+  markScenarioCol(step && step.type !== 'sum' ? step.d : null, null);
+}
+
+function explainCopy(step) {
+  const s = state.strategy, sim = state.sim;
+  if (!step) {
+    const rule = {
+      full: '<b class="full">Повне копіювання</b>: щовечора копіюємо всі файли.',
+      inc: '<b class="inc">Інкрементне копіювання</b>: після першої повної копії щовечора копіюємо лише файли, змінені з моменту <b>попередньої</b> копії.',
+      diff: '<b class="diff">Диференціальне копіювання</b>: після першої повної копії щовечора копіюємо всі файли, змінені з моменту <b>останньої повної</b> копії.',
+    }[s];
+    return `${rule}<small>Натисніть «Крок» або «Старт». Кожен день має дві дії: удень змінюються файли, а ввечері створюється резервна копія.</small>`;
+  }
+  if (step.type === 'change') {
+    const b = sim.backups[step.d];
+    if (step.d === 0) return `<b>День 1.</b> На диску створено ${F} файлів загальним обсягом ${sizeOf(b.changed)} МБ. Кожен файл має версію v1.`;
+    if (!b.changed.length) return `<b>День ${step.d + 1}.</b> Сьогодні жоден файл не змінювався.`;
+    return `<b>День ${step.d + 1}.</b> Учні працюють з файлами, і змінюються ${b.changed.map(f => `<b>${FILES[f].id}</b> (${FILES[f].name} → v${sim.ver[step.d][f]})`).join(', ')}.`;
+  }
+  if (step.type === 'backup') {
+    const b = sim.backups[step.d];
+    const list = b.files.length ? fileList(b.files.map(x => x.f)) : 'нічого';
+    if (b.type === 'full') {
+      const why = step.d === 0 ? 'Перша копія завжди повна.' : (s === 'full' ? '' : 'За розкладом сьогодні повна копія (кожні 7 днів).');
+      return `Увечері створюємо <b class="full">повну</b> копію: копіюємо <b>усі</b> файли, навіть незмінені, разом ${b.size} МБ. ${why}`;
+    }
+    if (b.type === 'inc') {
+      return `Створюємо <b class="inc">інкрементну</b> копію: лише файли, змінені з моменту <b>попередньої копії</b> (вчорашньої): ${list}, разом ${b.size} МБ.` +
+        (b.files.length ? '' : '<small>Змін не було, тож копія порожня. Але вона все одно є ланкою ланцюжка.</small>');
+    }
+    const grow = step.d > b.lastFull + 1 ? '<small>Зверніть увагу: диференціальна копія з кожним днем «росте», бо включає всі зміни від повної копії.</small>' : '';
+    return `Створюємо <b class="diff">диференціальну</b> копію: усі файли, змінені з моменту <b>останньої повної копії</b> (день ${b.lastFull + 1}): ${list}, разом ${b.size} МБ.${grow}`;
+  }
+  return `<b>Готово!</b> За ${state.days} днів створено ${copies(state.days)} загальним обсягом <b>${sim.total} МБ</b>. ` +
+    `Порівняйте з іншими стратегіями в таблиці внизу, а потім увімкніть режим «Аварія і відновлення».`;
+}
+
+// ---------- Режим «Аварія і відновлення» ----------
+function renderCrash() {
+  const step = state.cur >= 0 ? state.steps[state.cur] : null;
+  const sim = state.sim;
+  const c = state.crash - 1, target = c - 1;
+  const chain = state.chain;
+
+  // Стан диска: до збою — версії на день збою; після — порожньо, потім відновлюється
+  let vers, restored = null, applying = null;
+  const lostToday = sim.backups[c].changed;
+  if (!step) {
+    vers = sim.ver[c].slice();
+  } else {
+    vers = FILES.map(() => null);
+    const appliedUpTo = step.type === 'apply' ? step.i : step.type === 'verify' ? chain.length - 1 : -1;
+    for (let i = 0; i <= appliedUpTo; i++) sim.backups[chain[i]].files.forEach(x => { vers[x.f] = x.v; });
+    if (step.type === 'apply') { applying = step.d; restored = new Set(sim.backups[step.d].files.map(x => x.f)); }
+  }
+  renderFiles(vers, !step ? new Set(lostToday) : null, restored);
+  $('diskTitle').textContent = !step ? `Робочий диск: день ${c + 1}, до збою` :
+    step.type === 'verify' ? `Робочий диск після відновлення (стан на кінець дня ${target + 1})` : 'Робочий диск після збою';
+
+  renderTimeline(target, { crashDay: c, chain, showChain: !!step && step.type !== 'crash', applying, cur: null });
+
+  // Скільки даних уже прочитано з копій
+  const done = step ? (step.type === 'apply' ? step.i + 1 : step.type === 'verify' ? chain.length : 0) : 0;
+  const read = chain.slice(0, done).reduce((s, d) => s + sim.backups[d].size, 0);
+  $('volBox').innerHTML =
+    `<div>План відновлення: ${copies(chain.length)}</div><div class="volBig">Застосовано: ${done} з ${chain.length}</div>` +
+    `<div class="bar"><div style="width:${done / chain.length * 100}%;background:var(--ok)"></div></div>` +
+    `<div class="hint">Прочитано з копій: ${read} МБ</div>`;
+
+  $('explain').innerHTML = explainCrash(step);
+  markScenarioCol(null, c);
+}
+
+function explainCrash(step) {
+  const sim = state.sim, s = state.strategy;
+  const c = state.crash - 1, target = c - 1, chain = state.chain;
+  const f = chain[0];
+  if (!step) return `Стратегія <b class="${s}">«${STRAT[s].name}»</b>. Усі копії до дня ${c + 1} уже створено. Натисніть «Крок», щоб змоделювати збій диска в день ${c + 1}.`;
+  switch (step.type) {
+    case 'crash': {
+      const lost = sim.backups[c].changed;
+      return `<span class="bad">💥 День ${c + 1}: диск вийшов з ладу</span> ще до створення вечірньої копії! Усі файли на комп'ютері втрачено.` +
+        (lost.length ? `<small>Зміни, зроблені сьогодні (${fileList(lost)}), відновити неможливо: вони не потрапили в жодну копію. Тому копії треба робити регулярно.</small>`
+          : '<small>Сьогодні файли ще не змінювалися, тож усі дані можна відновити до останньої версії.</small>');
+    }
+    case 'plan':
+      if (s === 'full') return `<b>Алгоритм відновлення.</b> Беремо <b>останню</b> копію (день ${f + 1}). Вона повна і містить усі файли, тому вистачить <b>1 кроку</b>.`;
+      if (s === 'inc') return `<b>Алгоритм відновлення.</b> 1) Знаходимо останню повну копію: день ${f + 1}. ` +
+        (chain.length > 1 ? `2) Потім <b>по черзі, від старшої до новішої</b>, застосовуємо всі інкрементні копії: дні ${f + 2}–${target + 1}. Разом ${copies(chain.length)}.` : 'Інших копій після неї немає.') +
+        '<small>Порядок важливий: новіша версія файлу має перезаписати старішу. Якщо хоч одна копія з ланцюжка пошкоджена, відновити останній стан не вдасться.</small>';
+      return `<b>Алгоритм відновлення.</b> 1) Знаходимо останню повну копію: день ${f + 1}. ` +
+        (chain.length > 1 ? `2) Застосовуємо лише <b>останню</b> диференціальну копію (день ${target + 1}): вона вже містить усі зміни від повної. Разом ${copies(chain.length)}.` : 'Інших копій після неї немає.');
+    case 'apply': {
+      const b = sim.backups[step.d];
+      const prevVers = FILES.map(() => null);
+      for (let i = 0; i < step.i; i++) sim.backups[chain[i]].files.forEach(x => { prevVers[x.f] = x.v; });
+      const upd = b.files.filter(x => prevVers[x.f] != null && prevVers[x.f] !== x.v);
+      const list = b.files.length ? b.files.map(x => `${FILES[x.f].id} v${x.v}`).join(', ') : 'немає (порожня копія)';
+      return `<b>Крок ${step.i + 1} з ${chain.length}.</b> Застосовуємо ${TYPE_ADJ[b.type]} копію дня ${step.d + 1} (${b.size} МБ). Відновлюємо файли: ${list}.` +
+        (upd.length ? `<small>Оновлено до новіших версій: ${upd.map(x => `${FILES[x.f].id} (v${prevVers[x.f]} → v${x.v})`).join(', ')}.</small>` : '');
+    }
+    case 'verify': {
+      const ok = FILES.every((_, i) => {
+        let v = null; chain.forEach(d => sim.backups[d].files.forEach(x => { if (x.f === i) v = x.v; }));
+        return v === sim.ver[target][i];
+      });
+      const read = chain.reduce((t, d) => t + sim.backups[d].size, 0);
+      return (ok ? `<span class="good">✓ Відновлено стан на кінець дня ${target + 1}:</span> усі файли мають ті самі версії, що й у копіях перед збоєм.`
+        : '<span class="bad">Помилка відновлення!</span>') +
+        ` Застосовано ${copies(chain.length)}, прочитано ${read} МБ.<small>Порівняйте кількість кроків відновлення для різних стратегій у таблиці нижче.</small>`;
+    }
+  }
+  return '';
+}
+
+// ---------- Таблиця сценарію ----------
+function renderScenario() {
+  let h = '<tr><th>Файл</th><th>Розмір, МБ</th>';
+  for (let d = 0; d < state.days; d++) h += `<th data-col="${d}">День ${d + 1}</th>`;
+  h += '</tr>';
+  FILES.forEach((fl, f) => {
+    h += `<tr style="--c:${fl.color}"><td class="fn"><span class="dot">${fl.id}</span>${fl.name}</td>` +
+      `<td><input type="text" inputmode="numeric" data-size="${f}" value="${state.sizes[f]}" maxlength="3"></td>`;
+    for (let d = 0; d < state.days; d++) {
+      if (d === 0) h += `<td class="cell first" data-col="0">створ.</td>`;
+      else h += `<td class="cell ${state.ch[d][f] ? 'on' : ''}" data-col="${d}" data-d="${d}" data-f="${f}" title="${fl.name}, день ${d + 1}"></td>`;
+    }
+    h += '</tr>';
+  });
+  // підсумок змін за день
+  h += '<tr><td class="fn"><b>Змінено файлів</b></td><td></td>';
+  for (let d = 0; d < state.days; d++) h += `<td data-col="${d}"><b>${d === 0 ? F : state.ch[d].filter(Boolean).length}</b></td>`;
+  h += '</tr>';
+  // зберігаємо фокус і значення, якщо користувач саме редагує розмір
+  const active = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.size : undefined;
+  const typed = active !== undefined ? document.activeElement.value : null;
+  $('scTable').innerHTML = h;
+  document.querySelectorAll('#scTable input[data-size]').forEach(inp => {
+    const f = Number(inp.dataset.size);
+    if (String(f) === active) { inp.value = typed; inp.focus(); inp.setSelectionRange(typed.length, typed.length); }
+    const good = /^\d{1,3}$/.test(inp.value.trim()) && Number(inp.value) >= 1;
+    inp.classList.toggle('invalid', !good);
+  });
+}
+
+function markScenarioCol(curDay, crashDay) {
+  document.querySelectorAll('#scTable [data-col]').forEach(td => {
+    const d = Number(td.dataset.col);
+    td.classList.toggle('curCol', d === curDay);
+    td.classList.toggle('crashCol', d === crashDay);
+  });
+}
+
+// ---------- Порівняльна таблиця ----------
+function renderCompare() {
+  if (!state.valid) { $('cmpTable').innerHTML = ''; return; }
+  const c = state.crash - 1, target = c - 1;
+  const rows = Object.keys(STRAT).map(k => {
+    const sim = simulate(k);
+    const chain = restoreChain(sim, k, target);
+    return { k, total: sim.total, steps: chain.length, read: chain.reduce((s, d) => s + sim.backups[d].size, 0) };
+  });
+  const max = Math.max(...rows.map(r => r.total));
+  const ext = (key, r) => {
+    const vals = rows.map(x => x[key]);
+    return r[key] === Math.min(...vals) ? 'best' : r[key] === Math.max(...vals) ? 'worst' : '';
+  };
+  const notes = {
+    full: 'Найпростіше й найшвидше відновлення, але копії займають найбільше місця.',
+    inc: 'Найменший обсяг копій, але відновлення найдовше, і потрібні всі копії ланцюжка.',
+    diff: 'Компроміс: копія щодня «росте», зате для відновлення потрібно лише 2 копії.',
+  };
+  $('cmpTitle').textContent = `Порівняння стратегій (${state.days} днів, збій у день ${c + 1})`;
+  $('cmpTable').innerHTML =
+    '<tr><th>Стратегія</th><th>Обсяг усіх копій за період</th><th>Копій для відновлення</th><th>Прочитати під час відновлення</th><th>Особливості</th></tr>' +
+    rows.map(r => `<tr class="${r.k === state.strategy ? 'sel' : ''}">` +
+      `<td class="l"><span class="bdg t-${r.k}">${STRAT[r.k].badge}</span> ${STRAT[r.k].name}</td>` +
+      `<td><span class="${ext('total', r)}">${r.total} МБ</span><div class="mbar"><div style="width:${r.total / max * 100}%;background:var(--${r.k})"></div></div></td>` +
+      `<td><span class="${ext('steps', r)}">${r.steps}</span></td>` +
+      `<td><span class="${ext('read', r)}">${r.read} МБ</span></td>` +
+      `<td class="note">${notes[r.k]}</td></tr>`).join('') +
+    `<tr><td colspan="5" class="note">Зеленим виділено найкраще значення, червоним — найгірше. Повна копія ${state.fullEvery === 7 ? 'робиться кожні 7 днів' : 'робиться лише в день 1'} (для інкрементної та диференціальної стратегій).</td></tr>`;
+}
+
+/* =====================================================================
+   8. ЛІВА ПАНЕЛЬ
+   ===================================================================== */
+function syncPanel() {
+  document.querySelectorAll('#stratSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === state.strategy));
+  document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === state.mode));
+  $('fullSel').disabled = state.strategy === 'full';
+  $('stratHint').innerHTML = {
+    full: 'Щодня копіюються всі файли.',
+    inc: 'Копіюються зміни від <b>попередньої</b> копії.',
+    diff: 'Копіюються зміни від <b>останньої повної</b> копії.',
+  }[state.strategy];
+  // список днів збою
+  const sel = $('crashSel');
+  if (state.crash > state.days) state.crash = state.days;
+  sel.innerHTML = '';
+  for (let d = 2; d <= state.days; d++) sel.innerHTML += `<option value="${d}" ${d === state.crash ? 'selected' : ''}>День ${d}</option>`;
+}
+
+function init() {
+  const ds = $('daysSel');
+  for (let d = 7; d <= MAX_DAYS; d++) ds.innerHTML += `<option value="${d}" ${d === state.days ? 'selected' : ''}>${d} днів</option>`;
+
+  document.querySelectorAll('#stratSeg button').forEach(b => b.addEventListener('click', () => { state.strategy = b.dataset.v; rebuild(); }));
+  document.querySelectorAll('#modeSeg button').forEach(b => b.addEventListener('click', () => { state.mode = b.dataset.v; rebuild(); }));
+  ds.addEventListener('change', () => { state.days = Number(ds.value); rebuild(); });
+  $('fullSel').addEventListener('change', () => { state.fullEvery = Number($('fullSel').value); rebuild(); });
+  $('crashSel').addEventListener('change', () => { state.crash = Number($('crashSel').value); rebuild(); });
+
+  // Редагування сценарію: клацання по клітинці та зміна розміру
+  $('scTable').addEventListener('click', e => {
+    const td = e.target.closest('td[data-d]');
+    if (!td) return;
+    const d = Number(td.dataset.d), f = Number(td.dataset.f);
+    state.ch[d][f] = !state.ch[d][f];
+    rebuild();
+  });
+  $('scTable').addEventListener('input', e => { if (e.target.dataset.size !== undefined) rebuild(); });
+
+  SCENARIOS.forEach(sc => {
+    const b = document.createElement('button');
+    b.textContent = sc.title;
+    b.addEventListener('click', () => {
+      if (sc.clear) state.ch = Array.from({ length: MAX_DAYS }, () => FILES.map(() => false));
+      else genScenario(sc.seed ?? Math.floor(Math.random() * 1e9), sc.p);
+      rebuild();
+    });
+    $('presets').appendChild(b);
+  });
+
+  $('btnStep').addEventListener('click', () => { stop(); stepForward(); });
+  $('btnPlay').addEventListener('click', () => (state.timer ? stop() : play()));
+  $('btnAll').addEventListener('click', runAll);
+  $('btnReset').addEventListener('click', () => { stop(); state.cur = -1; render(); });
+  $('speed').addEventListener('input', () => {
+    $('speedVal').textContent = $('speed').value;
+    if (state.timer) { clearInterval(state.timer); state.timer = setInterval(stepForward, delay()); }
+  });
+  document.addEventListener('keydown', e => {
+    const tag = document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); stop(); stepForward(); }
+    if (e.key === ' ') { e.preventDefault(); state.timer ? stop() : play(); }
+  });
+
+  genScenario(SCENARIOS[0].seed, SCENARIOS[0].p);
+  rebuild();
+}
+
+init();
+</script>
+</body>
+</html>

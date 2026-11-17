@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Шифрування: від Цезаря до Віженера — 10 клас, тема 1.2</title>
+<!--
+  Візуалізатор «Шифрування: від Цезаря до Віженера»
+  10 клас, Розділ 1. Основи комп'ютерної безпеки, тема 1.2 «Основні поняття інформаційної безпеки».
+
+  Файл повністю самодостатній: HTML + CSS + JavaScript, без бібліотек та інтернету.
+  Відкривається подвійним клацанням у будь-якому сучасному браузері (Chrome, Edge, Firefox).
+
+  Як змінити під себе:
+   - готові приклади — масив PRESETS у розділі 2 скрипта;
+   - словник «знайомих слів» для зламу перебором — COMMON_WORDS у розділі 3;
+   - кольори — CSS-змінні в блоці :root нижче.
+-->
+<style>
+  /* ====== Кольори та базові розміри (легко змінити) ====== */
+  :root {
+    --bg: #f3f5fa;
+    --card: #ffffff;
+    --ink: #13203b;
+    --muted: #46557a;
+    --line: #c5cfe2;
+    --accent: #1d4ab8;       /* основний синій */
+    --accent-soft: #e2e9ff;
+    --cur: #ffd23f;          /* поточний елемент — жовтий */
+    --cur-soft: #fff3c4;
+    --ok: #13803a;           /* результат — зелений */
+    --ok-soft: #daf3e2;
+    --shift: #c94a0c;        /* зсув — помаранчевий */
+    --shift-soft: #ffe7d9;
+    --key: #7a2bbf;          /* ключ — фіолетовий */
+    --key-soft: #f0e3ff;
+    --err: #b3121f;
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; }
+  html { font-size: 18px; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.4;
+  }
+
+  /* ====== Шапка і підвал ====== */
+  header { background: var(--accent); color: #fff; padding: 12px 24px; }
+  header .meta { font-size: 0.9rem; opacity: 0.92; }
+  header h1 { margin: 2px 0 0; font-size: 1.55rem; }
+  footer { text-align: center; color: var(--muted); padding: 10px 0 18px; font-size: 0.95rem; }
+
+  /* ====== Загальна сітка ====== */
+  .layout {
+    display: grid;
+    grid-template-columns: 330px 1fr;
+    gap: 16px;
+    padding: 16px;
+    max-width: 1720px;
+    margin: 0 auto;
+  }
+  .card {
+    background: var(--card);
+    border: 2px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+  }
+  .cardTitle { font-weight: 700; font-size: 1.05rem; margin-bottom: 8px; }
+  .stage { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+  /* ====== Ліва панель налаштувань ====== */
+  .panel h2 { margin: 0 0 10px; font-size: 1.2rem; }
+  .field { margin-bottom: 14px; }
+  .label { display: block; font-weight: 700; margin-bottom: 6px; }
+  .hint { font-size: 0.85rem; color: var(--muted); margin-top: 5px; }
+  textarea, input[type=text] {
+    width: 100%;
+    font: inherit;
+    font-size: 1.15rem;
+    padding: 8px 10px;
+    border: 2px solid var(--line);
+    border-radius: 10px;
+    color: var(--ink);
+  }
+  textarea { resize: vertical; min-height: 84px; }
+  textarea:focus, input[type=text]:focus { outline: 3px solid var(--accent-soft); border-color: var(--accent); }
+  .invalid { border-color: var(--err) !important; background: #fff4f4; }
+
+  /* Перемикачі-кнопки (шифр, режим) */
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .seg.seg3 { grid-template-columns: 1fr 1fr; }
+  .seg.seg3 button:last-child { grid-column: 1 / -1; }
+  .seg button {
+    font: inherit; font-size: 1rem;
+    padding: 9px 6px;
+    border: 2px solid var(--accent);
+    background: #fff; color: var(--accent);
+    border-radius: 10px; cursor: pointer; font-weight: 600;
+  }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .seg button:disabled { border-color: var(--line); color: #9aa4ba; cursor: not-allowed; background: #f4f5f8; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+  .chip {
+    background: var(--key-soft); color: var(--key);
+    border: 2px solid var(--key); border-radius: 8px;
+    padding: 1px 8px; font-weight: 700; font-size: 0.95rem;
+  }
+  .error {
+    display: none;
+    color: var(--err); background: #fff0f0;
+    border: 2px solid var(--err); border-radius: 10px;
+    padding: 8px 10px; margin-bottom: 12px; font-weight: 600;
+  }
+  .error.show { display: block; }
+  .presets { display: flex; flex-direction: column; gap: 6px; }
+  .presets button {
+    font: inherit; font-size: 0.98rem; text-align: left;
+    padding: 8px 10px; border-radius: 10px; cursor: pointer;
+    border: 2px solid var(--line); background: #f8f9fd; color: var(--ink);
+  }
+  .presets button:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+  /* ====== Панель керування ====== */
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .btn {
+    font: inherit; font-size: 1.05rem; font-weight: 700;
+    padding: 10px 16px; border-radius: 10px; cursor: pointer;
+    border: 2px solid var(--accent); background: #fff; color: var(--accent);
+    min-width: 120px;
+  }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn:focus-visible, .seg button:focus-visible, .presets button:focus-visible { outline: 3px solid var(--cur); outline-offset: 2px; }
+  .speed { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-left: 6px; }
+  .speed input { width: 150px; accent-color: var(--accent); }
+  .progress { margin-left: auto; font-weight: 700; color: var(--muted); }
+
+  /* ====== Блок візуалізації: кільце + ланцюжок + стрічка ====== */
+  .viz { display: grid; grid-template-columns: minmax(300px, 400px) 1fr; gap: 14px; }
+  .ringCard { display: flex; flex-direction: column; align-items: center; }
+  #ring { width: 100%; max-width: 380px; height: auto; }
+  .legend { font-size: 0.9rem; color: var(--muted); text-align: center; margin-top: 4px; }
+  .legend b.o { color: var(--accent); }
+  .legend b.i { color: var(--ok); }
+  .right { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+  /* SVG-кільце абетки */
+  .ringBand { fill: none; }
+  .ringBand.outer { stroke: var(--accent-soft); stroke-width: 38; }
+  .ringBand.inner { stroke: var(--ok-soft); stroke-width: 36; }
+  .cell circle { fill: transparent; }
+  .cell text { font-size: 21px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+  .outerCell text { fill: var(--accent); }
+  .innerCell text { fill: var(--ok); font-size: 19px; }
+  .cell.hl circle { fill: var(--cur); stroke: var(--ink); stroke-width: 2; }
+  .cell.hl text { fill: var(--ink); }
+  .innerCell.hlRes circle { fill: var(--ok); stroke: var(--ink); stroke-width: 2; }
+  .innerCell.hlRes text { fill: #fff; }
+  .num { font-size: 11px; fill: var(--muted); text-anchor: middle; dominant-baseline: central; }
+  .num.hl { fill: var(--ink); font-weight: 700; font-size: 13px; }
+  #innerRing { transform-origin: 230px 230px; transition: transform 0.6s ease-in-out; }
+  .centerVal { font-size: 46px; font-weight: 800; fill: var(--shift); text-anchor: middle; dominant-baseline: central; }
+  .centerCap { font-size: 17px; fill: var(--muted); text-anchor: middle; }
+  .marker { fill: var(--shift); }
+
+  /* Ланцюжок «літера → позиція → зсув → нова літера» */
+  .chain { display: flex; align-items: stretch; gap: 6px; }
+  .box {
+    flex: 1; text-align: center;
+    border: 2px solid var(--line); border-radius: 12px;
+    padding: 6px 4px; background: #fafbfe;
+    transition: background 0.25s, border-color 0.25s;
+  }
+  .box .bt { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+  .box .bv { font-size: 1.7rem; font-weight: 800; min-height: 2.3rem; }
+  .box.filled { border-color: var(--accent); }
+  .box.active { background: var(--cur-soft); border-color: var(--ink); border-width: 3px; }
+  .box.b2 .bv { color: var(--shift); }
+  .box.b3 .bv { color: var(--ok); }
+  .chain .arrow { display: flex; align-items: center; font-size: 1.6rem; color: var(--muted); }
+  .bruteInfo { display: none; }
+  .bruteInfo .big { font-size: 1.5rem; font-weight: 800; }
+  .bar { height: 14px; background: #e6eaf3; border-radius: 7px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--accent); }
+
+  /* Стрічка тексту: кожен символ — стовпчик «ключ / вхід / вихід» */
+  .tapeLegend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.88rem; color: var(--muted); margin-bottom: 8px; }
+  .tapeLegend span::before {
+    content: ""; display: inline-block; width: 14px; height: 14px;
+    border-radius: 3px; margin-right: 5px; vertical-align: -2px;
+    border: 2px solid currentColor;
+  }
+  .tapeLegend .lk { color: var(--key); }
+  .tapeLegend .li { color: var(--accent); }
+  .tapeLegend .lo { color: var(--ok); }
+  .tape { display: flex; flex-wrap: wrap; gap: 4px 3px; }
+  .col { display: flex; flex-direction: column; gap: 3px; width: 38px; }
+  .col > div {
+    height: 38px; display: flex; align-items: center; justify-content: center;
+    border-radius: 7px; font-size: 1.3rem; font-weight: 700;
+  }
+  .col .k { background: var(--key-soft); color: var(--key); font-size: 1.05rem; }
+  .col .k:empty { background: transparent; }
+  .tape.noKey .col .k { display: none; }
+  .col .in { background: var(--accent-soft); color: var(--accent); border: 2px solid transparent; }
+  .col .out { background: #f1f3f8; color: var(--ok); border: 2px dashed var(--line); }
+  .col .out.full { background: var(--ok-soft); border: 2px solid var(--ok); }
+  .col.space .in, .col.space .out { color: #9aa4ba; font-weight: 400; }
+  .col.cur .in { background: var(--cur); color: var(--ink); border-color: var(--ink); }
+  .col.cur .out { border-color: var(--ink); }
+  .col.cur .k.act { background: var(--key); color: #fff; }
+  .resultBar {
+    display: none; margin-top: 10px; padding: 10px 12px;
+    background: var(--ok-soft); border: 2px solid var(--ok); border-radius: 10px;
+  }
+  .resultBar.show { display: block; }
+  .resultBar .rt { font-size: 1.3rem; font-weight: 700; word-break: break-word; margin: 2px 0 8px; }
+  .resultBar .btn { min-width: 0; font-size: 0.95rem; padding: 7px 12px; margin-right: 6px; }
+
+  /* Пояснення */
+  .explain {
+    font-size: 1.15rem; min-height: 4.2rem;
+    border-left: 8px solid var(--accent);
+  }
+  .explain .f { font-family: Consolas, "Courier New", monospace; background: var(--shift-soft); color: var(--shift); padding: 0 6px; border-radius: 6px; font-weight: 700; white-space: nowrap; }
+  .explain .warn { display: block; margin-top: 6px; color: var(--err); font-weight: 600; }
+  .explain .note { display: block; margin-top: 6px; color: var(--muted); font-size: 1rem; }
+
+  /* Таблиця відповідностей літер */
+  .stripWrap { overflow-x: auto; }
+  table.strip { border-collapse: collapse; width: 100%; min-width: 900px; table-layout: fixed; }
+  .strip th, .strip td { border: 1px solid var(--line); text-align: center; padding: 3px 0; }
+  .strip th { width: 100px; font-size: 0.85rem; background: #f4f6fb; text-align: left; padding-left: 6px; }
+  .strip td { font-size: 1.12rem; font-weight: 700; }
+  .strip tr.idx td { font-size: 0.75rem; font-weight: 400; color: var(--muted); }
+  .strip tr.rin td { color: var(--accent); }
+  .strip tr.rout td { color: var(--ok); }
+  .strip td.hl { background: var(--cur); color: var(--ink) !important; }
+  .strip td.hlRes { background: var(--ok); color: #fff !important; }
+
+  /* Протокол виконання */
+  .logWrap { max-height: 300px; overflow-y: auto; }
+  table.log { border-collapse: collapse; width: 100%; }
+  .log th, .log td { border: 1px solid var(--line); padding: 5px 8px; text-align: center; }
+  .log th { background: #f4f6fb; position: sticky; top: 0; font-size: 0.92rem; }
+  .log td { font-size: 1.05rem; }
+  .log td.txt { text-align: left; font-weight: 600; word-break: break-word; }
+  .log tr.cur td { background: var(--cur-soft); }
+  .log tr.best td { background: var(--ok-soft); font-weight: 700; }
+  .log .empty { color: var(--muted); font-style: italic; }
+
+  /* ====== Адаптивність: планшет і вузькі екрани ====== */
+  @media (max-width: 1180px) {
+    .layout { grid-template-columns: 1fr; }
+    .panel { order: 0; }
+  }
+  @media (max-width: 820px) {
+    html { font-size: 17px; }
+    .viz { grid-template-columns: 1fr; }
+    .progress { margin-left: 0; width: 100%; }
+    .chain .arrow { display: none; }
+    .chain { flex-wrap: wrap; }
+    .box { min-width: 45%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="meta">10 клас · Розділ 1. Основи комп'ютерної безпеки · Тема 1.2 «Основні поняття інформаційної безпеки»</div>
+  <h1>Візуалізатор «Шифрування: від Цезаря до Віженера»</h1>
+</header>
+
+<main class="layout">
+
+  <!-- ===================== ЛІВА ПАНЕЛЬ: НАЛАШТУВАННЯ ===================== -->
+  <aside class="panel card">
+    <h2>Налаштування</h2>
+
+    <div class="field">
+      <span class="label">Шифр</span>
+      <div class="seg" id="cipherSeg">
+        <button data-v="caesar">Цезаря</button>
+        <button data-v="vigenere">Віженера</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="label">Режим</span>
+      <div class="seg seg3" id="modeSeg">
+        <button data-v="encrypt">Шифрувати</button>
+        <button data-v="decrypt">Розшифрувати</button>
+        <button data-v="brute">Злам перебором</button>
+      </div>
+      <div class="hint" id="modeHint"></div>
+    </div>
+
+    <div class="field">
+      <label class="label" for="text" id="textLabel">Відкритий текст</label>
+      <textarea id="text" maxlength="100" spellcheck="false"></textarea>
+      <div class="hint">До 100 символів. Шифруються лише літери української абетки, а пробіли, цифри й розділові знаки лишаються без змін.</div>
+    </div>
+
+    <div class="field" id="keyField">
+      <label class="label" for="key" id="keyLabel">Ключ</label>
+      <input id="key" type="text" autocomplete="off" spellcheck="false">
+      <div class="hint" id="keyHint"></div>
+      <div class="chips" id="keyChips"></div>
+    </div>
+
+    <div class="error" id="error" role="alert"></div>
+
+    <div class="field">
+      <span class="label">Готові приклади</span>
+      <div class="presets" id="presets"></div>
+    </div>
+  </aside>
+
+  <!-- ===================== ПРАВА ЧАСТИНА: ВІЗУАЛІЗАЦІЯ ===================== -->
+  <section class="stage">
+
+    <!-- Кнопки покрокового керування -->
+    <div class="controls card">
+      <button id="btnStep" class="btn primary" title="Клавіша →">Крок ▶|</button>
+      <button id="btnPlay" class="btn" title="Клавіша Пробіл">▶ Старт</button>
+      <button id="btnAll" class="btn">Виконати все ⏭</button>
+      <button id="btnReset" class="btn">⟲ Скинути</button>
+      <label class="speed">Швидкість
+        <input type="range" id="speed" min="1" max="10" value="5">
+        <span id="speedVal">5</span>
+      </label>
+      <div class="progress" id="progress"></div>
+    </div>
+
+    <div class="viz">
+      <!-- Кільце абетки -->
+      <div class="card ringCard">
+        <div class="cardTitle">Кільце абетки (33 літери)</div>
+        <svg id="ring" viewBox="0 0 460 460" role="img" aria-label="Кільце української абетки"></svg>
+        <div class="legend" id="ringLegend"></div>
+      </div>
+
+      <div class="right">
+        <!-- Ланцюжок дій для поточної літери -->
+        <div class="card">
+          <div class="chain" id="chain">
+            <div class="box b0" id="box0"><div class="bt">1. Літера</div><div class="bv" id="val0">—</div></div>
+            <div class="arrow">→</div>
+            <div class="box b1" id="box1"><div class="bt">2. Позиція в абетці</div><div class="bv" id="val1">—</div></div>
+            <div class="arrow">→</div>
+            <div class="box b2" id="box2"><div class="bt">3. Зсув</div><div class="bv" id="val2">—</div></div>
+            <div class="arrow">→</div>
+            <div class="box b3" id="box3"><div class="bt">4. Нова літера</div><div class="bv" id="val3">—</div></div>
+          </div>
+          <div class="bruteInfo" id="bruteInfo"></div>
+        </div>
+
+        <!-- Стрічка тексту -->
+        <div class="card">
+          <div class="cardTitle">Текст символ за символом</div>
+          <div class="tapeLegend" id="tapeLegend"></div>
+          <div class="tape" id="tape"></div>
+          <div class="resultBar" id="resultBar"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Пояснення поточного кроку -->
+    <div class="explain card" id="explain" aria-live="polite"></div>
+
+    <!-- Таблиця відповідностей літер -->
+    <div class="card">
+      <div class="cardTitle" id="stripTitle">Таблиця відповідностей літер</div>
+      <div class="stripWrap"><table class="strip" id="strip"></table></div>
+    </div>
+
+    <!-- Протокол виконання / таблиця перебору -->
+    <div class="card">
+      <div class="cardTitle" id="logTitle">Протокол виконання</div>
+      <div class="logWrap" id="logWrap"><table class="log" id="log"></table></div>
+    </div>
+  </section>
+</main>
+
+<footer>Розроблено автором</footer>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   1. АБЕТКА ТА ДОПОМІЖНІ ФУНКЦІЇ
+   ===================================================================== */
+
+// Українська абетка — 33 літери. Позиції рахуємо з нуля: А = 0, Б = 1, …, Я = 32.
+const ALPHABET = [...'АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯ'];
+const N = ALPHABET.length;           // 33
+const STEP_DEG = 360 / N;            // кут між сусідніми літерами на кільці
+const MINUS = '−';
+
+const $ = id => document.getElementById(id);
+const mod = (a, n) => ((a % n) + n) % n;                  // остача, завжди невід'ємна
+const posOf = ch => ALPHABET.indexOf(ch.toUpperCase());   // позиція літери або −1
+const isLetter = ch => posOf(ch) >= 0;
+const isUpper = ch => ch === ch.toUpperCase();
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmtShift = s => (s > 0 ? '+' + s : s < 0 ? MINUS + (-s) : '0');
+const fmtNum = n => n.toLocaleString('uk-UA');
+
+// Як показати символ у клітинці стрічки (пробіл робимо видимим)
+const showChar = ch => (ch === ' ' ? '␣' : esc(ch));
+
+// Зсув однієї літери на shift позицій по колу (регістр зберігається)
+function shiftChar(ch, shift) {
+  const p = posOf(ch);
+  if (p < 0) return ch;
+  const r = ALPHABET[mod(p + shift, N)];
+  return isUpper(ch) ? r : r.toLowerCase();
+}
+
+// Шифр Цезаря для всього тексту (shift > 0 — шифрування, shift < 0 — розшифрування)
+function caesar(text, shift) {
+  return [...text].map(c => shiftChar(c, shift)).join('');
+}
+
+// Шифр Віженера: зсув для кожної літери дає відповідна літера ключового слова
+function vigenere(text, keyWord, dir) {
+  const shifts = [...keyWord].map(posOf);
+  let ki = 0;
+  return [...text].map(c => {
+    if (!isLetter(c)) return c;
+    return shiftChar(c, dir * shifts[ki++ % shifts.length]);
+  }).join('');
+}
+
+// Латинські i/I, які легко ввести з англійської розкладки, замінюємо на українські
+function normalize(text) {
+  return text.replace(/i/g, 'і').replace(/I/g, 'І');
+}
+
+/* =====================================================================
+   2. ГОТОВІ ПРИКЛАДИ (можна додавати власні)
+   ===================================================================== */
+const PRESETS = [
+  { title: '1. Цезар: шифруємо привітання', cipher: 'caesar', mode: 'encrypt',
+    text: 'Привіт, класе!', key: '3' },
+  { title: '2. Цезар: розшифруй записку', cipher: 'caesar', mode: 'decrypt',
+    text: caesar('Інформація — найцінніший ресурс', 5), key: '5' },
+  { title: '3. Віженер: ключове слово «КЛЮЧ»', cipher: 'vigenere', mode: 'encrypt',
+    text: 'Захист інформації', key: 'КЛЮЧ' },
+  { title: '4. Злам: перехоплене повідомлення', cipher: 'caesar', mode: 'brute',
+    text: caesar('Зустріч після уроків біля школи', 11), key: '' },
+];
+
+/* =====================================================================
+   3. АНАЛІЗ «ОСМИСЛЕНОСТІ» ТЕКСТУ (для режиму «Злам перебором»)
+   Дві ознаки: 1) знайомі слова зі словника; 2) схожість частот літер
+   на частоти в українській мові (косинусна подібність, 0–100 %).
+   ===================================================================== */
+const COMMON_WORDS = new Set((
+  'і й в у на не що та з із зі до як це за по від для після біля про під над при без але або ' +
+  'коли де тут там так ні ми ви ти я він вона воно вони його її їх мене тебе нас вас є був була ' +
+  'було були буде бути можна треба дуже вже ще теж також тільки лише щоб якщо бо о годині ' +
+  'урок уроку уроків уроки клас класі класу класе школа школи школі вчитель учні учень друг друзі ' +
+  'завтра сьогодні вчора зустріч зустрічаємось зустрінемось привіт добрий день ранок вечір ' +
+  'пароль ключ шифр секрет таємниця захист інформація інформації дані даних мережа ' +
+  'повідомлення текст лист дім додому вдома чекаю чекай приходь разом все всі усі ' +
+  'один два три перерва перерві бібліотека бібліотеці кабінет кабінеті найцінніший ресурс'
+).split(/\s+/));
+
+// Середні частоти літер в українських текстах, %
+const FREQ = { О: 9.4, А: 7.2, Н: 6.5, И: 6.1, І: 5.8, В: 5.2, Т: 5.0, Е: 4.9, Р: 4.6, С: 4.3,
+  К: 3.6, Л: 3.5, У: 3.3, Д: 3.1, П: 2.9, М: 2.9, Я: 2.4, З: 2.2, Ь: 1.9, Б: 1.6, Г: 1.5,
+  Ч: 1.5, Х: 1.2, Й: 1.1, Ж: 0.9, Ц: 0.7, Ш: 0.7, Ю: 0.7, Ї: 0.6, Щ: 0.6, Є: 0.4, Ф: 0.3, Ґ: 0.02 };
+
+function analyse(text) {
+  const words = text.toLowerCase().split(/[^а-яґєії']+/).filter(Boolean);
+  const found = words.filter(w => COMMON_WORDS.has(w));
+  const counts = ALPHABET.map(() => 0);
+  [...text].forEach(c => { const p = posOf(c); if (p >= 0) counts[p]++; });
+  let dot = 0, a = 0, b = 0;
+  ALPHABET.forEach((L, i) => { const f = FREQ[L]; dot += counts[i] * f; a += counts[i] ** 2; b += f * f; });
+  return { found, sim: a ? dot / Math.sqrt(a * b) : 0 };
+}
+
+/* =====================================================================
+   4. СТАН ПРОГРАМИ
+   ===================================================================== */
+const state = {
+  cipher: 'caesar',   // 'caesar' | 'vigenere'
+  mode: 'encrypt',    // 'encrypt' | 'decrypt' | 'brute'
+  valid: false,       // чи коректні введені дані
+  chars: [],          // текст, розбитий на символи
+  keyAt: [],          // літера ключа над кожним символом (для Віженера)
+  steps: [],          // заздалегідь підготовлений список кроків алгоритму
+  cur: -1,            // номер поточного кроку (−1 — ще не почали)
+  timer: null,        // таймер автоматичного виконання
+  info: {},           // додаткові дані (ключ, результат тощо)
+};
+
+/* =====================================================================
+   5. ПЕРЕВІРКА ВВЕДЕНИХ ДАНИХ
+   ===================================================================== */
+function readInputs() {
+  const text = normalize($('text').value);
+  $('text').classList.remove('invalid');
+  $('key').classList.remove('invalid');
+
+  const badText = msg => { $('text').classList.add('invalid'); return { ok: false, msg }; };
+  const badKey = msg => { $('key').classList.add('invalid'); return { ok: false, msg }; };
+
+  if (!text.trim()) return badText('Введіть текст, з яким працюватиме алгоритм.');
+  if ([...text].length > 100) return badText('Текст задовгий: максимум 100 символів.');
+  if (![...text].some(isLetter)) return badText('У тексті немає жодної літери української абетки. Латинські та інші літери не шифруються.');
+
+  if (state.mode === 'brute') return { ok: true, text };
+
+  const raw = normalize($('key').value.trim());
+
+  if (state.cipher === 'caesar') {
+    if (!/^\d+$/.test(raw)) return badKey('Ключ шифру Цезаря — ціле число від 1 до 32, наприклад 3.');
+    const k = Number(raw);
+    if (k % N === 0) return badKey(`Ключ ${k} дає зсув 0: кожна літера стане сама собою, тож текст не зміниться. Оберіть число від 1 до 32.`);
+    if (k > 32) return badKey(`Ключ має бути від 1 до 32. Абетка має 33 літери, тому зсув ${k} дорівнює зсуву ${k % N}.`);
+    return { ok: true, text, k };
+  }
+
+  // Віженер
+  const word = raw.toUpperCase();
+  if (!word) return badKey('Введіть ключове слово, наприклад КЛЮЧ.');
+  if ([...word].length > 12) return badKey('Ключове слово задовге: максимум 12 літер.');
+  if (![...word].every(isLetter)) return badKey('Ключове слово має складатися лише з літер української абетки (без пробілів, цифр і знаків).');
+  if ([...word].every(c => c === 'А')) return badKey('Літера «А» має позицію 0 і нічого не зсуває. Візьміть інше ключове слово.');
+  return { ok: true, text, word };
+}
+
+/* =====================================================================
+   6. ПІДГОТОВКА КРОКІВ АЛГОРИТМУ
+   Для кожної літери — 4 кроки: літера → позиція → зсув → нова літера.
+   Для символу поза абеткою — 1 крок «переносимо без змін».
+   ===================================================================== */
+function rebuild() {
+  stop();
+  state.steps = [];
+  state.cur = -1;
+  updatePanelTexts();
+
+  const v = readInputs();
+  state.valid = v.ok;
+  $('error').textContent = v.ok ? '' : v.msg;
+  $('error').classList.toggle('show', !v.ok);
+  if (!v.ok) { state.chars = []; render(); return; }
+
+  const chars = [...v.text];
+  state.chars = chars;
+  state.keyAt = chars.map(() => '');
+  const steps = state.steps;
+
+  if (state.mode === 'brute') {
+    // Перебираємо всі ключі від 1 до 32
+    for (let k = 1; k < N; k++) {
+      const res = caesar(v.text, -k);
+      const a = analyse(res);
+      steps.push({ type: 'try', k, res, found: a.found, sim: a.sim });
+    }
+    // Найкращий кандидат: більше знайомих слів, а за рівності — вища схожість частот
+    const best = steps.reduce((b, s) => (s.found.length + s.sim > b.found.length + b.sim ? s : b));
+    steps.push({ type: 'bruteDone', best });
+    state.info = { best };
+  } else {
+    const dir = state.mode === 'encrypt' ? 1 : -1;
+    const keyLetters = state.cipher === 'vigenere' ? [...v.word] : null;
+    const shifts = keyLetters ? keyLetters.map(posOf) : [v.k];
+    let ki = 0;   // номер літери ключа (рухається лише на літерах тексту)
+    let letters = 0;
+
+    chars.forEach((ch, idx) => {
+      if (!isLetter(ch)) { steps.push({ type: 'skip', idx, ch }); return; }
+      const up = ch.toUpperCase();
+      const p = posOf(ch);
+      const s = shifts[ki % shifts.length];
+      const kl = keyLetters ? keyLetters[ki % keyLetters.length] : null;
+      if (kl) state.keyAt[idx] = kl;
+      const shift = dir * s;
+      const q = mod(p + shift, N);
+      const nc = isUpper(ch) ? ALPHABET[q] : ALPHABET[q].toLowerCase();
+      for (let phase = 0; phase < 4; phase++) {
+        steps.push({ type: 'letter', phase, idx, ch, up, p, s, shift, q, nc, kl, n: letters + 1 });
+      }
+      ki++; letters++;
+    });
+
+    const result = keyLetters ? vigenere(v.text, v.word, dir) : caesar(v.text, dir * v.k);
+    steps.push({ type: 'done', result, letters });
+    state.info = { k: v.k, word: v.word, result };
+  }
+  render();
+}
+
+/* =====================================================================
+   7. КЕРУВАННЯ ВИКОНАННЯМ
+   ===================================================================== */
+const delay = () => 2100 - Number($('speed').value) * 190;   // від ~1,9 с до 0,2 с
+
+function stepForward() {
+  if (!state.valid || state.cur >= state.steps.length - 1) { stop(); return; }
+  state.cur++;
+  render();
+  if (state.cur >= state.steps.length - 1) stop();
+}
+function play() {
+  if (!state.valid) return;
+  if (state.cur >= state.steps.length - 1) { state.cur = -1; }   // повтор з початку
+  stop();
+  state.timer = setInterval(stepForward, delay());
+  stepForward();
+  updateButtons();
+}
+function stop() {
+  if (state.timer) clearInterval(state.timer);
+  state.timer = null;
+  updateButtons();
+}
+function togglePlay() { state.timer ? stop() : play(); }
+function runAll() {
+  if (!state.valid) return;
+  stop();
+  state.cur = state.steps.length - 1;
+  render();
+}
+
+function updateButtons() {
+  const atEnd = state.cur >= state.steps.length - 1;
+  $('btnStep').disabled = !state.valid || atEnd;
+  $('btnAll').disabled = !state.valid || atEnd;
+  $('btnPlay').disabled = !state.valid;
+  $('btnPlay').textContent = state.timer ? '⏸ Пауза' : (atEnd && state.valid ? '▶ Ще раз' : '▶ Старт');
+  $('btnReset').disabled = !state.valid;
+  $('progress').textContent = state.valid ? `Крок ${state.cur + 1} з ${state.steps.length}` : '';
+}
+
+/* =====================================================================
+   8. ПОБУДОВА КІЛЬЦЯ АБЕТКИ (SVG)
+   Зовнішнє кільце нерухоме — вхідні літери.
+   Внутрішнє кільце повертається на величину зсуву — вихідні літери.
+   ===================================================================== */
+const C = 230, R_NUM = 219, R_OUT = 186, R_IN = 142;
+
+function polar(r, i) {   // координати i-ї позиції (0 — вгорі, далі за годинниковою стрілкою)
+  const a = (i * STEP_DEG - 90) * Math.PI / 180;
+  return [C + r * Math.cos(a), C + r * Math.sin(a)];
+}
+
+function buildRing() {
+  let h = '';
+  h += `<circle class="ringBand outer" cx="${C}" cy="${C}" r="${R_OUT}"/>`;
+  h += `<circle class="ringBand inner" cx="${C}" cy="${C}" r="${R_IN}"/>`;
+  // номери позицій
+  ALPHABET.forEach((_, i) => {
+    const [x, y] = polar(R_NUM, i);
+    h += `<text class="num" id="n${i}" x="${x.toFixed(1)}" y="${y.toFixed(1)}">${i}</text>`;
+  });
+  // зовнішні літери
+  ALPHABET.forEach((L, i) => {
+    const [x, y] = polar(R_OUT, i);
+    h += `<g class="cell outerCell" id="o${i}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(i * STEP_DEG).toFixed(2)})">` +
+         `<circle r="17"/><text>${L}</text></g>`;
+  });
+  // внутрішнє кільце (група, що обертається)
+  h += `<g id="innerRing">`;
+  ALPHABET.forEach((L, i) => {
+    const [x, y] = polar(R_IN, i);
+    h += `<g class="cell innerCell" id="i${i}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(i * STEP_DEG).toFixed(2)})">` +
+         `<circle r="15"/><text>${L}</text></g>`;
+  });
+  h += `</g>`;
+  // центр із величиною зсуву
+  h += `<circle cx="${C}" cy="${C}" r="112" fill="#fff" stroke="${'#c5cfe2'}" stroke-width="2"/>`;
+  h += `<text class="centerCap" x="${C}" y="${C - 34}">зсув</text>`;
+  h += `<text class="centerVal" id="centerVal" x="${C}" y="${C + 10}">0</text>`;
+  h += `<text class="centerCap" id="centerCap2" x="${C}" y="${C + 56}"></text>`;
+  $('ring').innerHTML = h;
+}
+
+// Повертає внутрішнє кільце та підсвічує потрібні літери
+function setRing(shift, outHL, inHL) {
+  const ring = $('innerRing');
+  ring.style.transitionDuration = Math.min(0.6, delay() / 1000 * 0.6) + 's';
+  ring.style.transform = `rotate(${-shift * STEP_DEG}deg)`;
+  document.querySelectorAll('.outerCell.hl, .innerCell.hlRes, .num.hl').forEach(e => e.classList.remove('hl', 'hlRes'));
+  if (outHL >= 0) { $('o' + outHL).classList.add('hl'); $('n' + outHL).classList.add('hl'); }
+  if (inHL >= 0) $('i' + inHL).classList.add('hlRes');
+  $('centerVal').textContent = fmtShift(shift);
+}
+
+/* =====================================================================
+   9. ВІДОБРАЖЕННЯ
+   ===================================================================== */
+function render() {
+  if (state.mode === 'brute') renderBrute(); else renderCipher();
+  updateButtons();
+}
+
+// ---------- Шифрування / розшифрування ----------
+function renderCipher() {
+  const { steps, cur, chars } = state;
+  const step = cur >= 0 ? steps[cur] : null;
+  const isVig = state.cipher === 'vigenere';
+
+  // Збираємо стан на поточний момент: заповнений вихід, рядки протоколу, поворот кільця
+  const out = chars.map(() => '');
+  const rows = [];
+  let ringShift = 0;
+  for (let i = 0; i <= cur; i++) {
+    const s = steps[i];
+    if (s.type === 'skip') { out[s.idx] = s.ch; rows.push(s); }
+    if (s.type === 'letter') {
+      if (s.phase >= 2) ringShift = s.shift;
+      if (s.phase === 3) { out[s.idx] = s.nc; rows.push(s); }
+    }
+  }
+  // До першого кроку для Цезаря показуємо кільце без зсуву, далі — зі зсувом ключа
+  const ph = step && step.type === 'letter' ? step.phase : -1;
+
+  // Кільце
+  setRing(ringShift, ph >= 1 ? step.p : -1, ph === 3 ? step.q : -1);
+  $('centerCap2').textContent = isVig && ph >= 2 ? `ключ «${step.kl}»` : (state.cipher === 'caesar' && state.valid ? `ключ ${state.info.k}` : '');
+
+  // Ланцюжок «літера → позиція → зсув → нова літера»
+  $('chain').style.display = 'flex';
+  $('bruteInfo').style.display = 'none';
+  const vals = ['—', '—', '—', '—'];
+  if (step && step.type === 'letter') {
+    vals[0] = `«${step.up}»`;
+    if (ph >= 1) vals[1] = step.p;
+    if (ph >= 2) vals[2] = fmtShift(step.shift) + (isVig ? ` <small style="color:var(--key)">(${step.kl})</small>` : '');
+    if (ph >= 3) vals[3] = `«${step.nc.toUpperCase()}»`;
+  } else if (step && step.type === 'skip') {
+    vals[0] = `«${showChar(step.ch)}»`; vals[1] = 'немає'; vals[3] = `«${showChar(step.ch)}»`;
+  }
+  for (let b = 0; b < 4; b++) {
+    $('val' + b).innerHTML = vals[b];
+    $('box' + b).classList.toggle('active', ph === b);
+    $('box' + b).classList.toggle('filled', ph > b || (step && step.type === 'skip' && vals[b] !== '—'));
+  }
+
+  // Стрічка тексту
+  const curIdx = step && (step.type === 'letter' || step.type === 'skip') ? step.idx : -1;
+  renderTape(out, curIdx, ph >= 2);
+
+  // Таблиця відповідностей
+  renderStrip(ringShift, ph >= 1 ? step.p : -1, ph === 3);
+  $('stripTitle').innerHTML = `Таблиця відповідностей літер (зсув <span style="color:var(--shift)">${fmtShift(ringShift)}</span>)` +
+    (isVig ? ' — для Віженера оновлюється для кожної літери' : '');
+
+  // Протокол
+  renderLogCipher(rows, step);
+
+  // Пояснення
+  $('explain').innerHTML = state.valid ? explainCipher(step) : '<b>Виправте введені дані</b> — повідомлення про помилку ліворуч.';
+
+  // Рядок результату
+  const bar = $('resultBar');
+  if (step && step.type === 'done') {
+    const back = state.mode === 'encrypt' ? 'Розшифрувати цей текст' : 'Зашифрувати знову';
+    bar.innerHTML = `<div><b>${state.mode === 'encrypt' ? 'Шифротекст' : 'Відкритий текст'}:</b></div>` +
+      `<div class="rt">${esc(step.result)}</div>` +
+      `<button class="btn" id="btnCopy">Копіювати</button>` +
+      `<button class="btn" id="btnBack">${back}</button>`;
+    bar.classList.add('show');
+    $('btnCopy').onclick = () => copyText(step.result);
+    $('btnBack').onclick = () => {
+      $('text').value = step.result;
+      state.mode = state.mode === 'encrypt' ? 'decrypt' : 'encrypt';
+      syncSegs(); rebuild();
+    };
+  } else {
+    bar.classList.remove('show');
+  }
+}
+
+// Текст пояснення для кожного кроку
+function explainCipher(step) {
+  const isVig = state.cipher === 'vigenere';
+  const enc = state.mode === 'encrypt';
+  if (!step) {
+    return `Натисніть <b>«Крок»</b> або <b>«Старт»</b>. Алгоритм опрацьовує текст <b>символ за символом</b>, і для кожної літери виконує 4 дії: ` +
+      `літера → позиція в абетці → зсув → нова літера.` +
+      `<span class="note">Конфіденційність: прочитати повідомлення може лише той, хто знає ключ. ` +
+      (enc ? 'Під час шифрування літери зсуваються вперед по абетці.' : 'Під час розшифрування літери зсуваються назад, тобто в протилежний бік.') + `</span>`;
+  }
+  if (step.type === 'skip') {
+    return `Символ «${step.ch === ' ' ? 'пробіл' : esc(step.ch)}» не є літерою української абетки, тому переносимо його <b>без змін</b>` +
+      (isVig ? ', а літера ключа не використовується.' : '.');
+  }
+  if (step.type === 'done') {
+    let t = enc ? `<b>Готово!</b> Зашифровано літер: ${step.letters}.` : `<b>Готово!</b> Розшифровано літер: ${step.letters}. Розшифрування — це той самий алгоритм, тільки зсув у протилежний бік.`;
+    if (isVig) {
+      const n = [...state.info.word].length;
+      t += `<span class="note">Ключове слово з ${n} літер: кількість можливих ключів такої довжини 33<sup>${n}</sup> = <b>${fmtNum(N ** n)}</b>. ` +
+        `До того ж однакові літери тексту шифруються різними літерами, тому шифр Віженера значно надійніший за шифр Цезаря.</span>`;
+    } else {
+      t += `<span class="warn">Ключ шифру Цезаря — лише одне з 32 чисел. Зловмисник може перебрати їх усі за кілька секунд: спробуйте режим «Злам перебором». Короткий ключ ненадійний!</span>`;
+    }
+    return t;
+  }
+  // Крок з літерою
+  const n = `Літера №${step.n}`;
+  switch (step.phase) {
+    case 0:
+      return `${n}. <b>Дія 1 з 4:</b> беремо з тексту літеру «${esc(step.ch)}».`;
+    case 1:
+      return `${n}. <b>Дія 2 з 4:</b> знаходимо її позицію в абетці: «${step.up}» стоїть на позиції <b>${step.p}</b> ` +
+        `(рахуємо з нуля: А = 0, Б = 1, В = 2, …).`;
+    case 2:
+      if (isVig) {
+        return `${n}. <b>Дія 3 з 4:</b> над літерою стоїть літера ключа <b style="color:var(--key)">«${step.kl}»</b>, її позиція ${step.s}. ` +
+          `Тому зсув = <span class="f">${fmtShift(step.shift)}</span>. Внутрішнє кільце повертається. ` +
+          `<span class="note">У шифрі Віженера кожна літера тексту має <b>свій</b> зсув.</span>`;
+      }
+      return `${n}. <b>Дія 3 з 4:</b> зсув дорівнює ключу: <span class="f">${fmtShift(step.shift)}</span>. ` +
+        `Внутрішнє кільце повернуте на ${step.s} позицій ${enc ? 'вперед' : 'назад'}. Для всіх літер зсув однаковий.`;
+    case 3: {
+      const sum = step.p + step.shift;
+      const op = step.shift >= 0 ? '+' : MINUS;
+      let t = `${n}. <b>Дія 4 з 4:</b> нова позиція: <span class="f">(${step.p} ${op} ${Math.abs(step.shift)}) mod 33 = ${step.q}</span>. ` +
+        `На позиції ${step.q} стоїть «${ALPHABET[step.q]}», її й записуємо в результат.`;
+      if (sum >= N || sum < 0) {
+        t += `<span class="note">Ми вийшли за межі абетки (${sum}), тому беремо остачу від ділення на 33 (mod 33): рахунок іде по колу, і після «Я» знову йде «А».</span>`;
+      }
+      return t;
+    }
+  }
+  return '';
+}
+
+// ---------- Злам перебором ----------
+function renderBrute() {
+  const { steps, cur, chars } = state;
+  const step = cur >= 0 ? steps[cur] : null;
+  const tries = steps.slice(0, Math.max(0, cur + 1)).filter(s => s.type === 'try');
+  const last = tries[tries.length - 1];
+  const done = step && step.type === 'bruteDone';
+  const shown = done ? step.best : last;          // що показуємо на кільці та у стрічці
+  const k = shown ? shown.k : 0;
+
+  setRing(-k, -1, -1);
+  $('centerCap2').textContent = shown ? `ключ ${k}?` : '';
+
+  $('chain').style.display = 'none';
+  const info = $('bruteInfo');
+  info.style.display = 'block';
+  if (!state.valid) {
+    info.innerHTML = '';
+  } else {
+    const pct = shown ? Math.round(shown.sim * 100) : 0;
+    info.innerHTML =
+      `<div class="big">Перевірено ключів: ${tries.length} з 32</div>` +
+      `<div class="bar" style="margin:6px 0 10px"><div style="width:${tries.length / 32 * 100}%"></div></div>` +
+      (shown ? `<div>${done ? 'Найкращий кандидат' : 'Поточна спроба'}: ключ <b style="color:var(--shift)">${k}</b> · знайомих слів: <b>${shown.found.length}</b> · ` +
+        `схожість на українську мову: <b>${pct}%</b></div>` : '<div>Ще не перевірено жодного ключа.</div>');
+  }
+
+  const out = shown ? [...shown.res] : chars.map(() => '');
+  renderTape(out, -1, false, true);
+  renderStrip(-k, -1, false);
+  $('stripTitle').innerHTML = `Таблиця відповідностей літер (зсув <span style="color:var(--shift)">${fmtShift(-k)}</span>)`;
+
+  renderLogBrute(tries, step, done ? step.best : null);
+
+  // Пояснення
+  let t;
+  if (!state.valid) t = '<b>Виправте введені дані</b> — повідомлення про помилку ліворуч.';
+  else if (!step) t = `Маємо перехоплений шифротекст, але <b>ключ невідомий</b>. Шифр Цезаря має лише 32 можливі ключі, тож перевіримо кожен по черзі ` +
+      `і подивимося, на якому з них текст стане осмисленим.`;
+  else if (done) {
+    t = `<b>Перебрано всі 32 ключі.</b> Найбільш осмислений текст дає ключ <b style="color:var(--shift)">${step.best.k}</b>: «${esc(step.best.res)}».` +
+      `<span class="warn">Висновок: шифр Цезаря зламує навіть людина вручну за кілька хвилин, а комп'ютер — миттєво. Короткий ключ не забезпечує конфіденційності.</span>` +
+      `<span class="note">Для шифру Віженера з ключем із 6 літер довелося б перебрати 33<sup>6</sup> = ${fmtNum(N ** 6)} варіантів.</span>`;
+  } else {
+    t = `Пробуємо <b>ключ ${step.k}</b>: зсуваємо кожну літеру на ${step.k} позицій назад. Отримали: «${esc(step.res)}». ` +
+      (step.found.length ? `Знайдено знайомі слова: <b>${esc(step.found.join(', '))}</b>!` : 'Схоже на безглуздий набір літер, тож пробуємо далі.');
+  }
+  $('explain').innerHTML = t;
+
+  // Рядок результату
+  const bar = $('resultBar');
+  if (done) {
+    bar.innerHTML = `<div><b>Зламано! Ключ ${step.best.k}. Відкритий текст:</b></div><div class="rt">${esc(step.best.res)}</div>` +
+      `<button class="btn" id="btnCopy">Копіювати</button>` +
+      `<button class="btn" id="btnBack">Перевірити: розшифрувати з ключем ${step.best.k}</button>`;
+    bar.classList.add('show');
+    $('btnCopy').onclick = () => copyText(step.best.res);
+    $('btnBack').onclick = () => {
+      state.mode = 'decrypt';
+      $('key').value = String(step.best.k);
+      syncSegs(); rebuild();
+    };
+  } else bar.classList.remove('show');
+}
+
+// ---------- Спільні елементи ----------
+
+// Стрічка: для кожного символу — стовпчик [ключ / вхід / вихід]
+function renderTape(out, curIdx, keyActive) {
+  const isVig = state.cipher === 'vigenere' && state.mode !== 'brute';
+  const tape = $('tape');
+  tape.classList.toggle('noKey', !isVig);
+  $('tapeLegend').innerHTML =
+    (isVig ? '<span class="lk">верхній ряд — літера ключа</span>' : '') +
+    `<span class="li">${isVig ? 'середній' : 'верхній'} ряд — ${state.mode === 'encrypt' ? 'відкритий текст' : 'шифротекст'}</span>` +
+    `<span class="lo">нижній ряд — ${state.mode === 'encrypt' ? 'шифротекст' : state.mode === 'brute' ? 'спроба розшифрування' : 'відкритий текст'}</span>`;
+  tape.innerHTML = state.chars.map((ch, i) => {
+    const cls = ['col'];
+    if (!isLetter(ch)) cls.push('space');
+    if (i === curIdx) cls.push('cur');
+    return `<div class="${cls.join(' ')}">` +
+      `<div class="k${i === curIdx && keyActive ? ' act' : ''}">${state.keyAt[i] || ''}</div>` +
+      `<div class="in">${showChar(ch)}</div>` +
+      `<div class="out${out[i] ? ' full' : ''}">${out[i] ? showChar(out[i]) : ''}</div></div>`;
+  }).join('');
+}
+
+// Таблиця відповідностей: вхідна літера → вихідна літера при поточному зсуві
+function renderStrip(shift, hlCol, hlRes) {
+  const inName = state.mode === 'encrypt' ? 'Відкритий' : 'Шифр';
+  const outName = state.mode === 'encrypt' ? 'Шифр' : 'Відкритий';
+  let h = '<tr class="idx"><th>Позиція</th>' + ALPHABET.map((_, i) => `<td class="${i === hlCol ? 'hl' : ''}">${i}</td>`).join('') + '</tr>';
+  h += `<tr class="rin"><th>${inName}</th>` + ALPHABET.map((L, i) => `<td class="${i === hlCol ? 'hl' : ''}">${L}</td>`).join('') + '</tr>';
+  h += `<tr class="rout"><th>${outName}</th>` + ALPHABET.map((_, i) => {
+    const c = i === hlCol ? (hlRes ? 'hlRes' : 'hl') : '';
+    return `<td class="${c}">${ALPHABET[mod(i + shift, N)]}</td>`;
+  }).join('') + '</tr>';
+  $('strip').innerHTML = h;
+}
+
+// Протокол для шифрування/розшифрування
+function renderLogCipher(rows, step) {
+  const isVig = state.cipher === 'vigenere';
+  $('logTitle').textContent = 'Протокол виконання (трасувальна таблиця)';
+  let h = `<tr><th>№</th><th>Символ</th><th>Позиція</th><th>${isVig ? 'Літера ключа' : 'Ключ'}</th><th>Зсув</th><th>Обчислення</th><th>Результат</th></tr>`;
+  if (!rows.length) h += `<tr><td colspan="7" class="empty">Рядки з'являтимуться після опрацювання кожного символу.</td></tr>`;
+  rows.forEach((r, i) => {
+    const isLast = i === rows.length - 1 && step && (step.type === 'skip' || (step.type === 'letter' && step.phase === 3));
+    if (r.type === 'skip') {
+      h += `<tr class="${isLast ? 'cur' : ''}"><td>${i + 1}</td><td>«${showChar(r.ch)}»</td><td>—</td><td>—</td><td>—</td><td>не літера абетки, без змін</td><td>«${showChar(r.ch)}»</td></tr>`;
+    } else {
+      const op = r.shift >= 0 ? '+' : MINUS;
+      h += `<tr class="${isLast ? 'cur' : ''}"><td>${i + 1}</td><td>«${esc(r.ch)}»</td><td>${r.p}</td>` +
+        `<td>${isVig ? `«${r.kl}» = ${r.s}` : r.s}</td><td>${fmtShift(r.shift)}</td>` +
+        `<td>(${r.p} ${op} ${Math.abs(r.shift)}) mod 33 = ${r.q}</td><td><b style="color:var(--ok)">«${esc(r.nc)}»</b></td></tr>`;
+    }
+  });
+  $('log').innerHTML = h;
+  scrollLogToEnd();
+}
+
+// Таблиця перебору ключів
+function renderLogBrute(tries, step, best) {
+  $('logTitle').textContent = 'Перебір усіх ключів';
+  let h = '<tr><th>Ключ</th><th>Спроба розшифрування</th><th>Знайомі слова</th><th style="width:220px">Схожість на українську</th></tr>';
+  if (!tries.length) h += `<tr><td colspan="4" class="empty">Тут з'являтимуться результати для кожного ключа.</td></tr>`;
+  tries.forEach((t, i) => {
+    const cls = best && t.k === best.k ? 'best' : (!best && i === tries.length - 1 ? 'cur' : '');
+    const pct = Math.round(t.sim * 100);
+    h += `<tr class="${cls}"><td>${best && t.k === best.k ? '✔ ' : ''}${t.k}</td><td class="txt">${esc(t.res)}</td>` +
+      `<td>${t.found.length ? esc(t.found.join(', ')) : '—'}</td>` +
+      `<td><div class="bar"><div style="width:${pct}%;background:${pct >= 70 ? 'var(--ok)' : 'var(--accent)'}"></div></div>${pct}%</td></tr>`;
+  });
+  $('log').innerHTML = h;
+  if (best) {
+    const row = $('log').querySelector('tr.best');
+    if (row) $('logWrap').scrollTop = row.offsetTop - 60;
+  } else scrollLogToEnd();
+}
+
+function scrollLogToEnd() { const w = $('logWrap'); w.scrollTop = w.scrollHeight; }
+
+// Копіювання в буфер обміну (з запасним способом для відкриття з флешки)
+function copyText(t) {
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = t; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e) { /* ігноруємо */ }
+    ta.remove();
+  };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(t).catch(fallback);
+  else fallback();
+}
+
+/* =====================================================================
+   10. ЛІВА ПАНЕЛЬ: ПЕРЕМИКАЧІ, ПІДКАЗКИ, ПРИКЛАДИ
+   ===================================================================== */
+function syncSegs() {
+  document.querySelectorAll('#cipherSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === state.cipher));
+  document.querySelectorAll('#modeSeg button').forEach(b => {
+    b.classList.toggle('on', b.dataset.v === state.mode);
+    if (b.dataset.v === 'brute') {
+      b.disabled = state.cipher === 'vigenere';
+      b.title = b.disabled ? 'Злам перебором показано для шифру Цезаря' : '';
+    }
+  });
+}
+
+function updatePanelTexts() {
+  const m = state.mode, c = state.cipher;
+  $('textLabel').textContent = m === 'encrypt' ? 'Відкритий текст' : (m === 'brute' ? 'Перехоплений шифротекст' : 'Шифротекст');
+  $('keyField').style.display = m === 'brute' ? 'none' : 'block';
+  $('keyLabel').textContent = c === 'caesar' ? 'Ключ (зсув від 1 до 32)' : 'Ключове слово';
+  $('keyHint').textContent = c === 'caesar'
+    ? 'Ціле число. Кожна літера зсувається на стільки позицій.'
+    : 'Лише українські літери. Позиція кожної літери ключа — це зсув (А = 0, Б = 1, …).';
+  $('modeHint').innerHTML = m === 'encrypt' ? 'Літери зсуваються <b>вперед</b> по абетці.'
+    : m === 'decrypt' ? 'Літери зсуваються <b>назад</b>: зсув з протилежним знаком.'
+    : 'Ключ невідомий: перебираємо всі 32 варіанти.';
+  if (c === 'vigenere') $('modeHint').innerHTML += '<br>Злам перебором доступний для шифру Цезаря.';
+
+  // «Фішки» з позиціями літер ключового слова
+  const chips = $('keyChips');
+  chips.innerHTML = '';
+  if (c === 'vigenere' && m !== 'brute') {
+    const w = normalize($('key').value.trim()).toUpperCase();
+    [...w].filter(isLetter).forEach(L => { chips.innerHTML += `<span class="chip">${L} = ${posOf(L)}</span>`; });
+  }
+}
+
+function initPanel() {
+  document.querySelectorAll('#cipherSeg button').forEach(b => b.addEventListener('click', () => {
+    if (state.cipher === b.dataset.v) return;
+    state.cipher = b.dataset.v;
+    const key = $('key').value.trim();
+    // підставляємо ключ, що відповідає новому шифру
+    if (state.cipher === 'vigenere') {
+      if (state.mode === 'brute') state.mode = 'encrypt';
+      if (/^\d*$/.test(key)) $('key').value = 'КЛЮЧ';
+    } else if (!/^\d+$/.test(key)) $('key').value = '3';
+    syncSegs(); rebuild();
+  }));
+  document.querySelectorAll('#modeSeg button').forEach(b => b.addEventListener('click', () => {
+    if (b.disabled || state.mode === b.dataset.v) return;
+    state.mode = b.dataset.v;
+    syncSegs(); rebuild();
+  }));
+  $('text').addEventListener('input', rebuild);
+  $('key').addEventListener('input', rebuild);
+
+  PRESETS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.textContent = p.title;
+    btn.addEventListener('click', () => {
+      state.cipher = p.cipher; state.mode = p.mode;
+      $('text').value = p.text;
+      $('key').value = p.key;
+      syncSegs(); rebuild();
+    });
+    $('presets').appendChild(btn);
+  });
+}
+
+/* =====================================================================
+   11. ЗАПУСК
+   ===================================================================== */
+function init() {
+  buildRing();
+  initPanel();
+
+  $('btnStep').addEventListener('click', () => { stop(); stepForward(); });
+  $('btnPlay').addEventListener('click', togglePlay);
+  $('btnAll').addEventListener('click', runAll);
+  $('btnReset').addEventListener('click', rebuild);
+  $('speed').addEventListener('input', () => {
+    $('speedVal').textContent = $('speed').value;
+    if (state.timer) { clearInterval(state.timer); state.timer = setInterval(stepForward, delay()); }
+  });
+
+  // Клавіші: → — крок, Пробіл — старт/пауза (коли курсор не в полі введення)
+  document.addEventListener('keydown', e => {
+    const tag = document.activeElement.tagName;
+    if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); stop(); stepForward(); }
+    if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+  });
+
+  // Початковий приклад
+  const p = PRESETS[0];
+  state.cipher = p.cipher; state.mode = p.mode;
+  $('text').value = p.text; $('key').value = p.key;
+  syncSegs();
+  rebuild();
+}
+
+init();
+</script>
+</body>
+</html>
